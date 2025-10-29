@@ -1,0 +1,109 @@
+@startuml
+!define RECTANGLE class
+
+package "CLI Layer" {
+    [Cobra Commands] as CLI
+    [Input Validation] as Input
+    [Output Formatting] as Output
+    [Secure Prompts] as Prompts
+}
+
+package "Application Layer" {
+    [Vault Manager] as VaultMgr
+    [Profile Manager] as ProfileMgr
+    [Audit Manager] as AuditMgr
+    [Config Manager] as ConfigMgr
+    [Session Manager] as SessionMgr
+}
+
+package "Security Layer" {
+    [Key Derivation (Argon2id)] as KDF
+    [AEAD Encryption] as AEAD
+    [Envelope Format] as Envelope
+    [Memory Zeroization] as Zeroize
+    [Nonce Generation] as Nonce
+}
+
+package "Storage Layer" {
+    [BoltDB Wrapper] as Store
+    [File Locking] as Lock
+    [Atomic Operations] as Atomic
+    [Backup/Restore] as Backup
+    [Transaction Manager] as TxnMgr
+}
+
+package "Platform Layer" {
+    [Clipboard Integration] as Clipboard
+    [File Permissions] as Perms
+    [Cross-Platform Utils] as Platform
+    [Process Management] as Process
+}
+
+package "External Dependencies" {
+    database "BoltDB" as Bolt
+    [Argon2] as Argon2Lib
+    [AES-GCM] as AESLib
+    [Cobra] as CobraLib
+    [OS APIs] as OSAPIs
+}
+
+' CLI Layer connections
+CLI --> VaultMgr
+CLI --> ProfileMgr
+CLI --> AuditMgr
+CLI --> ConfigMgr
+CLI --> SessionMgr
+Input --> CLI
+Output --> CLI
+Prompts --> CLI
+
+' Application Layer connections
+VaultMgr --> KDF
+VaultMgr --> AEAD
+VaultMgr --> Store
+VaultMgr --> Zeroize
+
+ProfileMgr --> Store
+AuditMgr --> Store
+ConfigMgr --> Platform
+SessionMgr --> VaultMgr
+
+' Security Layer connections
+KDF --> Argon2Lib
+AEAD --> AESLib
+AEAD --> Envelope
+AEAD --> Nonce
+Envelope --> Zeroize
+
+' Storage Layer connections
+Store --> Bolt
+Store --> Lock
+Store --> Atomic
+Store --> TxnMgr
+Backup --> Store
+TxnMgr --> Atomic
+
+' Platform Layer connections
+Platform --> OSAPIs
+Clipboard --> OSAPIs
+Perms --> OSAPIs
+Process --> OSAPIs
+Lock --> Platform
+
+' Cross-layer connections
+VaultMgr --> Clipboard
+Store --> Perms
+CLI --> CobraLib
+
+note right of VaultMgr : Core business logic\nEntry CRUD operations\nMaster key management
+
+note right of Store : Record-level encryption\nProfile namespacing\nAtomic transactions
+
+note right of AEAD : AES-256-GCM encryption\nUnique nonce per record\nAuthenticated encryption
+
+note right of KDF : Argon2id key derivation\nTunable parameters\n~300ms default timing
+
+note right of Lock : Single-writer guarantee\nCross-platform file locking\n30s timeout
+
+note right of Clipboard : Auto-clear timer\nPlatform-specific APIs\nSecurity warnings
+@enduml

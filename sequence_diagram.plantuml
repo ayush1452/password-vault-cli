@@ -1,0 +1,336 @@
+@startuml
+
+actor User
+participant "CLI" as CLI
+participant "VaultManager" as VM
+participant "CryptoProvider" as Crypto
+participant "BoltStore" as Store
+participant "AuditLogger" as Audit
+participant "ClipboardManager" as Clip
+participant "ConfigManager" as Config
+
+== Vault Initialization ==
+User -> CLI: vault init --kdf-memory 65536
+CLI -> Config: GetDefault()
+Config --> CLI: defaultConfig
+CLI -> VM: Initialize(path, passphrase, kdfParams)
+    note right
+        Input: {
+            "path": "/home/user/.vault/vault.db",
+            "passphrase": "string",
+            "kdfParams": {
+                "memory": 65536,
+                "iterations": 3,
+                "parallelism": 4,
+                "keyLength": 32
+            }
+        }
+    end note
+VM -> Crypto: GenerateSalt()
+Crypto --> VM: salt[32]byte
+VM -> Crypto: DeriveKey(passphrase, salt, kdfParams)
+Crypto --> VM: masterKey[32]byte
+VM -> Store: Create(path, masterKey, metadata)
+Store -> Store: createBuckets()
+Store -> Store: setFilePermissions(0600)
+Store -> Audit: Initialize(chainKey)
+Store --> VM: success
+VM -> Crypto: Zeroize(masterKey)
+VM --> CLI: VaultCreated{path}
+CLI --> User: "Vault initialized at /home/user/.vault/vault.db"
+
+== Vault Unlock ==
+User -> CLI: vault unlock --ttl 3600
+CLI -> CLI: promptPassphrase()
+CLI -> VM: Unlock(passphrase, ttl)
+    note right
+        Input: {
+            "passphrase": "string",
+            "ttl": "1h"
+        }
+    end note
+VM -> Store: LoadVaultMetadata()
+Store --> VM: VaultMetadata{version, kdfParams, salt, createdAt}
+VM -> Crypto: DeriveKey(passphrase, metadata.salt, metadata.kdfParams)
+Crypto --> VM: masterKey[32]byte
+VM -> Store: Open(masterKey)
+Store -> Store: acquireFileLock()
+Store -> Store: verifyIntegrity()
+Store --> VM: success
+VM -> VM: createSession(masterKey, ttl)
+VM -> Audit: LogOperation(UNLOCK_VAULT)
+VM --> CLI: SessionCreated{expiresAt}
+CLI --> User: "Vault unlocked (expires in 1 hour)"
+
+== Add Entry ==
+User -> CLI: vault add github --username user@example.com --secret-prompt
+CLI -> CLI: promptSecret()
+CLI -> VM: AddEntry(profile, entry)
+    note right
+        Input: {
+            "profile": "default",
+            "entry": {
+                "name": "github",
+                "username": "user@example.com",
+                "secret": []byte("secure_password"),
+                "url": "",
+                "notes": "",
+                "tags": [],
+                "totpSeed": []byte("")
+            }
+        }
+    end note
+VM -> VM: validateSession()
+VM -> VM: generateEntryID()
+VM -> Store: CreateEntry(profile, entry)
+Store -> Crypto: GenerateNonce()
+Crypto --> Store: nonce[12]byte
+Store -> Store: marshalEntry(entry)
+Store -> Crypto: Seal(entryJSON, masterKey, nonce, additionalData)
+    note right
+        additionalData: profile + entryID + timestamp
+    end note
+Crypto --> Store: envelope{version, nonce, ciphertext, tag}
+Store -> Store: saveToProfileBucket(profile, entryID, envelope)
+Store -> Audit: LogOperation(ADD_ENTRY, profile, entryID)
+Audit -> Audit: computeChainHMAC(prevHMAC, operation)
+Audit -> Store: saveOperation(operation)
+Store --> VM: entryID
+VM -> Entry: Zeroize()
+VM --> CLI: EntryCreated{id, name}
+CLI --> User: "Entry 'github' added successfully (ID: abc123)"
+
+== Get Entry with Clipboard ==
+User -> CLI: vault get github --copy
+CLI -> VM: GetEntry(profile, "github", GetOptions{copy: true})
+    note right
+        Input: {
+            "profile": "default",
+            "identifier": "github",
+            "options": {
+                "field": "secret",
+                "copy": true,
+                "show": false
+            }
+        }
+    end note
+VM -> VM: validateSession()
+VM -> Store: GetEntryByName(profile, "github")
+Store -> Store: findInProfileBucket(profile, name)
+Store -> Store: loadEnvelope(entryID)
+Store -> Crypto: Open(envelope.ciphertext, masterKey, envelope.nonce, additionalData)
+Crypto --> Store: entryJSON[]byte
+Store -> Store: unmarshalEntry(entryJSON)
+Store --> VM: entry
+VM -> Clip: Copy(entry.Secret, clipboardTTL)
+Clip -> Clip: copyToSystemClipboard(data)
+Clip -> Clip: startAutoCleanTimer(30s)
+Clip --> VM: success
+VM -> Audit: LogOperation(GET_ENTRY, profile, entryID)
+VM -> Entry: Zeroize()
+VM --> CLI: EntryCopied{name, ttl}
+CLI --> User: "Password copied to clipboard (clears in 30s)"
+
+== List Entries ==
+User -> CLI: vault list --tag work --search github
+CLI -> VM: ListEntries(profile, filter)
+    note right
+        Input: {
+            "profile": "default",
+            "filter": {
+                "tags": ["work"],
+                "namePattern": "github",
+                "limit": 50,
+                "offset": 0
+            }
+        }
+    end note
+VM -> VM: validateSession()
+VM -> Store: ListEntries(profile, filter)
+Store -> Store: iterateProfileBucket(profile)
+loop for each entry
+    Store -> Crypto: Open(envelope.ciphertext, masterKey, envelope.nonce, additionalData)
+    Crypto --> Store: entryJSON[]byte
+    Store -> Store: unmarshalEntry(entryJSON)
+    Store -> Filter: Matches(entry)
+    Filter --> Store: bool
+end
+Store --> VM: entries[]Entry
+VM -> VM: sanitizeForDisplay(entries)
+VM --> CLI: EntryList{entries, count}
+    note right
+        Output: {
+            "entries": [
+                {
+                    "id": "abc123",
+                    "name": "github",
+                    "username": "user@example.com",
+                    "url": "https://github.com",
+                    "tags": ["work", "git"],
+                    "createdAt": "2024-01-01T00:00:00Z",
+                    "updatedAt": "2024-01-01T00:00:00Z"
+                }
+            ],
+            "total": 1,
+            "filtered": 1
+        }
+    end note
+CLI --> User: Display formatted table
+
+== Update Entry ==
+User -> CLI: vault update github --url https://github.com --tags work,git
+CLI -> VM: UpdateEntry(profile, "github", updates)
+    note right
+        Input: {
+            "profile": "default",
+            "identifier": "github",
+            "updates": {
+                "url": "https://github.com",
+                "tags": ["work", "git"]
+            }
+        }
+    end note
+VM -> VM: validateSession()
+VM -> Store: GetEntryByName(profile, "github")
+Store --> VM: currentEntry
+VM -> VM: applyUpdates(currentEntry, updates)
+VM -> Store: UpdateEntry(profile, entryID, updatedEntry)
+Store -> Store: beginTransaction()
+Store -> Crypto: GenerateNonce()
+Crypto --> Store: newNonce[12]byte
+Store -> Crypto: Seal(updatedEntryJSON, masterKey, newNonce, additionalData)
+Crypto --> Store: newEnvelope
+Store -> Store: replaceInProfileBucket(profile, entryID, newEnvelope)
+Store -> Audit: LogOperation(UPDATE_ENTRY, profile, entryID)
+Store -> Store: commitTransaction()
+Store --> VM: success
+VM -> Entry: Zeroize()
+VM --> CLI: EntryUpdated{id, name}
+CLI --> User: "Entry 'github' updated successfully"
+
+== Master Key Rotation ==
+User -> CLI: vault rotate-master-key
+CLI -> CLI: promptCurrentPassphrase()
+CLI -> CLI: promptNewPassphrase()
+CLI -> CLI: confirmNewPassphrase()
+CLI -> VM: RotateMasterKey(oldPassphrase, newPassphrase)
+    note right
+        Input: {
+            "oldPassphrase": "string",
+            "newPassphrase": "string"
+        }
+    end note
+VM -> VM: validateSession()
+VM -> Store: LoadVaultMetadata()
+Store --> VM: metadata
+VM -> Crypto: DeriveKey(oldPassphrase, metadata.salt, metadata.kdfParams)
+Crypto --> VM: oldMasterKey[32]byte
+VM -> VM: verifyCurrentKey(oldMasterKey)
+VM -> Crypto: GenerateSalt()
+Crypto --> VM: newSalt[32]byte
+VM -> Crypto: DeriveKey(newPassphrase, newSalt, metadata.kdfParams)
+Crypto --> VM: newMasterKey[32]byte
+VM -> Store: BeginMasterKeyRotation(oldKey, newKey)
+Store -> Store: beginTransaction()
+Store -> Store: reencryptAllEntries(oldKey, newKey)
+loop for each profile
+    loop for each entry in profile
+        Store -> Crypto: Open(oldEnvelope.ciphertext, oldKey, oldEnvelope.nonce, additionalData)
+        Crypto --> Store: plaintext[]byte
+        Store -> Crypto: GenerateNonce()
+        Crypto --> Store: newNonce[12]byte
+        Store -> Crypto: Seal(plaintext, newKey, newNonce, additionalData)
+        Crypto --> Store: newEnvelope
+        Store -> Store: replaceEntry(profile, entryID, newEnvelope)
+        Store -> Crypto: Zeroize(plaintext)
+    end
+end
+Store -> Store: updateVaultMetadata(newSalt, newKdfParams)
+Store -> Audit: LogOperation(ROTATE_MASTER_KEY)
+Store -> Store: commitTransaction()
+Store --> VM: success
+VM -> Crypto: Zeroize(oldMasterKey, newMasterKey)
+VM -> VM: updateSession(newMasterKey)
+VM --> CLI: MasterKeyRotated
+CLI --> User: "Master key rotated successfully"
+
+== Export Vault ==
+User -> CLI: vault export --encrypted backup.vault
+CLI -> VM: Export(path, ExportOptions{encrypted: true, includeSecrets: true})
+    note right
+        Input: {
+            "path": "backup.vault",
+            "options": {
+                "encrypted": true,
+                "includeSecrets": true,
+                "profiles": ["all"]
+            }
+        }
+    end note
+VM -> VM: validateSession()
+VM -> Store: ExportAllData()
+Store -> Store: gatherAllProfiles()
+Store -> Store: gatherAllEntries()
+Store -> Store: gatherAuditLog()
+Store --> VM: exportData
+VM -> VM: createExportEnvelope(exportData, masterKey)
+VM -> Crypto: GenerateNonce()
+Crypto --> VM: exportNonce[12]byte
+VM -> Crypto: Seal(exportJSON, masterKey, exportNonce, "export")
+Crypto --> VM: exportEnvelope
+VM -> VM: writeExportFile(path, exportEnvelope)
+VM -> Audit: LogOperation(EXPORT_VAULT, "", path)
+VM --> CLI: ExportCompleted{path, entryCount}
+    note right
+        Output: {
+            "path": "backup.vault",
+            "entryCount": 15,
+            "profileCount": 3,
+            "encrypted": true,
+            "size": "2.4KB"
+        }
+    end note
+CLI --> User: "Vault exported to backup.vault (15 entries, encrypted)"
+
+== Audit Log Verification ==
+User -> CLI: vault audit-log --verify
+CLI -> VM: VerifyAuditLog()
+VM -> VM: validateSession()
+VM -> Audit: VerifyIntegrity()
+Audit -> Store: loadAllOperations()
+Store --> Audit: operations[]Operation
+Audit -> Audit: loadChainKey()
+Audit -> Audit: recomputeHMACChain(operations, chainKey)
+loop for each operation
+    Audit -> Audit: computeExpectedHMAC(prevHMAC, operation)
+    Audit -> Audit: compareHMAC(expected, operation.HMAC)
+end
+Audit --> VM: VerificationResult{valid: true, operationCount: 42}
+VM --> CLI: AuditVerified{operationCount, lastOperation}
+    note right
+        Output: {
+            "valid": true,
+            "operationCount": 42,
+            "lastOperation": {
+                "type": "ADD_ENTRY",
+                "timestamp": "2024-01-01T12:00:00Z",
+                "profile": "default"
+            },
+            "chainIntact": true
+        }
+    end note
+CLI --> User: "Audit log verified: 42 operations, chain intact"
+
+== Vault Lock ==
+User -> CLI: vault lock
+CLI -> VM: Lock()
+VM -> VM: validateSession()
+VM -> Session: Zeroize()
+VM -> Store: Close()
+Store -> Store: releaseFileLock()
+Store -> Audit: LogOperation(LOCK_VAULT)
+Store --> VM: success
+VM --> CLI: VaultLocked
+CLI --> User: "Vault locked successfully"
+
+@enduml

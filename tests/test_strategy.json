@@ -1,0 +1,136 @@
+{
+    "overview": {
+      "project": "Password Vault CLI",
+      "test_types": [
+        "Unit Tests",
+        "Integration Tests",
+        "Security Tests",
+        "Performance Tests",
+        "Acceptance Tests",
+        "Fuzz Tests"
+      ],
+      "coverage_target": "90%+",
+      "security_focus": "High - cryptographic operations and data protection"
+    },
+    "test_categories": {
+      "unit_tests": {
+        "crypto_engine": [
+          "Key derivation (Argon2id)",
+          "Encryption/Decryption (AES-256-GCM)",
+          "Salt and nonce generation",
+          "Envelope serialization/deserialization",
+          "Parameter validation",
+          "Error handling"
+        ],
+        "storage_layer": [
+          "BoltDB operations",
+          "File locking mechanisms",
+          "Transaction handling",
+          "Data persistence",
+          "Concurrent access",
+          "Error recovery"
+        ],
+        "cli_commands": [
+          "Command parsing and validation",
+          "User input handling",
+          "Output formatting",
+          "Error messages",
+          "Help text generation",
+          "Configuration management"
+        ],
+        "domain_models": [
+          "Entry validation",
+          "Profile management",
+          "Data serialization",
+          "Field validation"
+        ]
+      },
+      "integration_tests": {
+        "end_to_end_workflows": [
+          "Vault initialization",
+          "Entry CRUD operations",
+          "Profile switching",
+          "Import/Export operations",
+          "Session management",
+          "Backup and restore"
+        ],
+        "cross_component": [
+          "CLI -> Storage -> Crypto flow",
+          "Configuration loading",
+          "Error propagation",
+          "State consistency"
+        ]
+      },
+      "security_tests": {
+        "cryptographic": [
+          "Key derivation timing attacks",
+          "Encryption strength validation",
+          "Random number quality",
+          "Memory clearing verification",
+          "Side-channel resistance"
+        ],
+        "data_protection": [
+          "Unauthorized access prevention",
+          "Data tampering detection",
+          "Secure deletion",
+          "Memory dumps analysis",
+          "File permission validation"
+        ],
+        "attack_scenarios": [
+          "Brute force attacks",
+          "Dictionary attacks",
+          "Malformed input handling",
+          "Race conditions",
+          "Resource exhaustion"
+        ]
+      },
+      "performance_tests": [
+        "Key derivation benchmarks",
+        "Encryption/Decryption speed",
+        "Database operation latency",
+        "Memory usage profiling",
+        "Concurrent access performance"
+      ],
+      "fuzz_tests": [
+        "CLI input fuzzing",
+        "Crypto envelope fuzzing",
+        "Database corruption testing",
+        "Invalid configuration handling"
+      ]
+    },
+    "test_infrastructure": {
+      "frameworks": [
+        "Go testing package",
+        "Testify for assertions",
+        "GoConvey for BDD-style tests",
+        "Go-fuzz for fuzzing"
+      ],
+      "test_data": [
+        "Golden files for CLI output",
+        "Test vectors for crypto",
+        "Mock databases",
+        "Sample configurations"
+      ],
+      "ci_cd": [
+        "Automated test execution",
+        "Coverage reporting",
+        "Security scanning",
+        "Performance regression detection"
+      ]
+    },
+    "security_validation": {
+      "threat_model_coverage": [
+        "Unauthorized vault access",
+        "Data exfiltration",
+        "Cryptographic attacks",
+        "System compromise",
+        "Social engineering"
+      ],
+      "compliance_checks": [
+        "OWASP guidelines",
+        "Cryptographic best practices",
+        "Secure coding standards",
+        "Privacy requirements"
+      ]
+    }
+  }

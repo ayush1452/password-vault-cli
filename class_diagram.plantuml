@@ -1,0 +1,293 @@
+@startuml
+
+interface VaultStore {
+    +Open(path: string, masterKey: []byte): error
+    +Close(): error
+    +IsLocked(): bool
+    +CreateEntry(profile: string, entry: Entry): (string, error)
+    +GetEntry(profile: string, id: string): (Entry, error)
+    +GetEntryByName(profile: string, name: string): (Entry, error)
+    +ListEntries(profile: string, filter: Filter): ([]Entry, error)
+    +UpdateEntry(profile: string, id: string, entry: Entry): error
+    +DeleteEntry(profile: string, id: string): error
+    +CreateProfile(name: string, description: string): error
+    +ListProfiles(): ([]ProfileInfo, error)
+    +DeleteProfile(name: string): error
+    +GetVaultMetadata(): (VaultMetadata, error)
+    +RotateMasterKey(newKey: []byte): error
+}
+
+interface CryptoProvider {
+    +DeriveKey(passphrase: string, salt: []byte, params: KDFParams): ([]byte, error)
+    +GenerateSalt(): []byte
+    +GenerateNonce(): []byte
+    +Seal(plaintext: []byte, key: []byte, nonce: []byte, additionalData: []byte): ([]byte, error)
+    +Open(ciphertext: []byte, key: []byte, nonce: []byte, additionalData: []byte): ([]byte, error)
+    +Zeroize(data: []byte)
+    +ValidateKDFParams(params: KDFParams): error
+}
+
+interface AuditLogger {
+    +LogOperation(op: Operation): error
+    +GetAuditLog(filter: AuditFilter): ([]Operation, error)
+    +VerifyIntegrity(): (bool, error)
+    +ExportLog(path: string): error
+    +GetChainKey(): []byte
+    +SetChainKey(key: []byte): error
+}
+
+interface ClipboardManager {
+    +Copy(data: string, ttl: time.Duration): error
+    +IsAvailable(): bool
+    +GetCapabilities(): ClipboardCapabilities
+}
+
+interface ConfigManager {
+    +Load(path: string): (Config, error)
+    +Save(config: Config, path: string): error
+    +GetDefault(): Config
+    +Validate(config: Config): error
+}
+
+class Entry {
+    +ID: string
+    +Name: string
+    +Username: string
+    +Secret: []byte
+    +URL: string
+    +Notes: string
+    +Tags: []string
+    +TOTPSeed: []byte
+    +CreatedAt: time.Time
+    +UpdatedAt: time.Time
+    +Validate(): error
+    +Zeroize()
+    +ToJSON(): ([]byte, error)
+    +FromJSON(data: []byte): error
+}
+
+class Envelope {
+    +Version: uint8
+    +Nonce: []byte
+    +Ciphertext: []byte
+    +Tag: []byte
+    +Marshal(): ([]byte, error)
+    +Unmarshal(data: []byte): error
+    +Validate(): error
+}
+
+class KDFParams {
+    +Memory: uint32
+    +Iterations: uint32
+    +Parallelism: uint8
+    +KeyLength: uint32
+    +Validate(): error
+    +EstimateTime(): time.Duration
+    +IsSecure(): bool
+}
+
+class Operation {
+    +ID: string
+    +Type: OperationType
+    +Profile: string
+    +EntryID: string
+    +EntryName: string
+    +Timestamp: time.Time
+    +Success: bool
+    +ErrorMessage: string
+    +HMAC: []byte
+    +ClientVersion: string
+    +ComputeHMAC(chainKey: []byte, prevHMAC: []byte): []byte
+    +Validate(): error
+}
+
+class Filter {
+    +Tags: []string
+    +NamePattern: string
+    +CreatedAfter: time.Time
+    +CreatedBefore: time.Time
+    +UpdatedAfter: time.Time
+    +UpdatedBefore: time.Time
+    +Limit: int
+    +Offset: int
+    +Matches(entry: Entry): bool
+}
+
+class VaultMetadata {
+    +Version: string
+    +KDFParams: KDFParams
+    +Salt: []byte
+    +CreatedAt: time.Time
+    +UpdatedAt: time.Time
+    +ProfileCount: int
+    +EntryCount: int
+    +Validate(): error
+}
+
+class ProfileInfo {
+    +Name: string
+    +Description: string
+    +CreatedAt: time.Time
+    +EntryCount: int
+    +IsDefault: bool
+}
+
+class Config {
+    +VaultPath: string
+    +DefaultProfile: string
+    +AutoLockTTL: time.Duration
+    +ClipboardTTL: time.Duration
+    +KDFParams: KDFParams
+    +OutputFormat: string
+    +ShowPasswords: bool
+    +ConfirmDestructive: bool
+    +Validate(): error
+    +GetVaultPath(): string
+    +GetConfigPath(): string
+}
+
+class BoltStore {
+    -db: *bolt.DB
+    -masterKey: []byte
+    -crypto: CryptoProvider
+    -audit: AuditLogger
+    -isOpen: bool
+    -lockFile: *os.File
+    +Open(path: string, masterKey: []byte): error
+    +Close(): error
+    +beginTx(writable: bool): (*bolt.Tx, error)
+    +encryptEntry(entry: Entry): (Envelope, error)
+    +decryptEntry(envelope: Envelope): (Entry, error)
+    -validateBucket(tx: *bolt.Tx, bucketName: string): error
+    -atomicWrite(path: string, data: []byte): error
+}
+
+class Argon2Provider {
+    -defaultParams: KDFParams
+    +DeriveKey(passphrase: string, salt: []byte, params: KDFParams): ([]byte, error)
+    +GenerateSalt(): []byte
+    +GenerateNonce(): []byte
+    +Seal(plaintext: []byte, key: []byte, nonce: []byte, additionalData: []byte): ([]byte, error)
+    +Open(ciphertext: []byte, key: []byte, nonce: []byte, additionalData: []byte): ([]byte, error)
+    +Zeroize(data: []byte)
+    +ValidateKDFParams(params: KDFParams): error
+    -sealAESGCM(plaintext: []byte, key: []byte, nonce: []byte, additionalData: []byte): ([]byte, error)
+    -openAESGCM(ciphertext: []byte, key: []byte, nonce: []byte, additionalData: []byte): ([]byte, error)
+}
+
+class HMACChainAuditor {
+    -store: VaultStore
+    -chainKey: []byte
+    -operations: []Operation
+    +LogOperation(op: Operation): error
+    +GetAuditLog(filter: AuditFilter): ([]Operation, error)
+    +VerifyIntegrity(): (bool, error)
+    +ExportLog(path: string): error
+    +GetChainKey(): []byte
+    +SetChainKey(key: []byte): error
+    -computeChainHMAC(prevHMAC: []byte, op: Operation): []byte
+    -loadOperations(): error
+    -saveOperation(op: Operation): error
+}
+
+class VaultManager {
+    -store: VaultStore
+    -crypto: CryptoProvider
+    -audit: AuditLogger
+    -config: Config
+    -session: *Session
+    +Initialize(path: string, passphrase: string, params: KDFParams): error
+    +Unlock(passphrase: string, ttl: time.Duration): error
+    +Lock(): error
+    +IsLocked(): bool
+    +AddEntry(profile: string, entry: Entry): (string, error)
+    +GetEntry(profile: string, identifier: string): (Entry, error)
+    +ListEntries(profile: string, filter: Filter): ([]Entry, error)
+    +UpdateEntry(profile: string, id: string, entry: Entry): error
+    +DeleteEntry(profile: string, id: string): error
+    +RotateMasterKey(oldPassphrase: string, newPassphrase: string): error
+    +Export(path: string, encrypted: bool, includeSecrets: bool): error
+    +Import(path: string, conflictResolution: ConflictResolution): error
+    -validateSession(): error
+    -deriveKeyFromPassphrase(passphrase: string): ([]byte, error)
+}
+
+class Session {
+    +VaultPath: string
+    +MasterKey: []byte
+    +UnlockedAt: time.Time
+    +TTL: time.Duration
+    +ProfileName: string
+    +IsExpired(): bool
+    +Extend(ttl: time.Duration)
+    +Zeroize()
+}
+
+enum OperationType {
+    INIT_VAULT
+    UNLOCK_VAULT
+    LOCK_VAULT
+    ADD_ENTRY
+    GET_ENTRY
+    UPDATE_ENTRY
+    DELETE_ENTRY
+    CREATE_PROFILE
+    DELETE_PROFILE
+    ROTATE_MASTER_KEY
+    EXPORT_VAULT
+    IMPORT_VAULT
+}
+
+enum ConflictResolution {
+    SKIP
+    OVERWRITE
+    DUPLICATE
+}
+
+class ClipboardCapabilities {
+    +Available: bool
+    +AutoClearSupported: bool
+    +SecureMode: bool
+    +MaxLength: int
+}
+
+class AuditFilter {
+    +OperationTypes: []OperationType
+    +Profiles: []string
+    +StartTime: time.Time
+    +EndTime: time.Time
+    +SuccessOnly: bool
+    +Limit: int
+    +Offset: int
+}
+
+' Relationships
+VaultStore <|-- BoltStore
+CryptoProvider <|-- Argon2Provider
+AuditLogger <|-- HMACChainAuditor
+
+BoltStore --> Entry
+BoltStore --> Envelope
+BoltStore --> CryptoProvider
+BoltStore --> AuditLogger
+BoltStore --> VaultMetadata
+
+Argon2Provider --> KDFParams
+HMACChainAuditor --> Operation
+HMACChainAuditor --> VaultStore
+
+VaultManager --> VaultStore
+VaultManager --> CryptoProvider
+VaultManager --> AuditLogger
+VaultManager --> Config
+VaultManager --> Session
+
+Entry --> Filter
+Operation --> OperationType
+VaultMetadata --> KDFParams
+Config --> KDFParams
+Session --> VaultManager
+
+ClipboardManager --> ClipboardCapabilities
+AuditLogger --> AuditFilter
+@enduml
