@@ -1,0 +1,24 @@
+#!/bin/bash
+# This script keeps the vault unlocked for multiple commands
+
+VAULT_PATH=~/.local/share/vault/vault.db
+
+# Unlock the vault with a 5-minute timeout
+echo "Unlocking vault..."
+VAULT_LOCK_TIMEOUT=5m ./vault --vault "$VAULT_PATH" unlock
+
+# If unlock was successful, run additional commands
+if [ $? -eq 0 ]; then
+    # Run the requested command if provided
+    if [ "$1" = "add" ] && [ -n "$2" ]; then
+        echo "Adding entry: $2"
+        ./vault --vault "$VAULT_PATH" add "$2"
+    fi
+    
+    # Keep the script running to maintain the unlock
+    echo "Vault will remain unlocked for 5 minutes. Press Ctrl+C to exit."
+    sleep 300
+else
+    echo "Failed to unlock vault"
+    exit 1
+fi

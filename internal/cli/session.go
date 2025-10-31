@@ -184,6 +184,22 @@ func GetSessionInfo() (bool, time.Duration, error) {
 	return true, remaining, nil
 }
 
+// RemainingSessionTTL returns the remaining TTL without triggering unlock side effects.
+func RemainingSessionTTL() time.Duration {
+	ensureSessionRestored()
+
+	if sessionManager == nil || sessionManager.ttl <= 0 {
+		return 0
+	}
+
+	remaining := sessionManager.ttl - time.Since(sessionManager.unlockTime)
+	if remaining < 0 {
+		return 0
+	}
+
+	return remaining
+}
+
 // EnsureVaultDirectory creates the vault directory if it doesn't exist
 func EnsureVaultDirectory(vaultPath string) error {
 	dir := filepath.Dir(vaultPath)

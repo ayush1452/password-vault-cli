@@ -90,7 +90,18 @@ vault lock
 
 # Check vault status
 vault status
+
+# Machine-readable status
+vault status --json
 ```
+
+**What `vault status` shows**
+- **Vault path**: Location of the active `vault.db` file.
+- **Cipher/KDF metadata**: `AES-256-GCM` plus Argon2id parameters (memory, iterations, parallelism, salt length).
+- **Entry statistics**: Entry count and most recent `updated_at` timestamp (visible only when the session is unlocked).
+- **Session state**: Reports `locked` or `unlocked`, including remaining TTL when unlocked. `Remaining TTL` is in seconds in JSON output to simplify scripting.
+
+Use `vault status --json` when integrating with scripts or monitoring systems.
 
 ### Entry Management
 
