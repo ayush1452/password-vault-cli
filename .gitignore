@@ -17,10 +17,10 @@ coverage.txt
 go.work
 
 # Compiled binaries
-vault
-cli
-crypto
-storage
+/vault
+/cli
+/crypto
+/storage
 
 # Vault files (sensitive data)
 *.vault
@@ -44,7 +44,6 @@ temp/
 *.tmp
 
 # Build artifacts
-dist/
 build/
 bin/
 
