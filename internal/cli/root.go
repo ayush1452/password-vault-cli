@@ -86,6 +86,7 @@ func init() {
 	rootCmd.AddCommand(auditLogCmd)
 	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(configCmd)
+	rootCmd.AddCommand(passgenCmd)
 }
 
 func initConfig() {
