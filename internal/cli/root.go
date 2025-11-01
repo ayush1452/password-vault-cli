@@ -87,6 +87,7 @@ func init() {
 	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(passgenCmd)
+	rootCmd.AddCommand(NewRotatePasswordCommand(cfg))
 }
 
 func initConfig() {

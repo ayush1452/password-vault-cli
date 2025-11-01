@@ -229,6 +229,32 @@ vault update github --rotate-secret
 vault update github --tags "development,git,updated"
 ```
 
+#### Rotate Passwords for Existing Entries
+
+Use `vault rotate` when you need to regenerate a stored password without re-entering metadata.
+
+```bash
+# Rotate using default settings (20-character password, no output)
+vault rotate github
+
+# Show the new password instead of copying it
+vault rotate github --show
+
+# Copy to clipboard and clear after 30 seconds
+vault rotate github --copy --ttl 30
+
+# Generate a longer secret
+vault rotate github --length 32
+```
+
+Command details:
+
+- **`--length`** sets the generated password length (default `20`).
+- **`--show`** prints the new password to stdout (mutually exclusive with `--copy`).
+- **`--copy`** copies the new password to the system clipboard; combine with `--ttl` to control the clear timeout.
+- **`--ttl`** accepts seconds; use `-1` to fall back to the configured default (`config.Config.ClipboardTTL`, 45s by default).
+- Errors clearly report when an entry is missing or the clipboard is unavailable.
+
 #### Delete Entries
 
 ```bash

@@ -560,7 +560,7 @@ func TestValidateArgon2ParamsComprehensive(t *testing.T) {
 			params: Argon2Params{
 				Memory:      64 * 1024,
 				Iterations:  3,
-				Parallelism: 255, // Too high (max uint8)
+				Parallelism: 255, // Too high (max allowed 254)
 			},
 			wantErr: true,
 			errMsg:  "parallelism parameter too high",

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/vault-cli/vault/internal/config"
@@ -22,6 +23,44 @@ type TestHelper struct {
 	Config     *config.Config
 	Salt       []byte // Salt used for key derivation
 	Passphrase string // Passphrase used to create the vault
+}
+
+// unlockWithSession prepares session state for commands that require an unlocked vault.
+func (h *TestHelper) unlockWithSession(t *testing.T) func() {
+	t.Helper()
+
+	// Derive master key using stored salt
+	crypto := vault.NewDefaultCryptoEngine()
+	masterKey, err := crypto.DeriveKey(h.Passphrase, h.Salt)
+	if err != nil {
+		t.Fatalf("Failed to derive master key: %v", err)
+	}
+
+	restore := func() {
+		_ = LockVault()
+		vault.Zeroize(masterKey)
+		sessionManager = nil
+		vaultPath = ""
+	}
+
+	// Configure session manager with mock store
+	s := store.NewBoltStore()
+	if err := s.OpenVault(h.VaultPath, masterKey); err != nil {
+		restore()
+		t.Fatalf("Failed to open vault: %v", err)
+	}
+
+	sessionManager = &SessionManager{
+		vaultPath:  h.VaultPath,
+		vaultStore: s,
+		masterKey:  masterKey,
+		unlockTime: time.Now(),
+		ttl:        time.Hour,
+	}
+
+	vaultPath = h.VaultPath
+
+	return restore
 }
 
 // NewTestHelper creates a new test helper with temporary directories
@@ -60,7 +99,7 @@ func NewTestHelper(t *testing.T) *TestHelper {
 func (h *TestHelper) SetupVault(t *testing.T, passphrase string) {
 	// Store passphrase for later use
 	h.Passphrase = passphrase
-	
+
 	// Create store
 	s := store.NewBoltStore()
 
@@ -69,7 +108,7 @@ func (h *TestHelper) SetupVault(t *testing.T, passphrase string) {
 	if err != nil {
 		t.Fatalf("Failed to generate salt: %v", err)
 	}
-	
+
 	// Store salt for later use
 	h.Salt = salt
 
@@ -234,12 +273,12 @@ func TestAddCommand(t *testing.T) {
 			// For duplicate test, add entry first
 			if tt.name == "Duplicate entry" {
 				s := store.NewBoltStore()
-				
+
 				// Derive master key using stored salt
 				crypto := vault.NewDefaultCryptoEngine()
 				masterKey, _ := crypto.DeriveKey(helper.Passphrase, helper.Salt)
 				defer vault.Zeroize(masterKey)
-				
+
 				// Open vault and add entry
 				_ = s.OpenVault(helper.VaultPath, masterKey)
 				defer s.CloseVault()
@@ -274,7 +313,7 @@ func TestGetCommand(t *testing.T) {
 
 	// Add test entries
 	s := store.NewBoltStore()
-	
+
 	// Derive master key using stored salt
 	crypto := vault.NewDefaultCryptoEngine()
 	masterKey, err := crypto.DeriveKey(helper.Passphrase, helper.Salt)
@@ -282,7 +321,7 @@ func TestGetCommand(t *testing.T) {
 		t.Fatalf("Failed to derive master key: %v", err)
 	}
 	defer vault.Zeroize(masterKey)
-	
+
 	err = s.OpenVault(helper.VaultPath, masterKey)
 	if err != nil {
 		t.Fatalf("Failed to open vault: %v", err)
@@ -364,7 +403,7 @@ func TestListCommand(t *testing.T) {
 
 	// Add test entries
 	s := store.NewBoltStore()
-	
+
 	// Derive master key using stored salt
 	crypto := vault.NewDefaultCryptoEngine()
 	masterKey, err := crypto.DeriveKey(helper.Passphrase, helper.Salt)
@@ -372,7 +411,7 @@ func TestListCommand(t *testing.T) {
 		t.Fatalf("Failed to derive master key: %v", err)
 	}
 	defer vault.Zeroize(masterKey)
-	
+
 	err = s.OpenVault(helper.VaultPath, masterKey)
 	if err != nil {
 		t.Fatalf("Failed to open vault: %v", err)
@@ -417,6 +456,9 @@ func TestListCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			cleanup := helper.unlockWithSession(t)
+			t.Cleanup(cleanup)
+
 			cmd := NewListCommand(helper.Config)
 			stdout, stderr, err := helper.ExecuteCommand(t, cmd, tt.args...)
 
@@ -449,7 +491,7 @@ func TestDeleteCommand(t *testing.T) {
 
 	// Add test entry
 	s := store.NewBoltStore()
-	
+
 	// Derive master key using stored salt
 	crypto := vault.NewDefaultCryptoEngine()
 	masterKey, err := crypto.DeriveKey(helper.Passphrase, helper.Salt)
@@ -457,7 +499,7 @@ func TestDeleteCommand(t *testing.T) {
 		t.Fatalf("Failed to derive master key: %v", err)
 	}
 	defer vault.Zeroize(masterKey)
-	
+
 	err = s.OpenVault(helper.VaultPath, masterKey)
 	if err != nil {
 		t.Fatalf("Failed to open vault: %v", err)
@@ -502,6 +544,9 @@ func TestDeleteCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			cleanup := helper.unlockWithSession(t)
+			t.Cleanup(cleanup)
+
 			cmd := NewDeleteCommand(helper.Config)
 			stdout, stderr, err := helper.ExecuteCommand(t, cmd, tt.args...)
 
@@ -650,6 +695,16 @@ func TestCommandValidation(t *testing.T) {
 // TestConfigCommand tests configuration management
 func TestConfigCommand(t *testing.T) {
 	helper := NewTestHelper(t)
+	originalCfg := cfg
+	originalCfgFile := cfgFile
+
+	cfg = helper.Config
+	cfgFile = helper.ConfigPath
+
+	t.Cleanup(func() {
+		cfg = originalCfg
+		cfgFile = originalCfgFile
+	})
 
 	tests := []struct {
 		name        string

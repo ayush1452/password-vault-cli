@@ -119,6 +119,7 @@ func runConfigGetAll() error {
 	fmt.Printf("default_profile: %s\n", cfg.DefaultProfile)
 	fmt.Printf("auto_lock_ttl: %s\n", cfg.AutoLockTTL)
 	fmt.Printf("clipboard_ttl: %s\n", cfg.ClipboardTTL)
+	fmt.Printf("session_timeout: %d\n", cfg.Security.SessionTimeout)
 	fmt.Printf("output_format: %s\n", cfg.OutputFormat)
 	fmt.Printf("show_passwords: %t\n", cfg.ShowPasswords)
 	fmt.Printf("confirm_destructive: %t\n", cfg.ConfirmDestructive)
@@ -129,7 +130,9 @@ func runConfigGetAll() error {
 }
 
 func runConfigGet(key string) error {
-	switch strings.ToLower(key) {
+	normalized := strings.ReplaceAll(strings.ToLower(key), "-", "_")
+
+	switch normalized {
 	case "vault_path":
 		fmt.Println(cfg.VaultPath)
 	case "default_profile":
@@ -138,6 +141,8 @@ func runConfigGet(key string) error {
 		fmt.Println(cfg.AutoLockTTL)
 	case "clipboard_ttl":
 		fmt.Println(cfg.ClipboardTTL)
+	case "session_timeout":
+		fmt.Println(cfg.Security.SessionTimeout)
 	case "output_format":
 		fmt.Println(cfg.OutputFormat)
 	case "show_passwords":
@@ -157,7 +162,9 @@ func runConfigGet(key string) error {
 }
 
 func runConfigSet(key, value string) error {
-	switch strings.ToLower(key) {
+	normalized := strings.ReplaceAll(strings.ToLower(key), "-", "_")
+
+	switch normalized {
 	case "vault_path":
 		cfg.VaultPath = value
 	case "default_profile":
@@ -174,6 +181,15 @@ func runConfigSet(key, value string) error {
 			return fmt.Errorf("invalid duration: %w", err)
 		}
 		cfg.ClipboardTTL = duration
+	case "session_timeout":
+		seconds, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("invalid timeout value: %w", err)
+		}
+		if seconds <= 0 {
+			return fmt.Errorf("invalid timeout value: must be positive seconds")
+		}
+		cfg.Security.SessionTimeout = seconds
 	case "output_format":
 		if value != "table" && value != "json" && value != "yaml" {
 			return fmt.Errorf("invalid output format: %s (valid: table, json, yaml)", value)
