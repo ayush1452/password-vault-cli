@@ -244,6 +244,41 @@ vault delete github gitlab bitbucket --yes
 
 ## 🎯 Advanced Features
 
+### Password Generation
+
+Use `vault passgen` to create strong passwords or passphrases without storing them in the vault. This command is powered by `internal/cli/passgen.go` and the entropy helpers in `internal/crypto/entropy.go`.
+
+#### Quick Examples
+
+```bash
+# Generate a 20-character password (default alnumsym charset)
+vault passgen
+
+# Generate a 32-character alphanumeric password
+vault passgen --length 32 --charset alnum
+
+# Generate a 5-word diceware-style passphrase
+vault passgen --words 5
+
+# Copy a password to clipboard for 45 seconds
+vault passgen --copy --ttl 45
+```
+
+#### Flags
+
+- **`--length <n>`** (default: `20`)
+  Length of the generated password. Ignored when `--words` is supplied.
+- **`--words <n>`**
+  Generate a Diceware-style passphrase with `<n>` hyphenated adjective–noun words. Cannot be combined with `--length` or `--charset`.
+- **`--charset <alpha|alnum|alnumsym>`** (default: `alnumsym`)
+  Character set used for password generation when `--length` is active.
+- **`--copy`**
+  Copy the generated output to the clipboard using `internal/clipboard/clipboard.go`. Falls back to printing when omitted.
+- **`--ttl <seconds>`**
+  How long the clipboard entry remains before clearing. Use `-1` (default) to fall back to `config.Config.ClipboardTTL`, otherwise specify seconds.
+
+If clipboard integration is unavailable, the command exits with an error when `--copy` is used. Invalid flag combinations and non-positive lengths/word counts return non-zero exit codes.
+
 ### Profile Management
 
 Profiles help organize passwords by environment or purpose.
