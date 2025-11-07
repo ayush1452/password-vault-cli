@@ -40,8 +40,9 @@ type VaultMetadata struct {
 
 // Filter represents entry filtering options
 type Filter struct {
-	Search string   `json:"search"`
-	Tags   []string `json:"tags"`
+	Search       string   `json:"search"`
+	Tags         []string `json:"tags"`
+	SearchTokens []string `json:"search_tokens"`
 }
 
 // Operation represents an audit log operation

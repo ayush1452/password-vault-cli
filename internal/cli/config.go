@@ -1,13 +1,22 @@
 package cli
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/vault-cli/vault/internal/config"
+)
+
+type contextKey string
+
+const (
+	configKey contextKey = "config"
 )
 
 var configCmd = &cobra.Command{
@@ -31,9 +40,9 @@ var configGetCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
-			return runConfigGetAll()
+			return runConfigGetAll(cmd)
 		}
-		return runConfigGet(args[0])
+		return runConfigGet(cmd, args[0])
 	},
 }
 
@@ -42,7 +51,7 @@ var configSetCmd = &cobra.Command{
 	Short: "Set configuration value",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runConfigSet(args[0], args[1])
+		return runConfigSet(cmd, args[0], args[1])
 	},
 }
 
@@ -50,7 +59,7 @@ var configPathCmd = &cobra.Command{
 	Use:   "path",
 	Short: "Show configuration file path",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runConfigPath()
+		return runConfigPath(cmd)
 	},
 }
 
@@ -76,6 +85,10 @@ Example:
   vault config set clipboard_ttl 60s     # Set clipboard timeout
   vault config get                       # Show all configuration`,
 	}
+	
+	// Set the config in the command's context
+	ctx := context.WithValue(context.Background(), configKey, cfg)
+	cmd.SetContext(ctx)
 
 	getCmd := &cobra.Command{
 		Use:   "get [key]",
@@ -83,9 +96,9 @@ Example:
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				return runConfigGetAll()
+				return runConfigGetAll(cmd)
 			}
-			return runConfigGet(args[0])
+			return runConfigGet(cmd, args[0])
 		},
 	}
 
@@ -94,7 +107,7 @@ Example:
 		Short: "Set configuration value",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runConfigSet(args[0], args[1])
+			return runConfigSet(cmd, args[0], args[1])
 		},
 	}
 
@@ -102,7 +115,7 @@ Example:
 		Use:   "path",
 		Short: "Show configuration file path",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runConfigPath()
+			return runConfigPath(cmd)
 		},
 	}
 
@@ -113,55 +126,82 @@ Example:
 	return cmd
 }
 
-func runConfigGetAll() error {
-	fmt.Printf("Configuration file: %s\n\n", cfgFile)
-	fmt.Printf("vault_path: %s\n", cfg.VaultPath)
-	fmt.Printf("default_profile: %s\n", cfg.DefaultProfile)
-	fmt.Printf("auto_lock_ttl: %s\n", cfg.AutoLockTTL)
-	fmt.Printf("clipboard_ttl: %s\n", cfg.ClipboardTTL)
-	fmt.Printf("session_timeout: %d\n", cfg.Security.SessionTimeout)
-	fmt.Printf("output_format: %s\n", cfg.OutputFormat)
-	fmt.Printf("show_passwords: %t\n", cfg.ShowPasswords)
-	fmt.Printf("confirm_destructive: %t\n", cfg.ConfirmDestructive)
-	fmt.Printf("kdf.memory: %d\n", cfg.KDF.Memory)
-	fmt.Printf("kdf.iterations: %d\n", cfg.KDF.Iterations)
-	fmt.Printf("kdf.parallelism: %d\n", cfg.KDF.Parallelism)
+func runConfigGetAll(cmd *cobra.Command) error {
+	var out io.Writer = os.Stdout
+	if cmd != nil {
+		out = cmd.OutOrStdout()
+	}
+
+	fmt.Fprintf(out, "Configuration file: %s\n\n", cfgFile)
+	fmt.Fprintf(out, "vault_path: %s\n", cfg.VaultPath)
+	fmt.Fprintf(out, "default_profile: %s\n", cfg.DefaultProfile)
+	fmt.Fprintf(out, "auto_lock_ttl: %s\n", cfg.AutoLockTTL)
+	fmt.Fprintf(out, "clipboard_ttl: %s\n", cfg.ClipboardTTL)
+	fmt.Fprintf(out, "session_timeout: %d\n", cfg.Security.SessionTimeout)
+	fmt.Fprintf(out, "output_format: %s\n", cfg.OutputFormat)
+	fmt.Fprintf(out, "show_passwords: %t\n", cfg.ShowPasswords)
+	fmt.Fprintf(out, "confirm_destructive: %t\n", cfg.ConfirmDestructive)
+	fmt.Fprintf(out, "kdf.memory: %d\n", cfg.KDF.Memory)
+	fmt.Fprintf(out, "kdf.iterations: %d\n", cfg.KDF.Iterations)
+	fmt.Fprintf(out, "kdf.parallelism: %d\n", cfg.KDF.Parallelism)
+
 	return nil
 }
 
-func runConfigGet(key string) error {
+func runConfigGet(cmd *cobra.Command, key string) error {
+	var out io.Writer = os.Stdout
+	if cmd != nil {
+		out = cmd.OutOrStdout()
+	}
+
+	// Get config from command context or use global config
+	var currentCfg *config.Config
+	if cmd != nil && cmd.Root() != nil {
+		if c, ok := cmd.Root().Context().Value(configKey).(*config.Config); ok && c != nil {
+			currentCfg = c
+		}
+	}
+	if currentCfg == nil {
+		currentCfg = cfg
+	}
+
 	normalized := strings.ReplaceAll(strings.ToLower(key), "-", "_")
 
 	switch normalized {
 	case "vault_path":
-		fmt.Println(cfg.VaultPath)
+		fmt.Fprintln(out, currentCfg.VaultPath)
 	case "default_profile":
-		fmt.Println(cfg.DefaultProfile)
+		fmt.Fprintln(out, currentCfg.DefaultProfile)
 	case "auto_lock_ttl":
-		fmt.Println(cfg.AutoLockTTL)
+		fmt.Fprintln(out, currentCfg.AutoLockTTL)
 	case "clipboard_ttl":
-		fmt.Println(cfg.ClipboardTTL)
+		fmt.Fprintln(out, currentCfg.ClipboardTTL)
 	case "session_timeout":
-		fmt.Println(cfg.Security.SessionTimeout)
+		fmt.Fprintln(out, currentCfg.Security.SessionTimeout)
 	case "output_format":
-		fmt.Println(cfg.OutputFormat)
+		fmt.Fprintln(out, currentCfg.OutputFormat)
 	case "show_passwords":
-		fmt.Println(cfg.ShowPasswords)
+		fmt.Fprintln(out, currentCfg.ShowPasswords)
 	case "confirm_destructive":
-		fmt.Println(cfg.ConfirmDestructive)
+		fmt.Fprintln(out, currentCfg.ConfirmDestructive)
 	case "kdf.memory":
-		fmt.Println(cfg.KDF.Memory)
+		fmt.Fprintln(out, currentCfg.KDF.Memory)
 	case "kdf.iterations":
-		fmt.Println(cfg.KDF.Iterations)
+		fmt.Fprintln(out, currentCfg.KDF.Iterations)
 	case "kdf.parallelism":
-		fmt.Println(cfg.KDF.Parallelism)
+		fmt.Fprintln(out, currentCfg.KDF.Parallelism)
 	default:
 		return fmt.Errorf("unknown configuration key: %s", key)
 	}
+
 	return nil
 }
 
-func runConfigSet(key, value string) error {
+func runConfigSet(cmd *cobra.Command, key, value string) error {
+	var out io.Writer = os.Stdout
+	if cmd != nil {
+		out = cmd.OutOrStdout()
+	}
 	normalized := strings.ReplaceAll(strings.ToLower(key), "-", "_")
 
 	switch normalized {
@@ -234,11 +274,15 @@ func runConfigSet(key, value string) error {
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}
 
-	fmt.Printf("✓ Configuration updated: %s = %s\n", key, value)
+	fmt.Fprintf(out, "✓ Configuration updated: %s = %s\n", key, value)
 	return nil
 }
 
-func runConfigPath() error {
-	fmt.Println(cfgFile)
+func runConfigPath(cmd *cobra.Command) error {
+	var out io.Writer = os.Stdout
+	if cmd != nil {
+		out = cmd.OutOrStdout()
+	}
+	fmt.Fprintln(out, cfgFile)
 	return nil
 }

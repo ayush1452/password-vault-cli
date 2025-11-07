@@ -386,12 +386,16 @@ func (bs *BoltStore) ListEntries(profile string, filter *domain.Filter) ([]*doma
 
 			// Apply filter
 			if filter != nil {
-				if filter.Search != "" {
+				if len(filter.SearchTokens) > 0 {
+					if !vault.MatchesSearchTokens(&entry, filter.SearchTokens) {
+						return nil
+					}
+				} else if filter.Search != "" {
 					searchLower := strings.ToLower(filter.Search)
 					if !strings.Contains(strings.ToLower(entry.Name), searchLower) &&
 						!strings.Contains(strings.ToLower(entry.Username), searchLower) &&
 						!strings.Contains(strings.ToLower(entry.URL), searchLower) {
-						return nil // Skip this entry
+						return nil
 					}
 				}
 
