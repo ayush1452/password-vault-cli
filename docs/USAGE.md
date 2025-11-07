@@ -179,8 +179,8 @@ vault get github --field password --show
 # List all entries
 vault list
 
-# List with details
-vault list --show
+# Detailed table with username, tags, and updated time
+vault list --long
 
 # JSON output
 vault list --json
@@ -188,8 +188,9 @@ vault list --json
 
 **Filtering**
 ```bash
-# Search by name
+# Search by name (fuzzy tokens use + as AND)
 vault list --search github
+vault list --search aws+prod
 
 # Filter by tags
 vault list --tags development
@@ -197,6 +198,7 @@ vault list --tags "development,git"
 
 # Combined filters
 vault list --search git --tags development
+vault list --search aws+prod --tags prod
 ```
 
 **Output Formats**
