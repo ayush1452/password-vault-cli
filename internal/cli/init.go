@@ -15,6 +15,7 @@ var (
 	kdfIterations  uint32
 	kdfParallelism uint8
 	force          bool
+	passphrase     string
 )
 
 var initCmd = &cobra.Command{
@@ -41,6 +42,7 @@ func init() {
 	initCmd.Flags().Uint32Var(&kdfIterations, "kdf-iterations", 3, "Time parameter for Argon2id")
 	initCmd.Flags().Uint8Var(&kdfParallelism, "kdf-parallelism", 4, "Parallelism parameter for Argon2id")
 	initCmd.Flags().BoolVar(&force, "force", false, "Overwrite existing vault")
+	initCmd.Flags().StringVar(&passphrase, "passphrase", "", "Master passphrase (for non-interactive use)")
 }
 
 // NewInitCommand creates a new init command for testing
@@ -57,7 +59,7 @@ The vault will be created with strong cryptographic defaults:
 
 Example:
   vault init
-  vault init --kdf-memory 128 --kdf-iterations 5
+  vault init --passphrase "my-strong-password" --kdf-memory 128 --kdf-iterations 5
   vault init --vault /path/to/vault.db --force`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cfg != nil && vaultPath == "" {
@@ -71,6 +73,7 @@ Example:
 	cmd.Flags().Uint32Var(&kdfIterations, "kdf-iterations", 3, "Time parameter for Argon2id")
 	cmd.Flags().Uint8Var(&kdfParallelism, "kdf-parallelism", 4, "Parallelism parameter for Argon2id")
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing vault")
+	cmd.Flags().StringVar(&passphrase, "passphrase", "", "Master passphrase (for non-interactive use)")
 
 	return cmd
 }
@@ -97,17 +100,45 @@ func runInit() error {
 		return fmt.Errorf("invalid KDF parameters: %w", err)
 	}
 
-	// Prompt for master passphrase
-	fmt.Println("Creating new vault...")
-	fmt.Println("Choose a strong master passphrase. This will be used to encrypt all your data.")
+	var err error
 
-	passphrase, err := PromptPasswordConfirm("Enter master passphrase: ")
-	if err != nil {
-		return fmt.Errorf("failed to get passphrase: %w", err)
-	}
+	// Get passphrase from flag or prompt
+	if passphrase == "" {
+		// Interactive mode
+		fmt.Println("Creating new vault...")
+		fmt.Println("Choose a strong master passphrase. This will be used to encrypt all your data.")
+		passphrase, err = PromptPassword("Enter master passphrase: ")
+		if err != nil {
+			return fmt.Errorf("failed to get passphrase: %w", err)
+		}
 
-	if len(passphrase) < 8 {
-		return fmt.Errorf("passphrase must be at least 8 characters long")
+		// Validate passphrase
+		if passphrase == "" {
+			return fmt.Errorf("passphrase cannot be empty")
+		}
+
+		if len(passphrase) < 8 {
+			return fmt.Errorf("passphrase is too short (minimum 8 characters)")
+		}
+
+		// Confirm passphrase
+		confirm, err := PromptPassword("Confirm master passphrase: ")
+		if err != nil {
+			return fmt.Errorf("failed to confirm passphrase: %w", err)
+		}
+
+		if passphrase != confirm {
+			return fmt.Errorf("passphrases do not match")
+		}
+	} else {
+		// Non-interactive mode - validate passphrase
+		if passphrase == "" {
+			return fmt.Errorf("passphrase cannot be empty")
+		}
+
+		if len(passphrase) < 8 {
+			return fmt.Errorf("passphrase is too short (minimum 8 characters)")
+		}
 	}
 
 	// Generate salt

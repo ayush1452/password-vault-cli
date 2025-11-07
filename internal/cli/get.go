@@ -31,7 +31,7 @@ Example:
   vault get github --field url --show # Display URL in terminal`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runGet(args[0])
+		return runGet(cmd, args[0])
 	},
 }
 
@@ -43,7 +43,7 @@ func init() {
 
 // NewGetCommand creates a new get command for testing
 func NewGetCommand(cfg *config.Config) *cobra.Command {
-	cmd := &cobra.Command{
+	var cmd = &cobra.Command{
 		Use:   "get <entry-name>",
 		Short: "Get an entry from the vault",
 		Long: `Get an entry from the vault and display or copy the specified field.
@@ -65,7 +65,7 @@ Example:
 			if cfg != nil && profile == "" {
 				profile = cfg.DefaultProfile
 			}
-			return runGet(args[0])
+			return runGet(cmd, args[0])
 		},
 	}
 
@@ -76,7 +76,7 @@ Example:
 	return cmd
 }
 
-func runGet(entryName string) error {
+func runGet(cmd *cobra.Command, entryName string) error {
 	defer CloseSessionStore()
 
 	// Check if vault is unlocked
@@ -114,7 +114,7 @@ func runGet(entryName string) error {
 	}
 
 	if value == "" {
-		fmt.Printf("Field '%s' is empty for entry '%s'\n", field, entryName)
+		fmt.Fprintf(cmd.OutOrStdout(), "Field '%s' is empty for entry '%s'\n", field, entryName)
 		return nil
 	}
 
@@ -135,17 +135,17 @@ func runGet(entryName string) error {
 			return fmt.Errorf("failed to copy to clipboard: %w", err)
 		}
 
-		fmt.Printf("✓ %s for '%s' copied to clipboard", strings.Title(field), entryName)
+		fmt.Fprintf(cmd.OutOrStdout(), "✓ %s for '%s' copied to clipboard", strings.Title(field), entryName)
 		if sensitive {
-			fmt.Printf(" (clears in %v)", timeout)
+			fmt.Fprintf(cmd.OutOrStdout(), " (clears in %v)", timeout)
 		}
-		fmt.Println()
+		fmt.Fprintln(cmd.OutOrStdout())
 	} else {
 		// Display in terminal
 		if sensitive {
-			fmt.Println("⚠️  WARNING: Displaying secret in terminal")
+			fmt.Fprintln(cmd.OutOrStdout(), "⚠️  WARNING: Displaying secret in terminal")
 		}
-		fmt.Printf("%s: %s\n", strings.Title(field), value)
+		fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", strings.Title(field), value)
 	}
 
 	// Show additional info if verbose
