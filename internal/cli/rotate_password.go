@@ -13,10 +13,10 @@ import (
 // NewRotatePasswordCommand creates a new command for rotating passwords
 func NewRotatePasswordCommand(cfg *config.Config) *cobra.Command {
 	var (
-		length      int
-		copyToClip  bool
-		ttl         int
-		show        bool
+		length     int
+		copyToClip bool
+		ttl        int
+		show       bool
 	)
 
 	cmd := &cobra.Command{

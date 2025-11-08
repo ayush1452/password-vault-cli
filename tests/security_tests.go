@@ -698,7 +698,7 @@ func TestInputValidation(t *testing.T) {
 			}
 
 			err := vaultStore.CreateEntry("default", entry)
-			
+
 			// If the vault doesn't reject it, at least validate the name was sanitized
 			if err == nil {
 				t.Logf("⚠️  Warning: Vault accepted potentially malicious name '%s' - should add validation", maliciousName)
@@ -729,7 +729,7 @@ func TestInputValidation(t *testing.T) {
 				t.Errorf("Failed to retrieve safe entry: %v", err)
 			} else {
 				if retrieved.Name != safeEntry.Name {
-					t.Errorf("Entry name was modified: expected '%s', got '%s'", 
+					t.Errorf("Entry name was modified: expected '%s', got '%s'",
 						safeEntry.Name, retrieved.Name)
 				}
 				t.Log("✅ Entry data integrity maintained")

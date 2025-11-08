@@ -48,23 +48,27 @@ func (m *rotatePasswordVaultStore) CreateEntry(profile string, entry *domain.Ent
 func (m *rotatePasswordVaultStore) ListEntries(profile string, filter *domain.Filter) ([]*domain.Entry, error) {
 	return nil, nil
 }
-func (m *rotatePasswordVaultStore) DeleteEntry(profile, id string) error                     { return nil }
-func (m *rotatePasswordVaultStore) EntryExists(profile, id string) bool                      { return false }
-func (m *rotatePasswordVaultStore) CreateProfile(name, description string) error             { return nil }
-func (m *rotatePasswordVaultStore) GetProfile(name string) (*domain.Profile, error)          { return nil, nil }
-func (m *rotatePasswordVaultStore) ListProfiles() ([]*domain.Profile, error)                 { return nil, nil }
-func (m *rotatePasswordVaultStore) DeleteProfile(name string) error                          { return nil }
-func (m *rotatePasswordVaultStore) ProfileExists(name string) bool                           { return false }
-func (m *rotatePasswordVaultStore) GetVaultMetadata() (*domain.VaultMetadata, error)         { return nil, nil }
-func (m *rotatePasswordVaultStore) UpdateVaultMetadata(metadata *domain.VaultMetadata) error { return nil }
-func (m *rotatePasswordVaultStore) LogOperation(op *domain.Operation) error                  { return nil }
-func (m *rotatePasswordVaultStore) GetAuditLog() ([]*domain.Operation, error)                { return nil, nil }
-func (m *rotatePasswordVaultStore) VerifyAuditIntegrity() error                              { return nil }
-func (m *rotatePasswordVaultStore) ExportVault(path string, includeSecrets bool) error       { return nil }
-func (m *rotatePasswordVaultStore) ImportVault(path string, conflictResolution string) error { return nil }
-func (m *rotatePasswordVaultStore) CompactVault() error                                      { return nil }
-func (m *rotatePasswordVaultStore) VerifyIntegrity() error                                   { return nil }
-func (m *rotatePasswordVaultStore) RotateMasterKey(newPassphrase string) error              { return nil }
+func (m *rotatePasswordVaultStore) DeleteEntry(profile, id string) error             { return nil }
+func (m *rotatePasswordVaultStore) EntryExists(profile, id string) bool              { return false }
+func (m *rotatePasswordVaultStore) CreateProfile(name, description string) error     { return nil }
+func (m *rotatePasswordVaultStore) GetProfile(name string) (*domain.Profile, error)  { return nil, nil }
+func (m *rotatePasswordVaultStore) ListProfiles() ([]*domain.Profile, error)         { return nil, nil }
+func (m *rotatePasswordVaultStore) DeleteProfile(name string) error                  { return nil }
+func (m *rotatePasswordVaultStore) ProfileExists(name string) bool                   { return false }
+func (m *rotatePasswordVaultStore) GetVaultMetadata() (*domain.VaultMetadata, error) { return nil, nil }
+func (m *rotatePasswordVaultStore) UpdateVaultMetadata(metadata *domain.VaultMetadata) error {
+	return nil
+}
+func (m *rotatePasswordVaultStore) LogOperation(op *domain.Operation) error            { return nil }
+func (m *rotatePasswordVaultStore) GetAuditLog() ([]*domain.Operation, error)          { return nil, nil }
+func (m *rotatePasswordVaultStore) VerifyAuditIntegrity() error                        { return nil }
+func (m *rotatePasswordVaultStore) ExportVault(path string, includeSecrets bool) error { return nil }
+func (m *rotatePasswordVaultStore) ImportVault(path string, conflictResolution string) error {
+	return nil
+}
+func (m *rotatePasswordVaultStore) CompactVault() error                        { return nil }
+func (m *rotatePasswordVaultStore) VerifyIntegrity() error                     { return nil }
+func (m *rotatePasswordVaultStore) RotateMasterKey(newPassphrase string) error { return nil }
 
 // TestRotatePasswordCommand tests the rotate password command
 func TestRotatePasswordCommand(t *testing.T) {

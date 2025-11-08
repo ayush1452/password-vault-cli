@@ -85,7 +85,7 @@ Example:
   vault config set clipboard_ttl 60s     # Set clipboard timeout
   vault config get                       # Show all configuration`,
 	}
-	
+
 	// Set the config in the command's context
 	ctx := context.WithValue(context.Background(), configKey, cfg)
 	cmd.SetContext(ctx)

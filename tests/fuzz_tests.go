@@ -208,17 +208,17 @@ func FuzzStoreOperations(f *testing.F) {
 		vaultPath := filepath.Join(tempDir, "fuzz_store.vault")
 
 		s := store.NewBoltStore()
-		
+
 		// Create and open vault
 		crypto := vault.NewDefaultCryptoEngine()
 		passphrase := "fuzz-test-passphrase"
 		salt, _ := vault.GenerateSalt()
 		masterKey, _ := crypto.DeriveKey(passphrase, salt)
-		
+
 		kdfParams := map[string]interface{}{
 			"algorithm": "argon2id",
 		}
-		
+
 		err := s.CreateVault(vaultPath, masterKey, kdfParams)
 		if err != nil {
 			t.Skip("Failed to create vault")
@@ -617,16 +617,16 @@ func BenchmarkStoreOperations(b *testing.B) {
 	vaultPath := filepath.Join(tempDir, "benchmark.vault")
 
 	s := store.NewBoltStore()
-	
+
 	crypto := vault.NewDefaultCryptoEngine()
 	passphrase := "benchmark-passphrase"
 	salt, _ := vault.GenerateSalt()
 	masterKey, _ := crypto.DeriveKey(passphrase, salt)
-	
+
 	kdfParams := map[string]interface{}{
 		"algorithm": "argon2id",
 	}
-	
+
 	err := s.CreateVault(vaultPath, masterKey, kdfParams)
 	if err != nil {
 		b.Fatalf("Failed to create vault: %v", err)

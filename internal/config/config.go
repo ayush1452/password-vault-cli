@@ -11,16 +11,16 @@ import (
 
 // Config represents the vault configuration
 type Config struct {
-	VaultPath          string                  `yaml:"vault_path"`
-	DefaultProfile     string                  `yaml:"default_profile"`
-	Profiles           map[string]*Profile     `yaml:"profiles"`
-	AutoLockTTL        time.Duration           `yaml:"auto_lock_ttl"`
-	ClipboardTTL       time.Duration           `yaml:"clipboard_ttl"`
-	OutputFormat       string                  `yaml:"output_format"`
-	ShowPasswords      bool                    `yaml:"show_passwords"`
-	ConfirmDestructive bool                    `yaml:"confirm_destructive"`
-	KDF                KDFConfig               `yaml:"kdf"`
-	Security           SecurityConfig          `yaml:"security"`
+	VaultPath          string              `yaml:"vault_path"`
+	DefaultProfile     string              `yaml:"default_profile"`
+	Profiles           map[string]*Profile `yaml:"profiles"`
+	AutoLockTTL        time.Duration       `yaml:"auto_lock_ttl"`
+	ClipboardTTL       time.Duration       `yaml:"clipboard_ttl"`
+	OutputFormat       string              `yaml:"output_format"`
+	ShowPasswords      bool                `yaml:"show_passwords"`
+	ConfirmDestructive bool                `yaml:"confirm_destructive"`
+	KDF                KDFConfig           `yaml:"kdf"`
+	Security           SecurityConfig      `yaml:"security"`
 }
 
 // Profile represents a vault profile configuration
