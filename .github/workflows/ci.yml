@@ -158,7 +158,7 @@ jobs:
         echo "Running security scan..."
         
         # Run gosec with SARIF output for GitHub code scanning
-        gosec -fmt=sarif -out=security-scan.sarif -exclude-generated -concurrency=8 ./...
+        gosec -quiet -fmt=sarif -out=security-scan.sarif -exclude-generated -concurrency=2 ./...
         
         # Upload SARIF results to GitHub
         echo "Uploading security scan results..."
