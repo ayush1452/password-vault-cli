@@ -534,7 +534,7 @@ func TestListCommandDetailed(t *testing.T) {
 	}
 
 	if err := s.CloseVault(); err != nil {
-		t.Fatalf("Failed to close vault after setup: %v", err)
+		t.Fatal(err)
 	}
 
 	// assertValidEntry validates the structure of an entry map

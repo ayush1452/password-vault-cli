@@ -58,4 +58,7 @@ type VaultStore interface {
 	// Maintenance operations
 	CompactVault() error
 	VerifyIntegrity() error
+
+	// Security operations
+	RotateMasterKey(newPassphrase string) error
 }

@@ -12,12 +12,12 @@ import (
 	"github.com/vault-cli/vault/internal/domain"
 )
 
-// mockVaultStore is a minimal implementation of VaultStore for testing
-type mockVaultStore struct {
+// rotatePasswordVaultStore is a minimal implementation of VaultStore for testing
+type rotatePasswordVaultStore struct {
 	entries map[string]*domain.Entry
 }
 
-func (m *mockVaultStore) GetEntry(profile, id string) (*domain.Entry, error) {
+func (m *rotatePasswordVaultStore) GetEntry(profile, id string) (*domain.Entry, error) {
 	if entry, exists := m.entries[id]; exists {
 		// Return a copy to prevent test interference
 		entryCopy := *entry
@@ -26,7 +26,7 @@ func (m *mockVaultStore) GetEntry(profile, id string) (*domain.Entry, error) {
 	return nil, errors.New("entry not found")
 }
 
-func (m *mockVaultStore) UpdateEntry(profile, id string, entry *domain.Entry) error {
+func (m *rotatePasswordVaultStore) UpdateEntry(profile, id string, entry *domain.Entry) error {
 	if _, exists := m.entries[id]; !exists {
 		return errors.New("entry not found")
 	}
@@ -36,34 +36,35 @@ func (m *mockVaultStore) UpdateEntry(profile, id string, entry *domain.Entry) er
 	return nil
 }
 
-func (m *mockVaultStore) IsOpen() bool { return true }
+func (m *rotatePasswordVaultStore) IsOpen() bool { return true }
 
 // Add other required store.VaultStore methods with empty implementations
-func (m *mockVaultStore) CreateVault(path string, masterKey []byte, kdfParams map[string]interface{}) error {
+func (m *rotatePasswordVaultStore) CreateVault(path string, masterKey []byte, kdfParams map[string]interface{}) error {
 	return nil
 }
-func (m *mockVaultStore) OpenVault(path string, masterKey []byte) error         { return nil }
-func (m *mockVaultStore) CloseVault() error                                     { return nil }
-func (m *mockVaultStore) CreateEntry(profile string, entry *domain.Entry) error { return nil }
-func (m *mockVaultStore) ListEntries(profile string, filter *domain.Filter) ([]*domain.Entry, error) {
+func (m *rotatePasswordVaultStore) OpenVault(path string, masterKey []byte) error         { return nil }
+func (m *rotatePasswordVaultStore) CloseVault() error                                     { return nil }
+func (m *rotatePasswordVaultStore) CreateEntry(profile string, entry *domain.Entry) error { return nil }
+func (m *rotatePasswordVaultStore) ListEntries(profile string, filter *domain.Filter) ([]*domain.Entry, error) {
 	return nil, nil
 }
-func (m *mockVaultStore) DeleteEntry(profile, id string) error                     { return nil }
-func (m *mockVaultStore) EntryExists(profile, id string) bool                      { return false }
-func (m *mockVaultStore) CreateProfile(name, description string) error             { return nil }
-func (m *mockVaultStore) GetProfile(name string) (*domain.Profile, error)          { return nil, nil }
-func (m *mockVaultStore) ListProfiles() ([]*domain.Profile, error)                 { return nil, nil }
-func (m *mockVaultStore) DeleteProfile(name string) error                          { return nil }
-func (m *mockVaultStore) ProfileExists(name string) bool                           { return false }
-func (m *mockVaultStore) GetVaultMetadata() (*domain.VaultMetadata, error)         { return nil, nil }
-func (m *mockVaultStore) UpdateVaultMetadata(metadata *domain.VaultMetadata) error { return nil }
-func (m *mockVaultStore) LogOperation(op *domain.Operation) error                  { return nil }
-func (m *mockVaultStore) GetAuditLog() ([]*domain.Operation, error)                { return nil, nil }
-func (m *mockVaultStore) VerifyAuditIntegrity() error                              { return nil }
-func (m *mockVaultStore) ExportVault(path string, includeSecrets bool) error       { return nil }
-func (m *mockVaultStore) ImportVault(path string, conflictResolution string) error { return nil }
-func (m *mockVaultStore) CompactVault() error                                      { return nil }
-func (m *mockVaultStore) VerifyIntegrity() error                                   { return nil }
+func (m *rotatePasswordVaultStore) DeleteEntry(profile, id string) error                     { return nil }
+func (m *rotatePasswordVaultStore) EntryExists(profile, id string) bool                      { return false }
+func (m *rotatePasswordVaultStore) CreateProfile(name, description string) error             { return nil }
+func (m *rotatePasswordVaultStore) GetProfile(name string) (*domain.Profile, error)          { return nil, nil }
+func (m *rotatePasswordVaultStore) ListProfiles() ([]*domain.Profile, error)                 { return nil, nil }
+func (m *rotatePasswordVaultStore) DeleteProfile(name string) error                          { return nil }
+func (m *rotatePasswordVaultStore) ProfileExists(name string) bool                           { return false }
+func (m *rotatePasswordVaultStore) GetVaultMetadata() (*domain.VaultMetadata, error)         { return nil, nil }
+func (m *rotatePasswordVaultStore) UpdateVaultMetadata(metadata *domain.VaultMetadata) error { return nil }
+func (m *rotatePasswordVaultStore) LogOperation(op *domain.Operation) error                  { return nil }
+func (m *rotatePasswordVaultStore) GetAuditLog() ([]*domain.Operation, error)                { return nil, nil }
+func (m *rotatePasswordVaultStore) VerifyAuditIntegrity() error                              { return nil }
+func (m *rotatePasswordVaultStore) ExportVault(path string, includeSecrets bool) error       { return nil }
+func (m *rotatePasswordVaultStore) ImportVault(path string, conflictResolution string) error { return nil }
+func (m *rotatePasswordVaultStore) CompactVault() error                                      { return nil }
+func (m *rotatePasswordVaultStore) VerifyIntegrity() error                                   { return nil }
+func (m *rotatePasswordVaultStore) RotateMasterKey(newPassphrase string) error              { return nil }
 
 // TestRotatePasswordCommand tests the rotate password command
 func TestRotatePasswordCommand(t *testing.T) {
@@ -77,7 +78,7 @@ func TestRotatePasswordCommand(t *testing.T) {
 	}
 
 	// Create a mock vault store
-	mockStore := &mockVaultStore{
+	mockStore := &rotatePasswordVaultStore{
 		entries: map[string]*domain.Entry{
 			"test-entry": testEntry,
 		},

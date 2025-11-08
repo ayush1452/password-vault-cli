@@ -392,13 +392,53 @@ vault import backup.vault --profile imported
 
 #### Master Key Rotation
 
-```bash
-# Rotate master passphrase
-vault rotate-master-key
+Rotating the master passphrase securely re-encrypts every entry in the vault with a newly derived key. The command runs entirely locally and never transmits data.
 
-# Verify rotation
-vault doctor --check-encryption
+**Prerequisites**
+
+- You must already have the vault unlocked in the current session (`vault unlock`).
+- The command prompts interactively for the current passphrase and the new passphrase (entered twice for confirmation). Non-interactive rotation is not yet supported.
+
+**Step-by-step workflow**
+
+```bash
+# 1. Unlock the vault (if not already unlocked)
+vault unlock --vault ~/vaults/demo.vault
+
+# 2. Rotate the master passphrase
+vault rotate-master-key --vault ~/vaults/demo.vault
+# Prompts:
+#   Verifying current passphrase...
+#   Enter current passphrase:
+#   Enter new passphrase:
+#   Confirm new passphrase:
+# Progress output ends with:
+#   Master key rotation completed successfully!
+#   Please unlock the vault with your new passphrase using 'vault unlock'
+
+# 3. Re-unlock using the new passphrase to verify
+vault unlock --vault ~/vaults/demo.vault
+
+# 4. (Optional) Confirm entries are still accessible
+vault get github --show --vault ~/vaults/demo.vault
+vault list --vault ~/vaults/demo.vault
 ```
+
+**What happens during rotation**
+
+1. The CLI derives the current master key using the supplied passphrase and validates it against the in-memory session key.
+2. A fresh 32-byte salt is generated and used with the existing Argon2id parameters to derive a new master key.
+3. Every entry bucket is decrypted with the old key and immediately re-encrypted with the new key inside a single BoltDB transaction.
+4. Vault metadata (`metadata.kdf_params`) is updated with the new salt and the effective Argon2id parameters.
+5. The in-memory session key is replaced, and the vault is locked to force a sign-in using the new passphrase.
+
+**Troubleshooting tips**
+
+- **"vault is locked"**: Run `vault unlock` first—rotation requires an active session.
+- **Placeholder paths**: Use a real, writable path (e.g. `~/vaults/demo.vault`) instead of `/path/to/vault.db`.
+- **Passphrase length**: The new passphrase must be at least 8 characters; shorter inputs fail with `passphrase is too short`.
+- **Key derivation warnings**: Messages such as `Warning: Key derivation took only 40ms` indicate that Argon2 completed faster than the recommended target. Increase difficulty via `vault init` flags or by editing your config (`kdf.memory`, `kdf.iterations`, `kdf.parallelism`).
+- **Old passphrase after rotation**: Attempting to unlock with the previous passphrase should fail—this is expected and confirms that rotation succeeded.
 
 #### Audit and Monitoring
 
