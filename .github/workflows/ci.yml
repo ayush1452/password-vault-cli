@@ -239,6 +239,9 @@ jobs:
         go mod verify
 
     - name: Build binary
+      env:
+        GITHUB_SHA: ${{ github.sha }}
+        RUNNER_OS: ${{ runner.os }}
       run: |
         export CGO_ENABLED=0
         export GOOS=$(echo ${{ matrix.platform }} | cut -d'/' -f1)
@@ -251,10 +254,10 @@ jobs:
         # Build with version information
         go build -v -trimpath \
           -ldflags="-s -w \
-            -X main.Version=${{ github.sha }} \
+            -X main.Version=$GITHUB_SHA \
             -X main.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
-            -X main.CommitHash=${{ github.sha }} \
-            -X main.BuildOS=${{ runner.os }}" \
+            -X main.CommitHash=$GITHUB_SHA \
+            -X main.BuildOS=$RUNNER_OS" \
           -o "$OUTPUT" \
           ./cmd/vault
         
