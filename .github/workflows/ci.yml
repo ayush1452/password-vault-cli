@@ -19,7 +19,7 @@ on:
 
 # Environment variables available to all jobs and steps
 env:
-  GO_VERSION: '1.21'
+  GO_VERSION: '1.24'
   BINARY_NAME: 'vault'
   CACHE_VERSION: 'v1'
   COVERAGE_FILE: 'coverage.out'
@@ -97,10 +97,11 @@ jobs:
         go install github.com/kisielk/errcheck@latest
         
         # Verify installations
-        goimports --version
-        gofumpt --version
-        staticcheck --version
-        gosec --version
+        go version
+        goimports -h > /dev/null && echo "goimports installed"
+        gofumpt -version
+        staticcheck -version
+        gosec -version
         golangci-lint --version
 
     - name: Check formatting (gofmt, goimports, gofumpt)
