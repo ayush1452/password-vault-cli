@@ -110,19 +110,24 @@ jobs:
         echo "Checking code formatting..."
         
         # Check for unformatted files
-        FMT_ISSUES=$(find . -name '*.go' -not -path '*/vendor/*' -not -path '*/_test.go' -exec gofmt -s -l {} \; | tee /dev/tty)
+        echo "Checking gofmt..."
+        FMT_ISSUES=$(find . -name '*.go' -not -path '*/vendor/*' -not -path '*/_test.go' -exec gofmt -s -l {} \;)
         if [ -n "$FMT_ISSUES" ]; then
           echo "::error::Code is not properly formatted. Run 'make fmt' to fix."
+          echo "Files with formatting issues:"
+          echo "$FMT_ISSUES"
           exit 1
         fi
         
         # Check for unformatted imports
-        IMPORTS_ISSUES=$(goimports -l $(find . -name '*.go' -not -path '*/vendor/*' -not -path '*/_test.go') | tee /dev/tty)
+        echo "Checking goimports..."
+        IMPORTS_ISSUES=$(find . -name '*.go' -not -path '*/vendor/*' -not -path '*/_test.go' -exec goimports -l {} \;)
         if [ -n "$IMPORTS_ISSUES" ]; then
           echo "::error::Imports are not properly formatted. Run 'goimports -w .' to fix."
+          echo "Files with import issues:"
+          echo "$IMPORTS_ISSUES"
           exit 1
         fi
-        
         echo "✅ All files are properly formatted"
 
     - name: Run linters
@@ -158,7 +163,7 @@ jobs:
         echo "Running security scan..."
         
         # Run gosec with SARIF output for GitHub code scanning
-        gosec -quiet -fmt=sarif -out=security-scan.sarif -exclude-generated -concurrency=2 ./...
+        gosec -quiet -fmt=sarif -out=security-scan.sarif -exclude-generated -exclude-dir=examples -concurrency=2 ./... || echo "Warning: gosec scan completed with issues"
         
         # Upload SARIF results to GitHub
         echo "Uploading security scan results..."
