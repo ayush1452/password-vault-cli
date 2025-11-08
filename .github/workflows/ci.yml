@@ -30,35 +30,65 @@ jobs:
     - name: Cache Go modules
       uses: actions/cache@v3
       with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+        go-version: '1.21'
+        cache: true
 
-    - name: Install dependencies
+    - name: Check Go environment
       run: |
-        go mod download
-        go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-        go install github.com/securego/gosec/v2/cmd/gosec@latest
+        echo "GOROOT: $GOROOT"
+        echo "GOPATH: $GOPATH"
+        echo "GO111MODULE: ${GO111MODULE:-"auto"}"
+        go version
+        go env
 
-    - name: Format check
+    - name: Check formatting
       run: |
-        if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-          echo "Code is not formatted. Run 'make fmt' to fix."
-          gofmt -s -l .
+        echo "Checking Go files formatting..."
+        find . -name '*.go' -not -path '*/vendor/*' -exec gofmt -s -l {} \;
+        if [ "$(find . -name '*.go' -not -path '*/vendor/*' -exec gofmt -s -l {} \; | wc -l)" -gt 0 ]; then
+          echo "::error::Code is not formatted. Run 'make fmt' to fix."
           exit 1
         fi
 
     - name: Lint
-      run: golangci-lint run --timeout=5m
+      run: |
+        echo "Running golangci-lint..."
+        golangci-lint run --timeout=5m ./...
+
+    - name: Install gosec
+      run: |
+        echo "Installing gosec..."
+        go install github.com/securego/gosec/v2/cmd/gosec@latest
+        echo "GOPATH: $GOPATH"
+        echo "GOPATH/bin: $GOPATH/bin"
+        echo "PATH: $PATH"
+        ls -la $GOPATH/bin
+        which gosec || echo "gosec not found in PATH"
 
     - name: Security scan
       run: |
         echo "Current directory: $(pwd)"
-        echo "Files in current directory:"
+        echo "Files in root directory:"
         ls -la
-        echo "Running gosec..."
-        gosec -fmt sarif -out ./gosec.sarif ./... || echo "gosec found issues or no Go files"
+        echo "Go files in project:"
+        find . -name '*.go' | head -5
+        echo "Total Go files: $(find . -name '*.go' | wc -l)"
+        
+        echo "\nRunning gosec with full path..."
+        export PATH=$PATH:$(go env GOPATH)/bin
+        $GOPATH/bin/gosec -version || echo "Failed to get gosec version"
+        
+        echo "\nRunning gosec scan..."
+        $GOPATH/bin/gosec -v -fmt sarif -out ./gosec.sarif ./... || echo "gosec completed with findings"
+        
+        echo "\nChecking if SARIF file was created..."
+        if [ -f "./gosec.sarif" ]; then
+          echo "SARIF file created successfully"
+          ls -la ./gosec.sarif
+        else
+          echo "ERROR: gosec.sarif was not created"
+          exit 1
+        fi
 
     - name: Upload security scan results
       uses: github/codeql-action/upload-sarif@v3
