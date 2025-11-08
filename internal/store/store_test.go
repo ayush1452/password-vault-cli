@@ -1,8 +1,10 @@
 package store
 
 import (
+	"encoding/base64"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -95,6 +97,151 @@ func TestBoltStore_CreateAndOpenVault(t *testing.T) {
 
 	if store.IsOpen() {
 		t.Error("Vault should be closed")
+	}
+}
+
+func TestBoltStore_RotateMasterKey(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "vault_rotate_test_")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	vaultPath := filepath.Join(tempDir, "rotate.vault")
+
+	params := vault.DefaultArgon2Params()
+	cryptoEngine := vault.NewCryptoEngine(params)
+
+	salt, err := vault.GenerateSalt()
+	if err != nil {
+		t.Fatalf("failed to generate salt: %v", err)
+	}
+
+	masterKey, err := cryptoEngine.DeriveKey("old-pass", salt)
+	if err != nil {
+		t.Fatalf("failed to derive initial master key: %v", err)
+	}
+	defer vault.Zeroize(masterKey)
+
+	kdfParams := map[string]interface{}{
+		"memory":      params.Memory,
+		"iterations":  params.Iterations,
+		"parallelism": params.Parallelism,
+		"salt":        salt,
+	}
+
+	creator := NewBoltStore()
+	if err := creator.CreateVault(vaultPath, masterKey, kdfParams); err != nil {
+		t.Fatalf("failed to create vault: %v", err)
+	}
+
+	store := NewBoltStore()
+	if err := store.OpenVault(vaultPath, masterKey); err != nil {
+		t.Fatalf("failed to open vault: %v", err)
+	}
+	defer store.CloseVault()
+
+	initialMetadata, err := store.GetVaultMetadata()
+	if err != nil {
+		t.Fatalf("failed to get vault metadata: %v", err)
+	}
+
+	initialSaltB64, ok := initialMetadata.KDFParams["salt"].(string)
+	if !ok {
+		t.Fatalf("metadata salt not stored as base64 string")
+	}
+
+	entry := &domain.Entry{
+		ID:        "example",
+		Name:      "example",
+		Username:  "user",
+		Password:  []byte("secret"),
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+
+	if err := store.CreateEntry("default", entry); err != nil {
+		t.Fatalf("failed to create entry: %v", err)
+	}
+
+	oldMasterKeyCopy := append([]byte(nil), masterKey...)
+	defer vault.Zeroize(oldMasterKeyCopy)
+
+	if err := store.RotateMasterKey("new-pass"); err != nil {
+		t.Fatalf("RotateMasterKey failed: %v", err)
+	}
+
+	rotatedEntry, err := store.GetEntry("default", entry.ID)
+	if err != nil {
+		t.Fatalf("failed to fetch entry after rotation: %v", err)
+	}
+	if string(rotatedEntry.Password) != "secret" {
+		t.Fatalf("entry password mismatch after rotation")
+	}
+
+	rotatedMetadata, err := store.GetVaultMetadata()
+	if err != nil {
+		t.Fatalf("failed to get rotated metadata: %v", err)
+	}
+
+	rotatedSaltB64, ok := rotatedMetadata.KDFParams["salt"].(string)
+	if !ok {
+		t.Fatalf("rotated salt not stored as base64 string")
+	}
+	if rotatedSaltB64 == initialSaltB64 {
+		t.Fatalf("salt should change after rotation")
+	}
+
+	rotatedSalt, err := base64.StdEncoding.DecodeString(rotatedSaltB64)
+	if err != nil {
+		t.Fatalf("failed to decode rotated salt: %v", err)
+	}
+	defer vault.Zeroize(rotatedSalt)
+
+	rotatedParams := vault.Argon2Params{
+		Memory:      uint32(rotatedMetadata.KDFParams["memory"].(float64)),
+		Iterations:  uint32(rotatedMetadata.KDFParams["iterations"].(float64)),
+		Parallelism: uint8(rotatedMetadata.KDFParams["parallelism"].(float64)),
+	}
+
+	rotatedCrypto := vault.NewCryptoEngine(rotatedParams)
+	rotatedMasterKey, err := rotatedCrypto.DeriveKey("new-pass", rotatedSalt)
+	if err != nil {
+		t.Fatalf("failed to derive rotated master key: %v", err)
+	}
+	defer vault.Zeroize(rotatedMasterKey)
+
+	if err := store.CloseVault(); err != nil {
+		t.Fatalf("failed to close rotated store: %v", err)
+	}
+
+	reopened := NewBoltStore()
+	if err := reopened.OpenVault(vaultPath, rotatedMasterKey); err != nil {
+		t.Fatalf("failed to reopen with rotated key: %v", err)
+	}
+
+	fetched, err := reopened.GetEntry("default", entry.ID)
+	if err != nil {
+		t.Fatalf("failed to fetch entry with rotated key: %v", err)
+	}
+	if string(fetched.Password) != "secret" {
+		t.Fatalf("entry password mismatch after reopen")
+	}
+
+	if err := reopened.CloseVault(); err != nil {
+		t.Fatalf("failed to close store opened with rotated key: %v", err)
+	}
+
+	oldStore := NewBoltStore()
+	if err := oldStore.OpenVault(vaultPath, oldMasterKeyCopy); err != nil {
+		t.Fatalf("old master key should still open for validation: %v", err)
+	}
+	defer oldStore.CloseVault()
+
+	if _, err := oldStore.GetEntry("default", entry.ID); err == nil {
+		t.Fatalf("expected decrypt failure with old master key")
+	} else if !strings.Contains(err.Error(), "failed to decrypt entry") {
+		t.Fatalf("unexpected error when using old master key: %v", err)
 	}
 }
 

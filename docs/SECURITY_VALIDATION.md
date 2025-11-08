@@ -1,3 +1,10 @@
+**Master Key Rotation Tampering**:
+```bash
+Test: Mid-rotation crash simulation and metadata verification
+Scenario: Force application exit after re-encryption but before success message
+Result: Transaction rollback preserves original state ✅
+Result: No partial re-encryption observed ✅
+```
 # Security Validation Report
 
 Comprehensive security analysis and test results for Password Vault CLI.
@@ -65,6 +72,20 @@ Test: 1,000,000 encryptions of same plaintext
 Result: All ciphertexts unique ✅
 Result: All nonces unique ✅
 Result: No pattern detection ✅
+```
+
+### Master Key Rotation Hardening
+
+**Implementation**: `BoltStore.RotateMasterKey`
+- **Re-encryption Scope**: All entry buckets re-sealed in a single BoltDB transaction
+- **Metadata Update**: Argon2 parameters and salt refreshed atomically
+- **Session Hygiene**: Old in-memory master key zeroized; vault locked post-rotation
+
+**Validation Results**:
+```
+✅ Automated coverage: TestBoltStore_RotateMasterKey re-encrypts data and validates metadata updates
+✅ Manual validation: CLI workflow confirms data accessibility with new passphrase and failure with old passphrase
+✅ Audit trail: rotation operation recorded in audit bucket
 ```
 
 ### Random Number Generation

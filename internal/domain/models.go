@@ -36,6 +36,7 @@ type VaultMetadata struct {
 	Version   string                 `json:"version"`
 	KDFParams map[string]interface{} `json:"kdf_params"`
 	CreatedAt time.Time              `json:"created_at"`
+	UpdatedAt time.Time              `json:"updated_at,omitempty"`
 }
 
 // Filter represents entry filtering options
