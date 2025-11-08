@@ -1,29 +1,305 @@
-name: CI Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
     branches: [ main, develop ]
+    paths:
+      - '**.go'
+      - 'go.mod'
+      - 'go.sum'
+      - '.golangci.yml'
   pull_request:
     branches: [ main, develop ]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual run'
+        required: false
+        default: 'Manual trigger'
+
+# Environment variables available to all jobs and steps
+env:
+  GO_VERSION: '1.21'
+  BINARY_NAME: 'vault'
+  CACHE_VERSION: 'v1'
+  COVERAGE_FILE: 'coverage.out'
+  BENCHMARK_FILE: 'benchmark.out'
+  LINT_TIMEOUT: '5m'
+  GOLANGCI_LINT_VERSION: 'v1.55.2'
+  GOSEC_VERSION: 'v2.19.0'
+
+# Job defaults
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  # Main CI job that runs the actual workflow file
-  main:
-    name: Run Main Workflow
+  code-quality:
+    name: Code Quality
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: 'Formatting & Linting'
+            run: format-lint
+          - name: 'Static Analysis'
+            run: static-analysis
+          - name: 'Security Scan'
+            run: security-scan
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          path: 'src'
-          
-      - name: Run workflow
-        run: |
-          echo "Running main workflow from .github/.workflow/"
-          # This will be replaced with the actual workflow execution
-          # once we confirm the structure is correct
-          echo "Workflow execution would happen here"
-          
-          # For now, just show the contents of the workflow directory
-          echo "Workflow files available:"
-          ls -la .github/.workflow/
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for better git blame
+        submodules: recursive
+
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+        cache-dependency-path: '**/go.sum'
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      id: go-cache
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Install tools
+      run: |
+        echo "Installing development tools..."
+        export PATH=$PATH:$(go env GOPATH)/bin
+        
+        # Install goimports and gofumpt for formatting
+        go install golang.org/x/tools/cmd/goimports@latest
+        go install mvdan.cc/gofumpt@latest
+        
+        # Install staticcheck for static analysis
+        go install honnef.co/go/tools/cmd/staticcheck@latest
+        
+        # Install gosec for security scanning
+        go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
+        
+        # Install golangci-lint
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin $GOLANGCI_LINT_VERSION
+        
+        # Install errcheck for error handling analysis
+        go install github.com/kisielk/errcheck@latest
+        
+        # Verify installations
+        goimports --version
+        gofumpt --version
+        staticcheck --version
+        gosec --version
+        golangci-lint --version
+
+    - name: Check formatting (gofmt, goimports, gofumpt)
+      if: matrix.run == 'format-lint'
+      run: |
+        echo "Checking code formatting..."
+        
+        # Check for unformatted files
+        FMT_ISSUES=$(find . -name '*.go' -not -path '*/vendor/*' -not -path '*/_test.go' -exec gofmt -s -l {} \; | tee /dev/tty)
+        if [ -n "$FMT_ISSUES" ]; then
+          echo "::error::Code is not properly formatted. Run 'make fmt' to fix."
+          exit 1
+        fi
+        
+        # Check for unformatted imports
+        IMPORTS_ISSUES=$(goimports -l $(find . -name '*.go' -not -path '*/vendor/*' -not -path '*/_test.go') | tee /dev/tty)
+        if [ -n "$IMPORTS_ISSUES" ]; then
+          echo "::error::Imports are not properly formatted. Run 'goimports -w .' to fix."
+          exit 1
+        fi
+        
+        echo "✅ All files are properly formatted"
+
+    - name: Run linters
+      if: matrix.run == 'format-lint'
+      run: |
+        echo "Running golangci-lint..."
+        golangci-lint run --timeout=${{ env.LINT_TIMEOUT }} --out-format=colored-line-number ./...
+        
+        # Additional linters that might not be in golangci-lint
+        echo "Running staticcheck..."
+        staticcheck -checks=all -fail=none ./...
+
+    - name: Run static analysis
+      if: matrix.run == 'static-analysis'
+      run: |
+        echo "Running static analysis..."
+        
+        # Check for common mistakes
+        echo "Running 'go vet'..."
+        go vet ./...
+        
+        # Check for unused code
+        echo "Checking for unused code..."
+        staticcheck -checks=U1000 ./...
+        
+        # Check for error handling issues
+        echo "Checking error handling..."
+        errcheck -blank -asserts -ignorepkg=bytes,io/ioutil,os -ignoretests ./...
+
+    - name: Run security scan
+      if: matrix.run == 'security-scan'
+      run: |
+        echo "Running security scan..."
+        
+        # Run gosec with SARIF output for GitHub code scanning
+        gosec -fmt=sarif -out=security-scan.sarif -exclude-generated -concurrency=8 ./...
+        
+        # Upload SARIF results to GitHub
+        echo "Uploading security scan results..."
+        if [ -f "security-scan.sarif" ]; then
+          echo "::notice::Security scan results available in the Security tab"
+          # Upload SARIF file as an artifact
+          echo "security-scan.sarif" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "::warning::No security scan results generated"
+        fi
+        
+        # Check for known vulnerabilities in dependencies
+        echo "Checking for vulnerable dependencies..."
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        govulncheck ./... || echo "Vulnerability check completed with findings"
+
+    - name: Upload code coverage
+      uses: actions/upload-artifact@v4
+      if: always() && matrix.run == 'format-lint'
+      with:
+        name: coverage-report
+        path: ${{ env.COVERAGE_FILE }}
+        retention-days: 7
+
+    - name: Upload security scan results
+      uses: actions/upload-artifact@v4
+      if: always() && matrix.run == 'security-scan' && success()
+      with:
+        name: security-scan-results
+        path: security-scan.sarif
+        retention-days: 7
+
+  build:
+    name: Build
+    needs: code-quality
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            platform: linux/amd64
+            ext: ''
+          - os: macos-latest
+            platform: darwin/amd64
+            ext: ''
+          - os: windows-latest
+            platform: windows/amd64
+            ext: '.exe'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-build-
+
+    - name: Get dependencies
+      run: |
+        go mod download
+        go mod verify
+
+    - name: Build binary
+      run: |
+        export CGO_ENABLED=0
+        export GOOS=$(echo ${{ matrix.platform }} | cut -d'/' -f1)
+        export GOARCH=$(echo ${{ matrix.platform }} | cut -d'/' -f2)
+        
+        echo "Building for $GOOS/$GOARCH..."
+        
+        OUTPUT="bin/${{ env.BINARY_NAME }}-$GOOS-$GOARCH${{ matrix.ext }}"
+        
+        # Build with version information
+        go build -v -trimpath \
+          -ldflags="-s -w \
+            -X main.Version=${{ github.sha }} \
+            -X main.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
+            -X main.CommitHash=${{ github.sha }} \
+            -X main.BuildOS=${{ runner.os }}" \
+          -o "$OUTPUT" \
+          ./cmd/vault
+        
+        echo "Binary built at: $OUTPUT"
+        
+        # Set binary permissions (for Linux/Mac)
+        if [ "${{ matrix.os }}" != "windows-latest" ]; then
+          chmod +x "$OUTPUT"
+        fi
+        
+        # Verify the binary
+        if [ -f "$OUTPUT" ]; then
+          echo "✅ Build successful"
+          if [ "${{ matrix.os }}" != "windows-latest" ]; then
+            echo "Binary info:"
+            file "$OUTPUT"
+            echo -e "\nBinary version:"
+            "$OUTPUT" --version || true
+          fi
+        else
+          echo "❌ Build failed"
+          exit 1
+        fi
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ runner.os }}-binaries
+        path: |
+          bin/${{ env.BINARY_NAME }}-*
+          !bin/*.md
+        retention-days: 7
+        if-no-files-found: error
+
+    - name: Run smoke test
+      run: |
+        echo "Running smoke test..."
+        BINARY="bin/${{ env.BINARY_NAME }}-$(echo ${{ matrix.platform }} | tr '/' '-')${{ matrix.ext }}"
+        
+        if [ -f "$BINARY" ]; then
+          echo "Testing $BINARY"
+          "$BINARY" --version || (echo "Smoke test failed" && exit 1)
+          echo "✅ Smoke test passed"
+        else
+          echo "❌ Binary not found: $BINARY"
+          ls -la bin/
+          exit 1
+        fi
