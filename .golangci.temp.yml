@@ -1,5 +1,4 @@
-# Minimal golangci-lint configuration
-version: "1.56"
+# golangci-lint configuration
 linters:
   enable:
     - govet
