@@ -1,9 +1,8 @@
-# golangci-lint configuration
-version: 1.0.0
+# golangci-lint configuration file (v1.55.2)
+# See https://golangci-lint.run/configuration/ for more information
 
-run:
-  timeout: 5m
-  modules-download-mode: mod
+# The 'version' field is required and must be a string
+version: v1.55.2
 
 linters:
   enable:
@@ -15,3 +14,7 @@ linters:
     - errcheck
     - typecheck
     - goimports
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
