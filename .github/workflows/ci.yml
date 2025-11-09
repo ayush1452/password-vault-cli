@@ -133,11 +133,23 @@ jobs:
     - name: Run linters
       if: matrix.run == 'format-lint'
       run: |
-        echo "Running golangci-lint..."
-        golangci-lint run --timeout=${{ env.LINT_TIMEOUT }} --out-format=colored-line-number ./...
+        echo "=== Setting up environment ==="
+        go version
+        go env
         
-        # Additional linters that might not be in golangci-lint
-        echo "Running staticcheck..."
+        echo "=== Installing YAML package ==="
+        go get -u gopkg.in/yaml.v3
+        
+        echo "=== Module information ==="
+        go mod download
+        go mod verify
+        go list -m all
+        
+        echo "=== Running golangci-lint ==="
+        # Run with verbose output and skip cache
+        golangci-lint run --timeout=5m -v --skip-dirs="(^|/)(vendor|testdata|examples)/" --build-tags=yaml
+        
+        echo "=== Running staticcheck ==="
         staticcheck -checks=all -fail=none ./...
 
     - name: Run static analysis
