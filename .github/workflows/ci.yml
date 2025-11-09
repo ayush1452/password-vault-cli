@@ -335,8 +335,13 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: ${{ matrix.go-version }}
+        go-version: '1.21.0'  # Explicit version to avoid compatibility issues
         cache: true
+        
+      # Set Go environment variables
+      env:
+        GO111MODULE: on
+        GOPROXY: https://proxy.golang.org,direct
         
     - name: Get dependencies
       run: |
@@ -389,18 +394,26 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: ${{ env.GO_VERSION }}
+        go-version: '1.21.0'  # Match the version used in test job
         cache: true
+      env:
+        GO111MODULE: on
+        GOPROXY: https://proxy.golang.org,direct
       
     - name: Verify Go installation
       run: |
         echo "Go version:"
         go version
-        echo "\nGo environment:"
+        echo -e "\nGo environment:"
         go env
+        echo -e "\nGo module information:"
+        go mod download
+        go mod verify
+        go list -m all
         
     - name: Get dependencies
       run: |
+        go mod tidy
         go mod download
         go mod verify
         
