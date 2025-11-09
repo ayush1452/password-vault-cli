@@ -1,5 +1,9 @@
-# Minimal golangci-lint configuration
-version: 1.55.2
+# golangci-lint configuration
+version: 1.0.0
+
+run:
+  timeout: 5m
+  modules-download-mode: mod
 
 linters:
   enable:
@@ -10,7 +14,4 @@ linters:
     - gosec
     - errcheck
     - typecheck
-
-run:
-  timeout: 5m
-  modules-download-mode: mod
+    - goimports
