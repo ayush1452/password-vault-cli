@@ -312,3 +312,90 @@ jobs:
           ls -la bin/
           exit 1
         fi
+
+  # Test job runs unit tests across different Go versions
+  test:
+    name: Test (Go ${{ matrix.go-version }}, ${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ['1.21', '1.22']
+        os: [ubuntu-latest]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ matrix.go-version }}
+        cache: true
+        
+    - name: Get dependencies
+      run: |
+        go mod download
+        go mod verify
+        
+    - name: Build and test
+      run: |
+        echo 'Building binary...'
+        go build -v -o vault ./cmd/vault
+        
+        echo 'Running tests...'
+        go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        
+        # Verify the binary works
+        echo 'Verifying binary...'
+        ./vault --version || (echo "Binary verification failed" && exit 1)
+
+  # CodeQL Analysis for security scanning
+  codeql-analysis:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        cache: true
+      
+    - name: Verify Go installation
+      run: |
+        echo "Go version:"
+        go version
+        echo "\nGo environment:"
+        go env
+        
+    - name: Get dependencies
+      run: |
+        go mod download
+        go mod verify
+        
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: go
+        queries: security-extended,security-and-quality
+        config-file: ./.github/codeql/codeql-config.yml
+        
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:go"
