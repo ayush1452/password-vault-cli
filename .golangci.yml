@@ -1,5 +1,7 @@
 # yaml-language-server: $schema=https://json.schemastore.org/golangci-lint.json
-version: "1"
+# Compatible with golangci-lint v1.64.8+
+
+version: "2"
 
 run:
   timeout: 5m
@@ -30,12 +32,12 @@ linters:
     - prealloc
     - exportloopref
     - whitespace
+
   settings:
     revive:
       rules:
         - name: exported
         - name: error-naming
-          arguments: []
     misspell:
       locale: US
     gocritic:
@@ -45,15 +47,15 @@ linters:
       severity: medium
       confidence: medium
 
-# ⬇️ goimports & gofumpt live under formatters in v2
+# Formatters available in version 2
 formatters:
   enable:
     - goimports
     - gofumpt
   settings:
     goimports:
-      # change to your module path from go.mod
-      local-prefixes: 
+      # Change to your module path (from go.mod)
+      local-prefixes:
         - github.com/ayush1452/password-vault-cli-project
     gofumpt:
       extra-rules: true
