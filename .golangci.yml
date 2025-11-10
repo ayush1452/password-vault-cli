@@ -17,7 +17,6 @@ linters:
   enable:
     - govet
     - staticcheck
-    - gosimple
     - ineffassign
     - unused
     - errcheck
@@ -29,7 +28,6 @@ linters:
     - nilerr
     - noctx
     - prealloc
-    - exportloopref
     - whitespace
 
   settings:
