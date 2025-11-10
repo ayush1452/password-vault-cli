@@ -53,7 +53,7 @@ jobs:
       run: |
         echo "Checking Go files formatting..."
         # First, check for any files that need formatting
-        unformatted=$(find . -name '*.go' -not -path '*/vendor/*' -not -path '*/_test.go' -exec gofmt -s -l {} \;)
+        unformatted=$(find . -name '*.go' -not -path '*/vendor/*' -not -name '*_test.go' -exec gofmt -s -l {} \;)
         
         if [ -n "$unformatted" ]; then
           echo "::error::The following files are not properly formatted:"
@@ -93,15 +93,25 @@ jobs:
         $GOPATH/bin/gosec -version || echo "Failed to get gosec version"
         
         echo "\nRunning gosec scan..."
-        $GOPATH/bin/gosec -v -fmt sarif -out ./gosec.sarif ./... || echo "gosec completed with findings"
-        
-        echo "\nChecking if SARIF file was created..."
-        if [ -f "./gosec.sarif" ]; then
-          echo "SARIF file created successfully"
-          ls -la ./gosec.sarif
-        else
-          echo "ERROR: gosec.sarif was not created"
+        # Run gosec with SARIF output
+        if ! $GOPATH/bin/gosec -fmt=sarif -out=./gosec.sarif ./...; then
+          if [ -f "./gosec.sarif" ]; then
+            # SARIF file was created but gosec found issues (exit code != 0)
+            echo "::warning::gosec found security issues. Review the SARIF report for details."
+            echo "SARIF report generated at: $(pwd)/gosec.sarif"
+            ls -la ./gosec.sarif
+          else
+            # gosec failed to run or create the SARIF file
+            echo "::error::gosec failed to run or generate SARIF report"
+            exit 1
           exit 1
+        fi
+          fi
+        else
+          # gosec ran successfully with no issues found
+          echo "No security issues found by gosec"
+          # Create an empty SARIF file if none exists
+          touch ./gosec.sarif
         fi
 
     - name: Upload security scan results
@@ -260,14 +270,15 @@ jobs:
         COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
         BUILD_TIME=$(date -u '+%Y-%m-%d_%H:%M:%S')
         
-        LDFLAGS="-ldflags=-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME} -s -w"
-        
         BINARY_NAME="${{ env.BINARY_NAME }}-${{ matrix.goos }}-${{ matrix.goarch }}"
         if [ "${{ matrix.goos }}" = "windows" ]; then
           BINARY_NAME="${BINARY_NAME}.exe"
         fi
         
-        go build ${LDFLAGS} -o ${BINARY_NAME} ./cmd/vault
+        go build \
+          -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME} -s -w" \
+          -o "${BINARY_NAME}" \
+          ./cmd/vault
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4

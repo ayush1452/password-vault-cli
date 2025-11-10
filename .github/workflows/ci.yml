@@ -19,7 +19,7 @@ on:
 
 # Environment variables available to all jobs and steps
 env:
-  GO_VERSION: '1.24.10'
+  GO_VERSION: '1.24.10'  # This is the minimum supported version for building
   GOTOOLCHAIN: local
   BINARY_NAME: 'vault'
   CACHE_VERSION: 'v1'
@@ -112,7 +112,7 @@ jobs:
         
         # Check for unformatted files
         echo "Checking gofmt..."
-        FMT_ISSUES=$(find . -name '*.go' -not -path '*/vendor/*' -not -path '*/_test.go' -exec gofmt -s -l {} \;)
+        FMT_ISSUES=$(find . -name '*.go' -not -path '*/vendor/*' -not -name '*_test.go' -exec gofmt -s -l {} \;)
         if [ -n "$FMT_ISSUES" ]; then
           echo "::error::Code is not properly formatted. Run 'make fmt' to fix."
           echo "Files with formatting issues:"
@@ -122,7 +122,7 @@ jobs:
         
         # Check for unformatted imports
         echo "Checking goimports..."
-        IMPORTS_ISSUES=$(find . -name '*.go' -not -path '*/vendor/*' -not -path '*/_test.go' -exec goimports -l {} \;)
+        IMPORTS_ISSUES=$(find . -name '*.go' -not -path '*/vendor/*' -not -name '*_test.go' -exec goimports -l {} \;)
         if [ -n "$IMPORTS_ISSUES" ]; then
           echo "::error::Imports are not properly formatted. Run 'goimports -w .' to fix."
           echo "Files with import issues:"
@@ -151,7 +151,8 @@ jobs:
         golangci-lint run --timeout=5m -v --skip-dirs="(^|/)(vendor|testdata|examples)/" --build-tags=yaml
         
         echo "=== Running staticcheck ==="
-        staticcheck -checks=all -fail=none ./...
+        staticcheck -checks=all ./...
+        
 
     - name: Run static analysis
       if: matrix.run == 'static-analysis'
@@ -163,8 +164,7 @@ jobs:
         go vet ./...
         
         # Check for unused code (excluding test files)
-        echo "Checking for unused code..."
-        staticcheck -checks=U1000 -tests=false ./... || echo "Note: Some unused code found (check logs for details)"
+        staticcheck -checks=U1000 -tests=false ./...
         
         # Check for error handling issues
         echo "Checking error handling..."
@@ -245,12 +245,10 @@ jobs:
     - name: Cache Go modules
       uses: actions/cache@v3
       with:
-        path: |
-          ~/go/pkg/mod
-          ~/.cache/go-build
-        key: ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ env.GO_VERSION }}-${{ hashFiles('**/go.sum') }}
         restore-keys: |
-          ${{ runner.os }}-go-build-
+          ${{ runner.os }}-go-${{ env.GO_VERSION }}-t dependencies
 
     - name: Get dependencies
       run: |
@@ -272,7 +270,7 @@ jobs:
         
         # Build with version information
         go build -v -trimpath \
-          -ldflags="-s -w \
+          -ldflags "-s -w \
             -X main.Version=$GITHUB_SHA \
             -X main.BuildDate=$(date -u +'%Y-%m-%dT%H:%M:%SZ') \
             -X main.CommitHash=$GITHUB_SHA \
@@ -336,7 +334,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go-version: ['1.21', '1.22']
+        go-version: ['1.21', '1.22', '1.24.10']
         os: [ubuntu-latest]
     
     steps:
@@ -348,7 +346,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21.0'  # Explicit version to avoid compatibility issues
+        go-version: ${{ matrix.go-version }}
         cache: true
         
       # Set Go environment variables
@@ -378,7 +376,7 @@ jobs:
         go build -v -o vault ./cmd/vault || (echo "Build failed" && exit 1)
         
         echo 'Running tests...'
-        go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        go test -v -race -coverprofile=${{ env.COVERAGE_FILE }} -covermode=atomic ./...
         
         # Verify the binary works
         if [ -f "./vault" ]; then
