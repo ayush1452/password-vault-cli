@@ -1,7 +1,6 @@
 package tests
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -735,41 +734,4 @@ func TestRecoveryScenarios(t *testing.T) {
 
 		t.Log("✅ Recovery scenario tests completed")
 	})
-}
-
-// Helper function to check if a file contains binary data
-func isBinaryFile(path string) bool {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false
-	}
-
-	// Check first 512 bytes for null bytes (common in binary files)
-	checkSize := 512
-	if len(data) < checkSize {
-		checkSize = len(data)
-	}
-
-	for i := 0; i < checkSize; i++ {
-		if data[i] == 0 {
-			return true
-		}
-	}
-
-	return false
-}
-
-// Helper function to count lines in output
-func countLines(output string) int {
-	if output == "" {
-		return 0
-	}
-
-	scanner := bufio.NewScanner(strings.NewReader(output))
-	count := 0
-	for scanner.Scan() {
-		count++
-	}
-
-	return count
 }
