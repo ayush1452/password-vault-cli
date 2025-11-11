@@ -119,7 +119,7 @@ func runList(cmd *cobra.Command) error {
 
 	if len(entries) == 0 {
 		out := cmd.OutOrStdout()
-		
+
 		// Helper function to write output with error checking
 		writeOutput := func(format string, args ...interface{}) error {
 			_, err := fmt.Fprintf(out, format, args...)
@@ -204,9 +204,9 @@ func outputEntriesTableLong(out io.Writer, entries []*domain.Entry) error {
 	// Write table header
 	headers := []string{"NAME", "USERNAME", "TAGS", "UPDATED_AT"}
 	headerLine := strings.Join(headers, "\t") + "\n"
-	separator := strings.Repeat("-", 4) + "\t" + 
-		strings.Repeat("-", 8) + "\t" + 
-		strings.Repeat("-", 4) + "\t" + 
+	separator := strings.Repeat("-", 4) + "\t" +
+		strings.Repeat("-", 8) + "\t" +
+		strings.Repeat("-", 4) + "\t" +
 		strings.Repeat("-", 10) + "\n"
 
 	if err := writeOutput(headerLine); err != nil {

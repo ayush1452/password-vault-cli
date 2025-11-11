@@ -244,7 +244,7 @@ func runConfigGet(cmd *cobra.Command, key string) error {
 	default:
 		return fmt.Errorf("unknown configuration key: %s", key)
 	}
-	
+
 	return nil
 }
 
@@ -334,11 +334,11 @@ func runConfigPath(cmd *cobra.Command) error {
 	if cmd != nil {
 		out = cmd.OutOrStdout()
 	}
-	
+
 	// Write the config file path and check for errors
 	if _, err := fmt.Fprintln(out, cfgFile); err != nil {
 		return fmt.Errorf("failed to write config file path: %w", err)
 	}
-	
+
 	return nil
 }

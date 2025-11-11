@@ -3,9 +3,9 @@ package store
 import (
 	"encoding/base64"
 	"encoding/binary"
-	"log"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"

@@ -3,9 +3,9 @@ package cli
 import (
 	"encoding/base64"
 	"encoding/json"
-	"log"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/user"
 	"path/filepath"

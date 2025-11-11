@@ -139,7 +139,7 @@ func runGet(cmd *cobra.Command, entryName string) error {
 
 		// Get the output writer once
 		out := cmd.OutOrStdout()
-		
+
 		// Helper function to write output with error checking
 		writeOutput := func(format string, args ...interface{}) error {
 			_, err := fmt.Fprintf(out, format, args...)
@@ -165,13 +165,13 @@ func runGet(cmd *cobra.Command, entryName string) error {
 	} else {
 		// Display in terminal
 		out := cmd.OutOrStdout()
-		
+
 		if sensitive {
 			if _, err := fmt.Fprintln(out, "⚠️  WARNING: Displaying secret in terminal"); err != nil {
 				return fmt.Errorf("failed to write warning: %w", err)
 			}
 		}
-		
+
 		if _, err := fmt.Fprintf(out, "%s: %s\n", strings.Title(field), value); err != nil {
 			return fmt.Errorf("failed to write %s: %w", field, err)
 		}
@@ -181,7 +181,7 @@ func runGet(cmd *cobra.Command, entryName string) error {
 	if verbose && field == "secret" {
 		// Get the output writer once
 		out := cmd.OutOrStdout()
-		
+
 		// Helper function to write output with error checking
 		writeOutput := func(format string, args ...interface{}) error {
 			_, err := fmt.Fprintf(out, format, args...)
