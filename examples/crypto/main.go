@@ -110,7 +110,10 @@ func main() {
 	fmt.Printf("  Parallelism: %d\n", tunedParams.Parallelism)
 
 	// Test the tuned parameters
-	testSalt, _ := vault.GenerateSalt()
+	testSalt, err := vault.GenerateSalt()
+	if err != nil {
+		log.Fatal("Failed to generate salt:", err)
+	}
 	actualDuration := vault.BenchmarkKDF(tunedParams, "test-passphrase", testSalt)
 	fmt.Printf("Actual duration with tuned params: %v\n", actualDuration)
 
