@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/base64"
 	"encoding/binary"
+	"log"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -65,7 +66,13 @@ func (bs *BoltStore) CreateVault(path string, masterKey []byte, kdfParams map[st
 	if err != nil {
 		return fmt.Errorf("failed to create vault database: %w", err)
 	}
-	defer db.Close()
+
+	// Use a closure to ensure db.Close() is called and its error is checked
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil {
+			log.Printf("Warning: failed to close database: %v", closeErr)
+		}
+	}()
 
 	// Initialize vault structure
 	err = db.Update(func(tx *bbolt.Tx) error {

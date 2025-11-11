@@ -132,18 +132,41 @@ func runConfigGetAll(cmd *cobra.Command) error {
 		out = cmd.OutOrStdout()
 	}
 
-	fmt.Fprintf(out, "Configuration file: %s\n\n", cfgFile)
-	fmt.Fprintf(out, "vault_path: %s\n", cfg.VaultPath)
-	fmt.Fprintf(out, "default_profile: %s\n", cfg.DefaultProfile)
-	fmt.Fprintf(out, "auto_lock_ttl: %s\n", cfg.AutoLockTTL)
-	fmt.Fprintf(out, "clipboard_ttl: %s\n", cfg.ClipboardTTL)
-	fmt.Fprintf(out, "session_timeout: %d\n", cfg.Security.SessionTimeout)
-	fmt.Fprintf(out, "output_format: %s\n", cfg.OutputFormat)
-	fmt.Fprintf(out, "show_passwords: %t\n", cfg.ShowPasswords)
-	fmt.Fprintf(out, "confirm_destructive: %t\n", cfg.ConfirmDestructive)
-	fmt.Fprintf(out, "kdf.memory: %d\n", cfg.KDF.Memory)
-	fmt.Fprintf(out, "kdf.iterations: %d\n", cfg.KDF.Iterations)
-	fmt.Fprintf(out, "kdf.parallelism: %d\n", cfg.KDF.Parallelism)
+	// Helper function to write formatted output and check for errors
+	writeOutput := func(format string, args ...interface{}) error {
+		_, err := fmt.Fprintf(out, format, args...)
+		return err
+	}
+
+	// Write configuration with error checking
+	if err := writeOutput("Configuration file: %s\n\n", cfgFile); err != nil {
+		return fmt.Errorf("failed to write configuration: %w", err)
+	}
+
+	// Create a slice of write operations to execute
+	writeOps := []struct {
+		format string
+		value  interface{}
+	}{
+		{"vault_path: %s\n", cfg.VaultPath},
+		{"default_profile: %s\n", cfg.DefaultProfile},
+		{"auto_lock_ttl: %s\n", cfg.AutoLockTTL},
+		{"clipboard_ttl: %s\n", cfg.ClipboardTTL},
+		{"session_timeout: %d\n", cfg.Security.SessionTimeout},
+		{"output_format: %s\n", cfg.OutputFormat},
+		{"show_passwords: %t\n", cfg.ShowPasswords},
+		{"confirm_destructive: %t\n", cfg.ConfirmDestructive},
+		{"kdf.memory: %d\n", cfg.KDF.Memory},
+		{"kdf.iterations: %d\n", cfg.KDF.Iterations},
+		{"kdf.parallelism: %d\n", cfg.KDF.Parallelism},
+	}
+
+	// Execute all write operations
+	for _, op := range writeOps {
+		if err := writeOutput(op.format, op.value); err != nil {
+			return fmt.Errorf("failed to write configuration: %w", err)
+		}
+	}
 
 	return nil
 }
@@ -152,6 +175,12 @@ func runConfigGet(cmd *cobra.Command, key string) error {
 	var out io.Writer = os.Stdout
 	if cmd != nil {
 		out = cmd.OutOrStdout()
+	}
+
+	// Helper function to write output and check for errors
+	writeOutput := func(v interface{}) error {
+		_, err := fmt.Fprintln(out, v)
+		return err
 	}
 
 	// Get config from command context or use global config
@@ -169,31 +198,53 @@ func runConfigGet(cmd *cobra.Command, key string) error {
 
 	switch normalized {
 	case "vault_path":
-		fmt.Fprintln(out, currentCfg.VaultPath)
+		if err := writeOutput(currentCfg.VaultPath); err != nil {
+			return fmt.Errorf("failed to write vault path: %w", err)
+		}
 	case "default_profile":
-		fmt.Fprintln(out, currentCfg.DefaultProfile)
+		if err := writeOutput(currentCfg.DefaultProfile); err != nil {
+			return fmt.Errorf("failed to write default profile: %w", err)
+		}
 	case "auto_lock_ttl":
-		fmt.Fprintln(out, currentCfg.AutoLockTTL)
+		if err := writeOutput(currentCfg.AutoLockTTL); err != nil {
+			return fmt.Errorf("failed to write auto lock TTL: %w", err)
+		}
 	case "clipboard_ttl":
-		fmt.Fprintln(out, currentCfg.ClipboardTTL)
+		if err := writeOutput(currentCfg.ClipboardTTL); err != nil {
+			return fmt.Errorf("failed to write clipboard TTL: %w", err)
+		}
 	case "session_timeout":
-		fmt.Fprintln(out, currentCfg.Security.SessionTimeout)
+		if err := writeOutput(currentCfg.Security.SessionTimeout); err != nil {
+			return fmt.Errorf("failed to write session timeout: %w", err)
+		}
 	case "output_format":
-		fmt.Fprintln(out, currentCfg.OutputFormat)
+		if err := writeOutput(currentCfg.OutputFormat); err != nil {
+			return fmt.Errorf("failed to write output format: %w", err)
+		}
 	case "show_passwords":
-		fmt.Fprintln(out, currentCfg.ShowPasswords)
+		if err := writeOutput(currentCfg.ShowPasswords); err != nil {
+			return fmt.Errorf("failed to write show passwords setting: %w", err)
+		}
 	case "confirm_destructive":
-		fmt.Fprintln(out, currentCfg.ConfirmDestructive)
+		if err := writeOutput(currentCfg.ConfirmDestructive); err != nil {
+			return fmt.Errorf("failed to write confirm destructive setting: %w", err)
+		}
 	case "kdf.memory":
-		fmt.Fprintln(out, currentCfg.KDF.Memory)
+		if err := writeOutput(currentCfg.KDF.Memory); err != nil {
+			return fmt.Errorf("failed to write KDF memory: %w", err)
+		}
 	case "kdf.iterations":
-		fmt.Fprintln(out, currentCfg.KDF.Iterations)
+		if err := writeOutput(currentCfg.KDF.Iterations); err != nil {
+			return fmt.Errorf("failed to write KDF iterations: %w", err)
+		}
 	case "kdf.parallelism":
-		fmt.Fprintln(out, currentCfg.KDF.Parallelism)
+		if err := writeOutput(currentCfg.KDF.Parallelism); err != nil {
+			return fmt.Errorf("failed to write KDF parallelism: %w", err)
+		}
 	default:
 		return fmt.Errorf("unknown configuration key: %s", key)
 	}
-
+	
 	return nil
 }
 
@@ -283,6 +334,11 @@ func runConfigPath(cmd *cobra.Command) error {
 	if cmd != nil {
 		out = cmd.OutOrStdout()
 	}
-	fmt.Fprintln(out, cfgFile)
+	
+	// Write the config file path and check for errors
+	if _, err := fmt.Fprintln(out, cfgFile); err != nil {
+		return fmt.Errorf("failed to write config file path: %w", err)
+	}
+	
 	return nil
 }

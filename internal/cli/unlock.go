@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -63,8 +64,11 @@ Example:
 func runUnlock() error {
 	// Check if already unlocked
 	if IsUnlocked() {
-		unlocked, remaining, _ := GetSessionInfo()
-		if unlocked {
+		unlocked, remaining, err := GetSessionInfo()
+		if err != nil {
+			log.Printf("Warning: failed to get session info: %v", err)
+			// Continue with unlock process if we can't get session info
+		} else if unlocked {
 			fmt.Printf("Vault is already unlocked (expires in %v)\n", remaining.Round(time.Second))
 			return nil
 		}

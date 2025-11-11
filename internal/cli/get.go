@@ -114,7 +114,9 @@ func runGet(cmd *cobra.Command, entryName string) error {
 	}
 
 	if value == "" {
-		fmt.Fprintf(cmd.OutOrStdout(), "Field '%s' is empty for entry '%s'\n", field, entryName)
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Field '%s' is empty for entry '%s'\n", field, entryName); err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
 		return nil
 	}
 
@@ -135,37 +137,99 @@ func runGet(cmd *cobra.Command, entryName string) error {
 			return fmt.Errorf("failed to copy to clipboard: %w", err)
 		}
 
-		fmt.Fprintf(cmd.OutOrStdout(), "✓ %s for '%s' copied to clipboard", strings.Title(field), entryName)
-		if sensitive {
-			fmt.Fprintf(cmd.OutOrStdout(), " (clears in %v)", timeout)
+		// Get the output writer once
+		out := cmd.OutOrStdout()
+		
+		// Helper function to write output with error checking
+		writeOutput := func(format string, args ...interface{}) error {
+			_, err := fmt.Fprintf(out, format, args...)
+			return err
 		}
-		fmt.Fprintln(cmd.OutOrStdout())
+
+		// Write the success message
+		if err := writeOutput("✓ %s for '%s' copied to clipboard", strings.Title(field), entryName); err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+
+		// Add timeout info if sensitive
+		if sensitive {
+			if err := writeOutput(" (clears in %v)", timeout); err != nil {
+				return fmt.Errorf("failed to write timeout info: %w", err)
+			}
+		}
+
+		// Add newline
+		if _, err := fmt.Fprintln(out); err != nil {
+			return fmt.Errorf("failed to write newline: %w", err)
+		}
 	} else {
 		// Display in terminal
+		out := cmd.OutOrStdout()
+		
 		if sensitive {
-			fmt.Fprintln(cmd.OutOrStdout(), "⚠️  WARNING: Displaying secret in terminal")
+			if _, err := fmt.Fprintln(out, "⚠️  WARNING: Displaying secret in terminal"); err != nil {
+				return fmt.Errorf("failed to write warning: %w", err)
+			}
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", strings.Title(field), value)
+		
+		if _, err := fmt.Fprintf(out, "%s: %s\n", strings.Title(field), value); err != nil {
+			return fmt.Errorf("failed to write %s: %w", field, err)
+		}
 	}
 
 	// Show additional info if verbose
 	if verbose && field == "secret" {
-		fmt.Printf("\nEntry details:\n")
-		fmt.Printf("  Name: %s\n", entry.Name)
+		// Get the output writer once
+		out := cmd.OutOrStdout()
+		
+		// Helper function to write output with error checking
+		writeOutput := func(format string, args ...interface{}) error {
+			_, err := fmt.Fprintf(out, format, args...)
+			return err
+		}
+
+		// Write entry details with error checking
+		if err := writeOutput("\nEntry details:\n"); err != nil {
+			return fmt.Errorf("failed to write entry details header: %w", err)
+		}
+
+		if err := writeOutput("  Name: %s\n", entry.Name); err != nil {
+			return fmt.Errorf("failed to write entry name: %w", err)
+		}
+
 		if entry.Username != "" {
-			fmt.Printf("  Username: %s\n", entry.Username)
+			if err := writeOutput("  Username: %s\n", entry.Username); err != nil {
+				return fmt.Errorf("failed to write username: %w", err)
+			}
 		}
+
 		if entry.URL != "" {
-			fmt.Printf("  URL: %s\n", entry.URL)
+			if err := writeOutput("  URL: %s\n", entry.URL); err != nil {
+				return fmt.Errorf("failed to write URL: %w", err)
+			}
 		}
+
 		if len(entry.Tags) > 0 {
-			fmt.Printf("  Tags: %v\n", entry.Tags)
+			if err := writeOutput("  Tags: %v\n", entry.Tags); err != nil {
+				return fmt.Errorf("failed to write tags: %w", err)
+			}
 		}
+
 		if entry.Notes != "" {
-			fmt.Printf("  Notes: %s\n", entry.Notes)
+			if err := writeOutput("  Notes: %s\n", entry.Notes); err != nil {
+				return fmt.Errorf("failed to write notes: %w", err)
+			}
 		}
-		fmt.Printf("  Created: %s\n", entry.CreatedAt.Format("2006-01-02 15:04:05"))
-		fmt.Printf("  Updated: %s\n", entry.UpdatedAt.Format("2006-01-02 15:04:05"))
+
+		createdAt := entry.CreatedAt.Format("2006-01-02 15:04:05")
+		if err := writeOutput("  Created: %s\n", createdAt); err != nil {
+			return fmt.Errorf("failed to write creation time: %w", err)
+		}
+
+		updatedAt := entry.UpdatedAt.Format("2006-01-02 15:04:05")
+		if err := writeOutput("  Updated: %s\n", updatedAt); err != nil {
+			return fmt.Errorf("failed to write update time: %w", err)
+		}
 	}
 
 	return nil

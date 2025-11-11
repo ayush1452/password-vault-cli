@@ -119,11 +119,24 @@ func runList(cmd *cobra.Command) error {
 
 	if len(entries) == 0 {
 		out := cmd.OutOrStdout()
+		
+		// Helper function to write output with error checking
+		writeOutput := func(format string, args ...interface{}) error {
+			_, err := fmt.Fprintf(out, format, args...)
+			return err
+		}
+
 		if filter.Search != "" || len(filter.Tags) > 0 {
-			fmt.Fprintln(out, "No entries found matching the filter criteria")
+			if err := writeOutput("No entries found matching the filter criteria\n"); err != nil {
+				return fmt.Errorf("failed to write no entries message: %w", err)
+			}
 		} else {
-			fmt.Fprintf(out, "No entries found in profile '%s'\n", profile)
-			fmt.Fprintln(out, "Use 'vault add <name>' to create your first entry")
+			if err := writeOutput("No entries found in profile '%s'\n", profile); err != nil {
+				return fmt.Errorf("failed to write no entries message: %w", err)
+			}
+			if err := writeOutput("Use 'vault add <name>' to create your first entry\n"); err != nil {
+				return fmt.Errorf("failed to write help message: %w", err)
+			}
 		}
 		return nil
 	}
@@ -149,14 +162,32 @@ func outputEntriesTable(out io.Writer, entries []*domain.Entry) error {
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	defer w.Flush()
 
-	fmt.Fprintf(w, "NAME\n")
-	fmt.Fprintf(w, "----\n")
-
-	for _, entry := range entries {
-		fmt.Fprintf(w, "%s\n", entry.Name)
+	// Helper function to write to tabwriter with error checking
+	writeOutput := func(format string, args ...interface{}) error {
+		_, err := fmt.Fprintf(w, format, args...)
+		return err
 	}
 
-	fmt.Fprintf(out, "\nFound %d entries in profile '%s'\n", len(entries), profile)
+	// Write table header
+	if err := writeOutput("NAME\n"); err != nil {
+		return fmt.Errorf("failed to write table header: %w", err)
+	}
+	if err := writeOutput("----\n"); err != nil {
+		return fmt.Errorf("failed to write table header separator: %w", err)
+	}
+
+	// Write table rows
+	for _, entry := range entries {
+		if err := writeOutput("%s\n", entry.Name); err != nil {
+			return fmt.Errorf("failed to write entry: %w", err)
+		}
+	}
+
+	// Write summary
+	if _, err := fmt.Fprintf(out, "\nFound %d entries in profile '%s'\n", len(entries), profile); err != nil {
+		return fmt.Errorf("failed to write summary: %w", err)
+	}
+
 	return nil
 }
 
@@ -164,9 +195,28 @@ func outputEntriesTableLong(out io.Writer, entries []*domain.Entry) error {
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	defer w.Flush()
 
-	fmt.Fprintf(w, "NAME\tUSERNAME\tTAGS\tUPDATED_AT\n")
-	fmt.Fprintf(w, "----\t--------\t----\t----------\n")
+	// Helper function to write to tabwriter with error checking
+	writeOutput := func(format string, args ...interface{}) error {
+		_, err := fmt.Fprintf(w, format, args...)
+		return err
+	}
 
+	// Write table header
+	headers := []string{"NAME", "USERNAME", "TAGS", "UPDATED_AT"}
+	headerLine := strings.Join(headers, "\t") + "\n"
+	separator := strings.Repeat("-", 4) + "\t" + 
+		strings.Repeat("-", 8) + "\t" + 
+		strings.Repeat("-", 4) + "\t" + 
+		strings.Repeat("-", 10) + "\n"
+
+	if err := writeOutput(headerLine); err != nil {
+		return fmt.Errorf("failed to write table header: %w", err)
+	}
+	if err := writeOutput(separator); err != nil {
+		return fmt.Errorf("failed to write table separator: %w", err)
+	}
+
+	// Write table rows
 	for _, entry := range entries {
 		tags := strings.Join(entry.Tags, ",")
 		if len(tags) > 40 {
@@ -178,15 +228,22 @@ func outputEntriesTableLong(out io.Writer, entries []*domain.Entry) error {
 			username = username[:21] + "..."
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+		updatedAt := entry.UpdatedAt.Format("2006-01-02 15:04")
+		if err := writeOutput("%s\t%s\t%s\t%s\n",
 			entry.Name,
 			username,
 			tags,
-			entry.UpdatedAt.Format("2006-01-02 15:04"),
-		)
+			updatedAt,
+		); err != nil {
+			return fmt.Errorf("failed to write entry: %w", err)
+		}
 	}
 
-	fmt.Fprintf(out, "\nFound %d entries in profile '%s'\n", len(entries), profile)
+	// Write summary
+	if _, err := fmt.Fprintf(out, "\nFound %d entries in profile '%s'\n", len(entries), profile); err != nil {
+		return fmt.Errorf("failed to write summary: %w", err)
+	}
+
 	return nil
 }
 
@@ -195,14 +252,15 @@ func outputEntriesJSON(out io.Writer, entries []*domain.Entry) error {
 	type EntryOutput struct {
 		Name      string   `json:"name"`
 		Username  string   `json:"username"`
-		URL       string   `json:"url"`
-		Notes     string   `json:"notes"`
-		Tags      []string `json:"tags"`
+		URL       string   `json:"url,omitempty"`
+		Notes     string   `json:"notes,omitempty"`
+		Tags      []string `json:"tags,omitempty"`
 		CreatedAt string   `json:"created_at"`
 		UpdatedAt string   `json:"updated_at"`
 	}
 
-	var output []EntryOutput
+	// Prepare output data
+	output := make([]EntryOutput, 0, len(entries))
 	for _, entry := range entries {
 		output = append(output, EntryOutput{
 			Name:      entry.Name,
@@ -215,7 +273,20 @@ func outputEntriesJSON(out io.Writer, entries []*domain.Entry) error {
 		})
 	}
 
+	// Configure JSON encoder
 	encoder := json.NewEncoder(out)
 	encoder.SetIndent("", "  ")
-	return encoder.Encode(output)
+	encoder.SetEscapeHTML(false) // Don't escape HTML characters
+
+	// Encode and write JSON output
+	if err := encoder.Encode(output); err != nil {
+		return fmt.Errorf("failed to encode JSON output: %w", err)
+	}
+
+	// Add a trailing newline for better CLI output
+	if _, err := fmt.Fprintln(out); err != nil {
+		return fmt.Errorf("failed to write trailing newline: %w", err)
+	}
+
+	return nil
 }
