@@ -3,6 +3,7 @@ package cli
 import (
 	"crypto/subtle"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/vault-cli/vault/internal/vault"
@@ -29,6 +30,15 @@ Example:
 }
 
 func runRotateMasterKey() error {
+	// Helper function to write output with error checking
+	printStatus := func(format string, args ...interface{}) error {
+		_, err := fmt.Fprintf(os.Stdout, format, args...)
+		if err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		return nil
+	}
+
 	// Check if vault is unlocked
 	if !IsUnlocked() {
 		return fmt.Errorf("vault is locked, run 'vault unlock' first")
@@ -41,7 +51,10 @@ func runRotateMasterKey() error {
 	}
 
 	// Prompt for current passphrase to verify identity
-	fmt.Println("Verifying current passphrase...")
+	if err := printStatus("Verifying current passphrase...\n"); err != nil {
+		return err
+	}
+
 	currentPassphrase, err := PromptPassword("Enter current passphrase: ")
 	if err != nil {
 		return fmt.Errorf("failed to read current passphrase: %w", err)
@@ -73,7 +86,10 @@ func runRotateMasterKey() error {
 	}
 
 	// Prompt for new passphrase
-	fmt.Println("\nSet a new master passphrase")
+	if err := printStatus("\nSet a new master passphrase\n"); err != nil {
+		return err
+	}
+
 	newPassphrase, err := PromptPassword("Enter new passphrase: ")
 	if err != nil {
 		return fmt.Errorf("failed to read new passphrase: %w", err)
@@ -94,7 +110,9 @@ func runRotateMasterKey() error {
 	}
 
 	// Perform the key rotation
-	fmt.Println("\nRotating master key...")
+	if err := printStatus("\nRotating master key...\n"); err != nil {
+		return err
+	}
 
 	if err := vaultStore.RotateMasterKey(newPassphrase); err != nil {
 		return fmt.Errorf("failed to rotate master key: %w", err)
@@ -105,8 +123,12 @@ func runRotateMasterKey() error {
 		return fmt.Errorf("failed to lock vault after rotation: %w", err)
 	}
 
-	fmt.Println("\n✅ Master key rotation completed successfully!")
-	fmt.Println("Please unlock the vault with your new passphrase using 'vault unlock'")
+	if err := printStatus("\n✅ Master key rotation completed successfully!\n"); err != nil {
+		return err
+	}
+	if err := printStatus("Please unlock the vault with your new passphrase using 'vault unlock'\n"); err != nil {
+		return err
+	}
 
 	return nil
 }

@@ -82,14 +82,15 @@ func runRotatePassword(cmd *cobra.Command, name string, length int, copyToClip b
 
 	// Save the updated entry
 	err = vaultStore.UpdateEntry("", name, updatedEntry) // Empty string for profile uses default
-
 	if err != nil {
 		return fmt.Errorf("failed to update entry: %w", err)
 	}
 
 	// Handle output and clipboard
 	if show {
-		fmt.Fprintln(cmd.OutOrStdout(), newPassword)
+		if _, err := fmt.Fprintln(cmd.OutOrStdout(), newPassword); err != nil {
+			return fmt.Errorf("failed to write password to output: %w", err)
+		}
 	}
 
 	if copyToClip {
@@ -101,9 +102,13 @@ func runRotatePassword(cmd *cobra.Command, name string, length int, copyToClip b
 		if err := copyToClipboard(newPassword, ttlDuration); err != nil {
 			return fmt.Errorf("failed to copy to clipboard: %w", err)
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "✓ Password rotated and copied to clipboard (clears in %s)\n", ttlDuration.Round(time.Second))
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "✓ Password rotated and copied to clipboard (clears in %s)\n", ttlDuration.Round(time.Second)); err != nil {
+			return fmt.Errorf("failed to write status to output: %w", err)
+		}
 	} else if !show {
-		fmt.Fprintln(cmd.OutOrStdout(), "✓ Password rotated successfully")
+		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "✓ Password rotated successfully"); err != nil {
+			return fmt.Errorf("failed to write status to output: %w", err)
+		}
 	}
 
 	return nil

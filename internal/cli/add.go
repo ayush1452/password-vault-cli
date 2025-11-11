@@ -89,6 +89,15 @@ Example:
 func runAdd(entryName string) error {
 	defer CloseSessionStore()
 
+	// Helper function to write output and check for errors
+	printStatus := func(format string, args ...interface{}) error {
+		_, err := fmt.Fprintf(os.Stdout, format, args...)
+		if err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		return nil
+	}
+
 	// Check if vault is unlocked
 	if !IsUnlocked() {
 		return fmt.Errorf("vault is locked, run 'vault unlock' first")
@@ -160,15 +169,27 @@ func runAdd(entryName string) error {
 	// Refresh session
 	RefreshSession()
 
-	fmt.Printf("✓ Entry '%s' added successfully to profile '%s'\n", entryName, profile)
+	if err := printStatus("✓ Entry '%s' added successfully to profile '%s'\n", entryName, profile); err != nil {
+		return err
+	}
 
 	if verbose {
-		fmt.Printf("Details:\n")
-		fmt.Printf("  Username: %s\n", username)
-		fmt.Printf("  URL: %s\n", url)
-		fmt.Printf("  Tags: %v\n", tags)
+		if err := printStatus("Details:\n"); err != nil {
+			return err
+		}
+		if err := printStatus("  Username: %s\n", username); err != nil {
+			return err
+		}
+		if err := printStatus("  URL: %s\n", url); err != nil {
+			return err
+		}
+		if err := printStatus("  Tags: %v\n", tags); err != nil {
+			return err
+		}
 		if notes != "" {
-			fmt.Printf("  Notes: %s\n", notes)
+			if err := printStatus("  Notes: %s\n", notes); err != nil {
+				return err
+			}
 		}
 	}
 

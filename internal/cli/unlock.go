@@ -3,15 +3,14 @@ package cli
 import (
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/vault-cli/vault/internal/config"
 )
 
-var (
-	unlockTTL time.Duration
-)
+var unlockTTL time.Duration
 
 var unlockCmd = &cobra.Command{
 	Use:   "unlock",
@@ -62,6 +61,11 @@ Example:
 }
 
 func runUnlock() error {
+	// Use the shared writeOutput function for consistent error handling
+	writeOutput := func(format string, args ...interface{}) error {
+		return writeOutput(os.Stdout, format, args...)
+	}
+
 	// Check if already unlocked
 	if IsUnlocked() {
 		unlocked, remaining, err := GetSessionInfo()
@@ -69,7 +73,9 @@ func runUnlock() error {
 			log.Printf("Warning: failed to get session info: %v", err)
 			// Continue with unlock process if we can't get session info
 		} else if unlocked {
-			fmt.Printf("Vault is already unlocked (expires in %v)\n", remaining.Round(time.Second))
+			if err := writeOutput("Vault is already unlocked (expires in %v)\n", remaining.Round(time.Second)); err != nil {
+				log.Printf("Warning: failed to write status: %v", err)
+			}
 			return nil
 		}
 	}
@@ -85,8 +91,18 @@ func runUnlock() error {
 		return fmt.Errorf("failed to unlock vault: %w", err)
 	}
 
-	fmt.Printf("✓ Vault unlocked successfully\n")
-	fmt.Printf("Auto-lock timeout: %v\n", unlockTTL)
+	// Write success message and timeout info
+	errs := []error{
+		writeOutput("✓ Vault unlocked successfully\n"),
+		writeOutput("Auto-lock timeout: %v\n", unlockTTL),
+	}
+
+	// Return the first error if any occurred
+	for _, err := range errs {
+		if err != nil {
+			return fmt.Errorf("error during unlock: %w", err)
+		}
+	}
 
 	return nil
 }

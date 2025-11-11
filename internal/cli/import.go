@@ -6,9 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	importConflict string
-)
+var importConflict string
 
 var importCmd = &cobra.Command{
 	Use:   "import <file>",

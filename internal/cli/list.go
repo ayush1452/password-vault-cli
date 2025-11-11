@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/vault-cli/vault/internal/config"
@@ -92,6 +93,15 @@ func runList(cmd *cobra.Command) error {
 		listLong = false
 	}()
 
+	// Helper function to write output with error checking
+	writeOutput := func(w io.Writer, format string, args ...interface{}) error {
+		_, err := fmt.Fprintf(w, format, args...)
+		if err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		return nil
+	}
+
 	out := cmd.OutOrStdout()
 
 	// Check if vault is unlocked
@@ -120,22 +130,16 @@ func runList(cmd *cobra.Command) error {
 	if len(entries) == 0 {
 		out := cmd.OutOrStdout()
 
-		// Helper function to write output with error checking
-		writeOutput := func(format string, args ...interface{}) error {
-			_, err := fmt.Fprintf(out, format, args...)
-			return err
-		}
-
 		if filter.Search != "" || len(filter.Tags) > 0 {
-			if err := writeOutput("No entries found matching the filter criteria\n"); err != nil {
-				return fmt.Errorf("failed to write no entries message: %w", err)
+			if err := writeOutput(out, "No entries found matching the filter criteria\n"); err != nil {
+				return err
 			}
 		} else {
-			if err := writeOutput("No entries found in profile '%s'\n", profile); err != nil {
-				return fmt.Errorf("failed to write no entries message: %w", err)
+			if err := writeOutput(out, "No entries found in profile '%s'\n", profile); err != nil {
+				return err
 			}
-			if err := writeOutput("Use 'vault add <name>' to create your first entry\n"); err != nil {
-				return fmt.Errorf("failed to write help message: %w", err)
+			if err := writeOutput(out, "Use 'vault add <name>' to create your first entry\n"); err != nil {
+				return err
 			}
 		}
 		return nil
@@ -165,27 +169,30 @@ func outputEntriesTable(out io.Writer, entries []*domain.Entry) error {
 	// Helper function to write to tabwriter with error checking
 	writeOutput := func(format string, args ...interface{}) error {
 		_, err := fmt.Fprintf(w, format, args...)
-		return err
+		if err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		return nil
 	}
 
 	// Write table header
 	if err := writeOutput("NAME\n"); err != nil {
-		return fmt.Errorf("failed to write table header: %w", err)
+		return err
 	}
 	if err := writeOutput("----\n"); err != nil {
-		return fmt.Errorf("failed to write table header separator: %w", err)
+		return err
 	}
 
 	// Write table rows
 	for _, entry := range entries {
 		if err := writeOutput("%s\n", entry.Name); err != nil {
-			return fmt.Errorf("failed to write entry: %w", err)
+			return err
 		}
 	}
 
 	// Write summary
-	if _, err := fmt.Fprintf(out, "\nFound %d entries in profile '%s'\n", len(entries), profile); err != nil {
-		return fmt.Errorf("failed to write summary: %w", err)
+	if err := writeOutput("\nFound %d entries in profile '%s'\n", len(entries), profile); err != nil {
+		return err
 	}
 
 	return nil
@@ -198,7 +205,10 @@ func outputEntriesTableLong(out io.Writer, entries []*domain.Entry) error {
 	// Helper function to write to tabwriter with error checking
 	writeOutput := func(format string, args ...interface{}) error {
 		_, err := fmt.Fprintf(w, format, args...)
-		return err
+		if err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		return nil
 	}
 
 	// Write table header
@@ -210,10 +220,10 @@ func outputEntriesTableLong(out io.Writer, entries []*domain.Entry) error {
 		strings.Repeat("-", 10) + "\n"
 
 	if err := writeOutput(headerLine); err != nil {
-		return fmt.Errorf("failed to write table header: %w", err)
+		return err
 	}
 	if err := writeOutput(separator); err != nil {
-		return fmt.Errorf("failed to write table separator: %w", err)
+		return err
 	}
 
 	// Write table rows
@@ -235,13 +245,13 @@ func outputEntriesTableLong(out io.Writer, entries []*domain.Entry) error {
 			tags,
 			updatedAt,
 		); err != nil {
-			return fmt.Errorf("failed to write entry: %w", err)
+			return err
 		}
 	}
 
 	// Write summary
-	if _, err := fmt.Fprintf(out, "\nFound %d entries in profile '%s'\n", len(entries), profile); err != nil {
-		return fmt.Errorf("failed to write summary: %w", err)
+	if err := writeOutput("\nFound %d entries in profile '%s'\n", len(entries), profile); err != nil {
+		return err
 	}
 
 	return nil
@@ -251,41 +261,33 @@ func outputEntriesJSON(out io.Writer, entries []*domain.Entry) error {
 	// Create output structure without secrets
 	type EntryOutput struct {
 		Name      string   `json:"name"`
-		Username  string   `json:"username"`
+		Username  string   `json:"username,omitempty"`
 		URL       string   `json:"url,omitempty"`
-		Notes     string   `json:"notes,omitempty"`
 		Tags      []string `json:"tags,omitempty"`
-		CreatedAt string   `json:"created_at"`
-		UpdatedAt string   `json:"updated_at"`
+		Notes     string   `json:"notes,omitempty"`
+		CreatedAt string   `json:"createdAt"`
+		UpdatedAt string   `json:"updatedAt"`
 	}
 
-	// Prepare output data
-	output := make([]EntryOutput, 0, len(entries))
+	var output []EntryOutput
+
 	for _, entry := range entries {
 		output = append(output, EntryOutput{
 			Name:      entry.Name,
 			Username:  entry.Username,
 			URL:       entry.URL,
-			Notes:     entry.Notes,
 			Tags:      entry.Tags,
-			CreatedAt: entry.CreatedAt.Format("2006-01-02T15:04:05Z"),
-			UpdatedAt: entry.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+			Notes:     entry.Notes,
+			CreatedAt: entry.CreatedAt.Format(time.RFC3339),
+			UpdatedAt: entry.UpdatedAt.Format(time.RFC3339),
 		})
 	}
 
-	// Configure JSON encoder
+	// Encode to JSON with indentation
 	encoder := json.NewEncoder(out)
 	encoder.SetIndent("", "  ")
-	encoder.SetEscapeHTML(false) // Don't escape HTML characters
-
-	// Encode and write JSON output
 	if err := encoder.Encode(output); err != nil {
-		return fmt.Errorf("failed to encode JSON output: %w", err)
-	}
-
-	// Add a trailing newline for better CLI output
-	if _, err := fmt.Fprintln(out); err != nil {
-		return fmt.Errorf("failed to write trailing newline: %w", err)
+		return fmt.Errorf("failed to encode entries to JSON: %w", err)
 	}
 
 	return nil

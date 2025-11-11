@@ -34,6 +34,14 @@ type sessionFileData struct {
 
 var sessionManager *SessionManager
 
+// logWarning logs a warning message with proper error handling
+func logWarning(format string, args ...interface{}) {
+	if err := log.Output(2, fmt.Sprintf("WARNING: "+format, args...)); err != nil {
+		// If we can't log, there's not much we can do, so we'll just print to stderr
+		fmt.Fprintf(os.Stderr, "WARNING: Failed to log warning: %v\n", err)
+	}
+}
+
 // IsUnlocked returns true if the vault is currently unlocked
 func IsUnlocked() bool {
 	ensureSessionRestored()
@@ -46,7 +54,7 @@ func IsUnlocked() bool {
 	if time.Since(sessionManager.unlockTime) > sessionManager.ttl {
 		// Session expired, lock vault
 		if err := LockVault(); err != nil {
-			log.Printf("Warning: Failed to lock vault: %v", err)
+			logWarning("Failed to lock vault: %v", err)
 		}
 		return false
 	}
@@ -65,10 +73,10 @@ func GetVaultStore() store.VaultStore {
 	if sessionManager.vaultStore == nil || !sessionManager.vaultStore.IsOpen() {
 		vaultStore := store.NewBoltStore()
 		if err := vaultStore.OpenVault(sessionManager.vaultPath, sessionManager.masterKey); err != nil {
-			log.Printf("Error opening vault store: %v", err)
+			logWarning("Error opening vault store: %v", err)
 			// Try to clear the session if we can't open the vault
 			if clearErr := LockVault(); clearErr != nil {
-				log.Printf("Failed to clear session after open error: %v", clearErr)
+				logWarning("Failed to clear session after open error: %v", clearErr)
 			}
 			return nil
 		}
@@ -103,7 +111,7 @@ func UnlockVault(vaultPath, passphrase string, ttl time.Duration) error {
 	defer func() {
 		if tempStore != nil {
 			if closeErr := tempStore.CloseVault(); closeErr != nil {
-				log.Printf("Warning: failed to close temporary vault store: %v", closeErr)
+				logWarning("Failed to close temporary vault store: %v", closeErr)
 			}
 		}
 	}()
@@ -141,6 +149,10 @@ func UnlockVault(vaultPath, passphrase string, ttl time.Duration) error {
 	// Create and open the actual store with the derived key
 	vaultStore := store.NewBoltStore()
 	if err := vaultStore.OpenVault(vaultPath, masterKey); err != nil {
+		if _, err := fmt.Fprintf(os.Stderr, "Failed to open vault with derived key: %v\n", err); err != nil {
+			// If we can't even print to stderr, we're in a bad state
+			panic(err)
+		}
 		return fmt.Errorf("failed to open vault with derived key: %w", err)
 	}
 
@@ -164,7 +176,7 @@ func UnlockVault(vaultPath, passphrase string, ttl time.Duration) error {
 
 	// Close the store as we'll open it on demand
 	if err := CloseSessionStore(); err != nil {
-		log.Printf("Warning: failed to close session store after unlock: %v", err)
+		logWarning("Failed to close session store after unlock: %v", err)
 	}
 
 	log.Printf("Successfully unlocked vault at: %s", vaultPath)
@@ -189,7 +201,15 @@ func LockVault() error {
 	}
 
 	sessionManager = nil
-	os.Remove(sessionFile)
+	if removeErr := os.Remove(sessionFile); removeErr != nil && !os.IsNotExist(removeErr) {
+		// If there's an error removing the file and it's not because it doesn't exist,
+		// combine it with any existing error
+		if err == nil {
+			err = fmt.Errorf("failed to remove session file: %w", removeErr)
+		} else {
+			err = fmt.Errorf("%w; failed to remove session file: %v", err, removeErr)
+		}
+	}
 	return err
 }
 
@@ -274,7 +294,11 @@ func persistSession() error {
 	}
 	tempPath := tempFile.Name()
 	defer func() {
-		tempFile.Close()
+		// Check for errors when closing the temp file
+		if closeErr := tempFile.Close(); closeErr != nil {
+			log.Printf("Warning: failed to close temporary file %s: %v", tempPath, closeErr)
+		}
+		// Only try to remove if the file still exists
 		if _, err := os.Stat(tempPath); err == nil {
 			if removeErr := os.Remove(tempPath); removeErr != nil {
 				log.Printf("Warning: failed to remove temporary file %s: %v", tempPath, removeErr)
@@ -477,7 +501,9 @@ func ClearPersistedSession() {
 
 	path := sessionFilePath(sessionManager.vaultPath)
 	if path != "" {
-		os.Remove(path)
+		if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
+			log.Printf("Warning: failed to remove session file %s: %v", path, removeErr)
+		}
 	}
 
 	if err := CloseSessionStore(); err != nil {

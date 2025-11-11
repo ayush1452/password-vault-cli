@@ -104,8 +104,22 @@ func runPassgen(cmd *cobra.Command, opts *passgenOptions, conf *config.Config) e
 }
 
 func outputPassgen(cmd *cobra.Command, secret string, opts *passgenOptions, conf *config.Config) error {
+	// Get the output writer
+	out := cmd.OutOrStdout()
+
+	// Use the shared writeOutput function for consistent error handling
+	writeOutput := func(format string, args ...interface{}) error {
+		_, err := fmt.Fprintf(out, format, args...)
+		if err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		return nil
+	}
+
 	if !opts.copy {
-		fmt.Fprintln(cmd.OutOrStdout(), secret)
+		if err := writeOutput("%s\n", secret); err != nil {
+			return fmt.Errorf("failed to write password: %w", err)
+		}
 		return nil
 	}
 
@@ -122,7 +136,9 @@ func outputPassgen(cmd *cobra.Command, secret string, opts *passgenOptions, conf
 		return fmt.Errorf("failed to copy to clipboard: %w", err)
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "✓ Password copied to clipboard (clears in %s)\n", ttl.Round(time.Second))
+	if err := writeOutput("✓ Password copied to clipboard (clears in %s)\n", ttl.Round(time.Second)); err != nil {
+		return fmt.Errorf("failed to write success message: %w", err)
+	}
 	return nil
 }
 

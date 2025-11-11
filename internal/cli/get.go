@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -43,7 +44,7 @@ func init() {
 
 // NewGetCommand creates a new get command for testing
 func NewGetCommand(cfg *config.Config) *cobra.Command {
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "get <entry-name>",
 		Short: "Get an entry from the vault",
 		Long: `Get an entry from the vault and display or copy the specified field.
@@ -78,6 +79,15 @@ Example:
 
 func runGet(cmd *cobra.Command, entryName string) error {
 	defer CloseSessionStore()
+
+	// Helper function to write output with error checking
+	writeOutput := func(w io.Writer, format string, args ...interface{}) error {
+		_, err := fmt.Fprintf(w, format, args...)
+		if err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		return nil
+	}
 
 	// Check if vault is unlocked
 	if !IsUnlocked() {
@@ -114,8 +124,8 @@ func runGet(cmd *cobra.Command, entryName string) error {
 	}
 
 	if value == "" {
-		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Field '%s' is empty for entry '%s'\n", field, entryName); err != nil {
-			return fmt.Errorf("failed to write output: %w", err)
+		if err := writeOutput(cmd.OutOrStdout(), "Field '%s' is empty for entry '%s'\n", field, entryName); err != nil {
+			return err
 		}
 		return nil
 	}
@@ -137,24 +147,16 @@ func runGet(cmd *cobra.Command, entryName string) error {
 			return fmt.Errorf("failed to copy to clipboard: %w", err)
 		}
 
-		// Get the output writer once
-		out := cmd.OutOrStdout()
-
-		// Helper function to write output with error checking
-		writeOutput := func(format string, args ...interface{}) error {
-			_, err := fmt.Fprintf(out, format, args...)
-			return err
-		}
-
 		// Write the success message
-		if err := writeOutput("✓ %s for '%s' copied to clipboard", strings.Title(field), entryName); err != nil {
-			return fmt.Errorf("failed to write output: %w", err)
+		out := cmd.OutOrStdout()
+		if err := writeOutput(out, "✓ %s for '%s' copied to clipboard", strings.Title(field), entryName); err != nil {
+			return err
 		}
 
 		// Add timeout info if sensitive
 		if sensitive {
-			if err := writeOutput(" (clears in %v)", timeout); err != nil {
-				return fmt.Errorf("failed to write timeout info: %w", err)
+			if err := writeOutput(out, " (clears in %v)", timeout); err != nil {
+				return err
 			}
 		}
 
@@ -167,67 +169,59 @@ func runGet(cmd *cobra.Command, entryName string) error {
 		out := cmd.OutOrStdout()
 
 		if sensitive {
-			if _, err := fmt.Fprintln(out, "⚠️  WARNING: Displaying secret in terminal"); err != nil {
-				return fmt.Errorf("failed to write warning: %w", err)
+			if err := writeOutput(out, "⚠️  WARNING: Displaying secret in terminal\n"); err != nil {
+				return err
 			}
 		}
 
-		if _, err := fmt.Fprintf(out, "%s: %s\n", strings.Title(field), value); err != nil {
+		if err := writeOutput(out, "%s: %s\n", strings.Title(field), value); err != nil {
 			return fmt.Errorf("failed to write %s: %w", field, err)
 		}
 	}
 
 	// Show additional info if verbose
 	if verbose && field == "secret" {
-		// Get the output writer once
-		out := cmd.OutOrStdout()
-
-		// Helper function to write output with error checking
-		writeOutput := func(format string, args ...interface{}) error {
-			_, err := fmt.Fprintf(out, format, args...)
-			return err
-		}
-
 		// Write entry details with error checking
-		if err := writeOutput("\nEntry details:\n"); err != nil {
+		out := cmd.OutOrStdout()
+		if err := writeOutput(out, "\nEntry details:\n"); err != nil {
 			return fmt.Errorf("failed to write entry details header: %w", err)
 		}
 
-		if err := writeOutput("  Name: %s\n", entry.Name); err != nil {
+		if err := writeOutput(out, "  Name: %s\n", entry.Name); err != nil {
 			return fmt.Errorf("failed to write entry name: %w", err)
 		}
 
 		if entry.Username != "" {
-			if err := writeOutput("  Username: %s\n", entry.Username); err != nil {
+			if err := writeOutput(out, "  Username: %s\n", entry.Username); err != nil {
 				return fmt.Errorf("failed to write username: %w", err)
 			}
 		}
 
 		if entry.URL != "" {
-			if err := writeOutput("  URL: %s\n", entry.URL); err != nil {
+			if err := writeOutput(out, "  URL: %s\n", entry.URL); err != nil {
 				return fmt.Errorf("failed to write URL: %w", err)
 			}
 		}
 
 		if len(entry.Tags) > 0 {
-			if err := writeOutput("  Tags: %v\n", entry.Tags); err != nil {
+			if err := writeOutput(out, "  Tags: %s\n", strings.Join(entry.Tags, ", ")); err != nil {
 				return fmt.Errorf("failed to write tags: %w", err)
 			}
 		}
 
 		if entry.Notes != "" {
-			if err := writeOutput("  Notes: %s\n", entry.Notes); err != nil {
+			if err := writeOutput(out, "  Notes: %s\n", entry.Notes); err != nil {
 				return fmt.Errorf("failed to write notes: %w", err)
 			}
 		}
 
 		createdAt := entry.CreatedAt.Format("2006-01-02 15:04:05")
-		if err := writeOutput("  Created: %s\n", createdAt); err != nil {
+		if err := writeOutput(out, "  Created: %s\n", createdAt); err != nil {
 			return fmt.Errorf("failed to write creation time: %w", err)
 		}
 
 		updatedAt := entry.UpdatedAt.Format("2006-01-02 15:04:05")
-		if err := writeOutput("  Updated: %s\n", updatedAt); err != nil {
+		if err := writeOutput(out, "  Updated: %s\n", updatedAt); err != nil {
 			return fmt.Errorf("failed to write update time: %w", err)
 		}
 	}

@@ -116,7 +116,6 @@ func FuzzEnvelopeSerialization(f *testing.F) {
 
 		var envelope vault.Envelope
 		err := json.Unmarshal(data, &envelope)
-
 		// Unmarshaling may fail with invalid JSON - that's expected
 		if err != nil {
 			return
@@ -364,7 +363,7 @@ security:
 		tempDir := t.TempDir()
 		configPath := filepath.Join(tempDir, "config.yaml")
 
-		err := os.WriteFile(configPath, configData, 0644)
+		err := os.WriteFile(configPath, configData, 0o644)
 		if err != nil {
 			t.Skip("Failed to write config file")
 		}
@@ -514,13 +513,13 @@ func testFileOperations(t *testing.T, path string) {
 
 	// Create directory if needed
 	dir := filepath.Dir(path)
-	os.MkdirAll(dir, 0755)
+	os.MkdirAll(dir, 0o755)
 
 	// Test file operations
 	testData := []byte("test data")
 
 	// Write
-	err := os.WriteFile(path, testData, 0644)
+	err := os.WriteFile(path, testData, 0o644)
 	if err != nil {
 		return // Expected for invalid paths
 	}

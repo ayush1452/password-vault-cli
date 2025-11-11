@@ -105,8 +105,12 @@ func runInit() error {
 	// Get passphrase from flag or prompt
 	if passphrase == "" {
 		// Interactive mode
-		fmt.Println("Creating new vault...")
-		fmt.Println("Choose a strong master passphrase. This will be used to encrypt all your data.")
+		if _, err := fmt.Fprintln(os.Stdout, "Creating new vault..."); err != nil {
+			return fmt.Errorf("failed to write status: %w", err)
+		}
+		if _, err := fmt.Fprintln(os.Stdout, "Choose a strong master passphrase. This will be used to encrypt all your data."); err != nil {
+			return fmt.Errorf("failed to write instructions: %w", err)
+		}
 		passphrase, err = PromptPassword("Enter master passphrase: ")
 		if err != nil {
 			return fmt.Errorf("failed to get passphrase: %w", err)
@@ -169,12 +173,34 @@ func runInit() error {
 		return fmt.Errorf("failed to create vault: %w", err)
 	}
 
-	fmt.Printf("✓ Vault created successfully at %s\n", vaultPath)
-	fmt.Printf("KDF Parameters:\n")
-	fmt.Printf("  Memory: %d KB\n", kdfMemory)
-	fmt.Printf("  Iterations: %d\n", kdfIterations)
-	fmt.Printf("  Parallelism: %d\n", kdfParallelism)
-	fmt.Printf("\nUse 'vault unlock' to start using your vault.\n")
+	// Helper function to handle fmt.Fprintf errors
+	printStatus := func(format string, args ...interface{}) error {
+		_, err := fmt.Fprintf(os.Stdout, format, args...)
+		if err != nil {
+			return fmt.Errorf("failed to write status: %w", err)
+		}
+		return nil
+	}
+
+	// Output success message and KDF parameters
+	if err := printStatus("✓ Vault created successfully at %s\n", vaultPath); err != nil {
+		return err
+	}
+	if err := printStatus("KDF Parameters:\n"); err != nil {
+		return err
+	}
+	if err := printStatus("  Memory: %d KB\n", kdfMemory); err != nil {
+		return err
+	}
+	if err := printStatus("  Iterations: %d\n", kdfIterations); err != nil {
+		return err
+	}
+	if err := printStatus("  Parallelism: %d\n", kdfParallelism); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(os.Stdout, "\nUse 'vault unlock' to start using your vault."); err != nil {
+		return fmt.Errorf("failed to write instructions: %w", err)
+	}
 
 	return nil
 }

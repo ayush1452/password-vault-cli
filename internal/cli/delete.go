@@ -2,14 +2,14 @@ package cli
 
 import (
 	"fmt"
+	"io"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/vault-cli/vault/internal/config"
 )
 
-var (
-	deleteYes bool
-)
+var deleteYes bool
 
 var deleteCmd = &cobra.Command{
 	Use:   "delete <entry-name>",
@@ -63,6 +63,15 @@ Example:
 }
 
 func runDelete(entryName string) error {
+	// Helper function to write output with error checking
+	writeOutput := func(w io.Writer, format string, args ...interface{}) error {
+		_, err := fmt.Fprintf(w, format, args...)
+		if err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		return nil
+	}
+
 	// Check if vault is unlocked
 	if !IsUnlocked() {
 		return fmt.Errorf("vault is locked, run 'vault unlock' first")
@@ -77,13 +86,16 @@ func runDelete(entryName string) error {
 
 	// Confirm deletion unless --yes flag is used
 	if !deleteYes {
-		confirmed, err := PromptConfirm(fmt.Sprintf("Delete entry '%s' from profile '%s'?", entryName, profile), false)
+		confirmMsg := fmt.Sprintf("Delete entry '%s' from profile '%s'?", entryName, profile)
+		confirmed, err := PromptConfirm(confirmMsg, false)
 		if err != nil {
 			return fmt.Errorf("failed to get confirmation: %w", err)
 		}
 
 		if !confirmed {
-			fmt.Println("Entry deletion cancelled")
+			if err := writeOutput(os.Stdout, "Entry deletion cancelled\n"); err != nil {
+				return err
+			}
 			return nil
 		}
 	}
@@ -96,6 +108,8 @@ func runDelete(entryName string) error {
 	// Refresh session
 	RefreshSession()
 
-	fmt.Printf("✓ Entry '%s' deleted successfully from profile '%s'\n", entryName, profile)
+	if err := writeOutput(os.Stdout, "✓ Entry '%s' deleted successfully from profile '%s'\n", entryName, profile); err != nil {
+		return err
+	}
 	return nil
 }

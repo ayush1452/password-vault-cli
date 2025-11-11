@@ -55,12 +55,12 @@ func (bs *BoltStore) CreateVault(path string, masterKey []byte, kdfParams map[st
 
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("failed to create vault directory: %w", err)
 	}
 
 	// Create and open database
-	db, err := bbolt.Open(path, 0600, &bbolt.Options{
+	db, err := bbolt.Open(path, 0o600, &bbolt.Options{
 		Timeout: 10 * time.Second,
 	})
 	if err != nil {
@@ -142,7 +142,6 @@ func (bs *BoltStore) CreateVault(path string, masterKey []byte, kdfParams map[st
 
 		return nil
 	})
-
 	if err != nil {
 		os.Remove(path) // Clean up on failure
 		return err
@@ -175,7 +174,7 @@ func (bs *BoltStore) OpenVault(path string, masterKey []byte) error {
 	}
 
 	// Open database
-	db, err := bbolt.Open(path, 0600, &bbolt.Options{
+	db, err := bbolt.Open(path, 0o600, &bbolt.Options{
 		Timeout:  10 * time.Second,
 		ReadOnly: false,
 	})
@@ -204,7 +203,6 @@ func (bs *BoltStore) OpenVault(path string, masterKey []byte) error {
 
 		return nil
 	})
-
 	if err != nil {
 		db.Close()
 		lock.Unlock()
@@ -1161,12 +1159,12 @@ func (bs *BoltStore) ExportVault(path string, includeSecrets bool) error {
 	}
 
 	if dir := filepath.Dir(path); dir != "." && dir != "" {
-		if err := os.MkdirAll(dir, 0700); err != nil {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return fmt.Errorf("failed to create export directory: %w", err)
 		}
 	}
 
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write export file: %w", err)
 	}
 

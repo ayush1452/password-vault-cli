@@ -119,10 +119,23 @@ func runUpdate(cmd *cobra.Command, entryName string) error {
 
 	// If no flags were provided, prompt for updates interactively
 	if !updated {
-		fmt.Printf("Updating entry '%s' (press Enter to keep current value):\n\n", entryName)
+		// Helper function to handle fmt.Fprintf errors
+		printPrompt := func(format string, args ...interface{}) error {
+			_, err := fmt.Fprintf(os.Stdout, format, args...)
+			if err != nil {
+				return fmt.Errorf("failed to write prompt: %w", err)
+			}
+			return nil
+		}
+
+		if err := printPrompt("Updating entry '%s' (press Enter to keep current value):\n\n", entryName); err != nil {
+			return err
+		}
 
 		// Username
-		fmt.Printf("Username [%s]: ", entry.Username)
+		if err := printPrompt("Username [%s]: ", entry.Username); err != nil {
+			return err
+		}
 		newUsername, err := PromptInput("")
 		if err != nil {
 			return fmt.Errorf("failed to read username: %w", err)
@@ -133,7 +146,9 @@ func runUpdate(cmd *cobra.Command, entryName string) error {
 		}
 
 		// URL
-		fmt.Printf("URL [%s]: ", entry.URL)
+		if err := printPrompt("URL [%s]: ", entry.URL); err != nil {
+			return err
+		}
 		newURL, err := PromptInput("")
 		if err != nil {
 			return fmt.Errorf("failed to read URL: %w", err)
@@ -144,7 +159,9 @@ func runUpdate(cmd *cobra.Command, entryName string) error {
 		}
 
 		// Notes
-		fmt.Printf("Notes [%s]: ", entry.Notes)
+		if err := printPrompt("Notes [%s]: ", entry.Notes); err != nil {
+			return err
+		}
 		newNotes, err := PromptInput("")
 		if err != nil {
 			return fmt.Errorf("failed to read notes: %w", err)
@@ -156,7 +173,9 @@ func runUpdate(cmd *cobra.Command, entryName string) error {
 
 		// Tags
 		currentTags := strings.Join(entry.Tags, ",")
-		fmt.Printf("Tags [%s]: ", currentTags)
+		if err := printPrompt("Tags [%s]: ", currentTags); err != nil {
+			return err
+		}
 		newTags, err := PromptInput("")
 		if err != nil {
 			return fmt.Errorf("failed to read tags: %w", err)
@@ -191,7 +210,9 @@ func runUpdate(cmd *cobra.Command, entryName string) error {
 	}
 
 	if !updated {
-		fmt.Println("No changes made")
+		if _, err := fmt.Fprintln(os.Stdout, "No changes made"); err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
 		return nil
 	}
 
@@ -203,7 +224,9 @@ func runUpdate(cmd *cobra.Command, entryName string) error {
 	// Refresh session
 	RefreshSession()
 
-	fmt.Printf("✓ Entry '%s' updated successfully\n", entryName)
+	if _, err := fmt.Fprintf(os.Stdout, "✓ Entry '%s' updated successfully\n", entryName); err != nil {
+		return fmt.Errorf("failed to write success message: %w", err)
+	}
 	return nil
 }
 

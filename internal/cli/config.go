@@ -132,19 +132,25 @@ func runConfigGetAll(cmd *cobra.Command) error {
 		out = cmd.OutOrStdout()
 	}
 
-	// Helper function to write formatted output and check for errors
+	// Use the shared writeOutput function for consistent error handling
 	writeOutput := func(format string, args ...interface{}) error {
 		_, err := fmt.Fprintf(out, format, args...)
-		return err
+		if err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		return nil
 	}
 
-	// Write configuration with error checking
-	if err := writeOutput("Configuration file: %s\n\n", cfgFile); err != nil {
-		return fmt.Errorf("failed to write configuration: %w", err)
-	}
+	// Collect all write operations and execute them at the end
+	var writeOps []func() error
 
-	// Create a slice of write operations to execute
-	writeOps := []struct {
+	// Add configuration header
+	writeOps = append(writeOps, func() error {
+		return writeOutput("Configuration file: %s\n\n", cfgFile)
+	})
+
+	// Add configuration values
+	configValues := []struct {
 		format string
 		value  interface{}
 	}{
@@ -161,11 +167,24 @@ func runConfigGetAll(cmd *cobra.Command) error {
 		{"kdf.parallelism: %d\n", cfg.KDF.Parallelism},
 	}
 
-	// Execute all write operations
+	for _, cv := range configValues {
+		cv := cv // Create a new variable for the closure
+		writeOps = append(writeOps, func() error {
+			return writeOutput(cv.format, cv.value)
+		})
+	}
+
+	// Execute all write operations and collect errors
+	var errs []error
 	for _, op := range writeOps {
-		if err := writeOutput(op.format, op.value); err != nil {
-			return fmt.Errorf("failed to write configuration: %w", err)
+		if err := op(); err != nil {
+			errs = append(errs, err)
 		}
+	}
+
+	// Return the first error if any occurred
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to write configuration: %w", errs[0])
 	}
 
 	return nil
@@ -177,10 +196,13 @@ func runConfigGet(cmd *cobra.Command, key string) error {
 		out = cmd.OutOrStdout()
 	}
 
-	// Helper function to write output and check for errors
+	// Use the shared writeOutput function for consistent error handling
 	writeOutput := func(v interface{}) error {
 		_, err := fmt.Fprintln(out, v)
-		return err
+		if err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		return nil
 	}
 
 	// Get config from command context or use global config
@@ -325,7 +347,9 @@ func runConfigSet(cmd *cobra.Command, key, value string) error {
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}
 
-	fmt.Fprintf(out, "✓ Configuration updated: %s = %s\n", key, value)
+	if _, err := fmt.Fprintf(out, "✓ Configuration updated: %s = %s\n", key, value); err != nil {
+		return fmt.Errorf("failed to write success message: %w", err)
+	}
 	return nil
 }
 
@@ -335,8 +359,15 @@ func runConfigPath(cmd *cobra.Command) error {
 		out = cmd.OutOrStdout()
 	}
 
-	// Write the config file path and check for errors
-	if _, err := fmt.Fprintln(out, cfgFile); err != nil {
+	writeOutput := func(v interface{}) error {
+		_, err := fmt.Fprintln(out, v)
+		if err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		return nil
+	}
+
+	if err := writeOutput(cfgFile); err != nil {
 		return fmt.Errorf("failed to write config file path: %w", err)
 	}
 
