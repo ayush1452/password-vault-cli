@@ -86,16 +86,12 @@ Example:
 	return cmd
 }
 
-func runAdd(entryName string) error {
-	defer CloseSessionStore()
+func runAdd(entryName string) (err error) {
+	defer checkDeferredErr(&err, "CloseSessionStore", CloseSessionStore())
 
-	// Helper function to write output and check for errors
+	// Use the shared writeOutput function for consistent error handling
 	printStatus := func(format string, args ...interface{}) error {
-		_, err := fmt.Fprintf(os.Stdout, format, args...)
-		if err != nil {
-			return fmt.Errorf("failed to write output: %w", err)
-		}
-		return nil
+		return writeOutput(os.Stdout, format, args...)
 	}
 
 	// Check if vault is unlocked
@@ -112,7 +108,6 @@ func runAdd(entryName string) error {
 
 	// Get secret
 	var secret string
-	var err error
 
 	if secretFile != "" {
 		// Read from file

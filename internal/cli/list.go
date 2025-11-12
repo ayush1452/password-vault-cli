@@ -4,15 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/vault-cli/vault/internal/config"
 	"github.com/vault-cli/vault/internal/domain"
 	"github.com/vault-cli/vault/internal/vault"
+	"github.com/vault-cli/vault/internal/config"
 )
 
 var (
@@ -84,23 +85,18 @@ Example:
 	return cmd
 }
 
-func runList(cmd *cobra.Command) error {
-	defer CloseSessionStore()
+func runList(cmd *cobra.Command) (err error) {
+	// Handle cleanup and error reporting for deferred functions
 	defer func() {
+		// Check deferred CloseSessionStore error
+		checkDeferredErr(&err, "CloseSessionStore", CloseSessionStore())
+		
+		// Reset global flags
 		listTags = nil
 		search = ""
 		outputJSON = false
 		listLong = false
 	}()
-
-	// Helper function to write output with error checking
-	writeOutput := func(w io.Writer, format string, args ...interface{}) error {
-		_, err := fmt.Fprintf(w, format, args...)
-		if err != nil {
-			return fmt.Errorf("failed to write output: %w", err)
-		}
-		return nil
-	}
 
 	out := cmd.OutOrStdout()
 
@@ -164,35 +160,37 @@ func outputEntriesTable(out io.Writer, entries []*domain.Entry) error {
 	}
 
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	defer w.Flush()
-
-	// Helper function to write to tabwriter with error checking
-	writeOutput := func(format string, args ...interface{}) error {
-		_, err := fmt.Fprintf(w, format, args...)
-		if err != nil {
-			return fmt.Errorf("failed to write output: %w", err)
+	defer func() {
+		// Use the shared writeOutput for the final flush
+		if err := w.Flush(); err != nil {
+			// Log the error if we can't flush the writer
+			_ = writeOutput(os.Stderr, "warning: failed to flush tabwriter: %v\n", err)
 		}
-		return nil
-	}
+	}()
 
 	// Write table header
-	if err := writeOutput("NAME\n"); err != nil {
-		return err
+	if err := writeOutput(w, "NAME\n"); err != nil {
+		return fmt.Errorf("failed to write table header: %w", err)
 	}
-	if err := writeOutput("----\n"); err != nil {
-		return err
+	if err := writeOutput(w, "----\n"); err != nil {
+		return fmt.Errorf("failed to write table header separator: %w", err)
 	}
+
+	// Sort entries by name
+	sort.Slice(entries, func(i, j int) bool {
+		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
+	})
 
 	// Write table rows
 	for _, entry := range entries {
-		if err := writeOutput("%s\n", entry.Name); err != nil {
-			return err
+		if err := writeOutput(w, "%s\n", entry.Name); err != nil {
+			return fmt.Errorf("failed to write entry '%s': %w", entry.Name, err)
 		}
 	}
 
 	// Write summary
-	if err := writeOutput("\nFound %d entries in profile '%s'\n", len(entries), profile); err != nil {
-		return err
+	if err := writeOutput(w, "\nFound %d entries in profile '%s'\n", len(entries), profile); err != nil {
+		return fmt.Errorf("failed to write summary: %w", err)
 	}
 
 	return nil
@@ -200,16 +198,17 @@ func outputEntriesTable(out io.Writer, entries []*domain.Entry) error {
 
 func outputEntriesTableLong(out io.Writer, entries []*domain.Entry) error {
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	defer w.Flush()
-
-	// Helper function to write to tabwriter with error checking
-	writeOutput := func(format string, args ...interface{}) error {
-		_, err := fmt.Fprintf(w, format, args...)
-		if err != nil {
-			return fmt.Errorf("failed to write output: %w", err)
+	defer func() {
+		// Handle flush error using shared writeOutput
+		if err := w.Flush(); err != nil {
+			_ = writeOutput(os.Stderr, "warning: failed to flush tabwriter: %v\n", err)
 		}
-		return nil
-	}
+	}()
+
+	// Sort entries by name
+	sort.Slice(entries, func(i, j int) bool {
+		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
+	})
 
 	// Write table header
 	headers := []string{"NAME", "USERNAME", "TAGS", "UPDATED_AT"}
@@ -219,39 +218,30 @@ func outputEntriesTableLong(out io.Writer, entries []*domain.Entry) error {
 		strings.Repeat("-", 4) + "\t" +
 		strings.Repeat("-", 10) + "\n"
 
-	if err := writeOutput(headerLine); err != nil {
-		return err
+	if err := writeOutput(w, headerLine); err != nil {
+		return fmt.Errorf("failed to write table header: %w", err)
 	}
-	if err := writeOutput(separator); err != nil {
-		return err
+	if err := writeOutput(w, separator); err != nil {
+		return fmt.Errorf("failed to write header separator: %w", err)
 	}
 
 	// Write table rows
 	for _, entry := range entries {
-		tags := strings.Join(entry.Tags, ",")
-		if len(tags) > 40 {
-			tags = tags[:37] + "..."
-		}
-
-		username := entry.Username
-		if len(username) > 24 {
-			username = username[:21] + "..."
-		}
-
-		updatedAt := entry.UpdatedAt.Format("2006-01-02 15:04")
-		if err := writeOutput("%s\t%s\t%s\t%s\n",
+		updatedAt := entry.UpdatedAt.Format("2006-01-02")
+		tags := strings.Join(entry.Tags, ", ")
+		if err := writeOutput(w, "%s\t%s\t%s\t%s\n",
 			entry.Name,
-			username,
+			entry.Username,
 			tags,
 			updatedAt,
 		); err != nil {
-			return err
+			return fmt.Errorf("failed to write entry '%s': %w", entry.Name, err)
 		}
 	}
 
 	// Write summary
-	if err := writeOutput("\nFound %d entries in profile '%s'\n", len(entries), profile); err != nil {
-		return err
+	if err := writeOutput(w, "\nFound %d entries in profile '%s'\n", len(entries), profile); err != nil {
+		return fmt.Errorf("failed to write summary: %w", err)
 	}
 
 	return nil

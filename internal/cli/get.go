@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -77,17 +76,10 @@ Example:
 	return cmd
 }
 
-func runGet(cmd *cobra.Command, entryName string) error {
-	defer CloseSessionStore()
+func runGet(cmd *cobra.Command, entryName string) (err error) {
+	defer checkDeferredErr(&err, "CloseSessionStore", CloseSessionStore())
 
-	// Helper function to write output with error checking
-	writeOutput := func(w io.Writer, format string, args ...interface{}) error {
-		_, err := fmt.Fprintf(w, format, args...)
-		if err != nil {
-			return fmt.Errorf("failed to write output: %w", err)
-		}
-		return nil
-	}
+	// Use the shared writeOutput function for consistent error handling
 
 	// Check if vault is unlocked
 	if !IsUnlocked() {
