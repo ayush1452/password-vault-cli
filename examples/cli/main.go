@@ -30,13 +30,13 @@ func main() {
 	// Build the vault binary
 	fmt.Println("\n1. Building vault binary...")
 	vaultBinaryPath := filepath.Join(tempDir, "vault")
-	
+
 	// Use absolute path to the Go binary for security
 	goPath, err := exec.LookPath("go")
 	if err != nil {
 		log.Fatal("Could not find 'go' in PATH")
 	}
-	
+
 	buildCmd := &exec.Cmd{
 		Path: goPath,
 		Args: []string{"go", "build", "-o", vaultBinaryPath, "./cmd/vault"},
@@ -45,18 +45,18 @@ func main() {
 			Setpgid: true, // Prevent child processes from being killed when parent is killed
 		},
 	}
-	
+
 	output, err := buildCmd.CombinedOutput()
 	if err != nil {
 		log.Printf("Build output: %s", output)
 		log.Fatal("Failed to build vault binary:", err)
 	}
-	
+
 	// Ensure the binary has secure permissions
 	if err := os.Chmod(vaultBinaryPath, 0o750); err != nil {
 		log.Fatal("Failed to set binary permissions:", err)
 	}
-	
+
 	fmt.Println("✓ Vault binary built successfully")
 
 	vaultBinary := filepath.Join(tempDir, "vault")
