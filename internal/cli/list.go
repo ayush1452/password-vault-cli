@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/vault-cli/vault/internal/config"
 	"github.com/vault-cli/vault/internal/domain"
 	"github.com/vault-cli/vault/internal/vault"
-	"github.com/vault-cli/vault/internal/config"
 )
 
 var (
@@ -90,7 +90,7 @@ func runList(cmd *cobra.Command) (err error) {
 	defer func() {
 		// Check deferred CloseSessionStore error
 		checkDeferredErr(&err, "CloseSessionStore", CloseSessionStore())
-		
+
 		// Reset global flags
 		listTags = nil
 		search = ""
