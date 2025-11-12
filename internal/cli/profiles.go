@@ -133,7 +133,11 @@ func runProfilesList() error {
 
 	// Table output
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	defer w.Flush()
+	defer func() {
+		if err := w.Flush(); err != nil {
+			_ = writeOutput(os.Stderr, "warning: failed to flush tabwriter: %v\n", err)
+		}
+	}()
 
 	// Write table header
 	headers := []string{"NAME", "DESCRIPTION", "CREATED", "DEFAULT"}
@@ -144,10 +148,10 @@ func runProfilesList() error {
 		strings.Repeat("-", 6) + "\n"
 
 	if err := writeOutput(w, headerLine); err != nil {
-		return err
+		return fmt.Errorf("failed to write table header: %w", err)
 	}
 	if err := writeOutput(w, separator); err != nil {
-		return err
+		return fmt.Errorf("failed to write header separator: %w", err)
 	}
 
 	// Write table rows
@@ -163,13 +167,13 @@ func runProfilesList() error {
 			profile.CreatedAt.Format("2006-01-02"),
 			isDefault,
 		); err != nil {
-			return err
+			return fmt.Errorf("failed to write profile '%s' (name: %s, description: %s, created_at: %s, is_default: %s): %w", profile.Name, profile.Name, profile.Description, profile.CreatedAt.Format("2006-01-02"), isDefault, err)
 		}
 	}
 
 	// Write summary
 	if err := writeOutput(os.Stdout, "\nFound %d profiles\n", len(profiles)); err != nil {
-		return err
+		return fmt.Errorf("failed to write summary for %d profiles: %w", len(profiles), err)
 	}
 
 	return nil

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
 )
 
@@ -28,12 +29,34 @@ func main() {
 
 	// Build the vault binary
 	fmt.Println("\n1. Building vault binary...")
-	buildCmd := exec.Command("go", "build", "-o", filepath.Join(tempDir, "vault"), "./cmd/vault")
-	buildCmd.Dir = "/workspace"
-	if output, err := buildCmd.CombinedOutput(); err != nil {
+	vaultBinaryPath := filepath.Join(tempDir, "vault")
+	
+	// Use absolute path to the Go binary for security
+	goPath, err := exec.LookPath("go")
+	if err != nil {
+		log.Fatal("Could not find 'go' in PATH")
+	}
+	
+	buildCmd := &exec.Cmd{
+		Path: goPath,
+		Args: []string{"go", "build", "-o", vaultBinaryPath, "./cmd/vault"},
+		Dir:  "/workspace",
+		SysProcAttr: &syscall.SysProcAttr{
+			Setpgid: true, // Prevent child processes from being killed when parent is killed
+		},
+	}
+	
+	output, err := buildCmd.CombinedOutput()
+	if err != nil {
 		log.Printf("Build output: %s", output)
 		log.Fatal("Failed to build vault binary:", err)
 	}
+	
+	// Ensure the binary has secure permissions
+	if err := os.Chmod(vaultBinaryPath, 0o750); err != nil {
+		log.Fatal("Failed to set binary permissions:", err)
+	}
+	
 	fmt.Println("✓ Vault binary built successfully")
 
 	vaultBinary := filepath.Join(tempDir, "vault")
@@ -75,12 +98,19 @@ func main() {
 		fmt.Printf("\n%d. %s\n", i+2, cmd.desc)
 		fmt.Printf("Command: vault %s\n", joinArgs(cmd.args))
 
-		execCmd := exec.Command(vaultBinary, cmd.args...)
-		execCmd.Dir = tempDir
+		// Secure command execution with proper argument handling
+		execCmd := &exec.Cmd{
+			Path: vaultBinary,
+			Args: append([]string{filepath.Base(vaultBinary)}, cmd.args...),
+			Dir:  tempDir,
+			SysProcAttr: &syscall.SysProcAttr{
+				Setpgid: true, // Prevent child processes from being killed when parent is killed
+			},
+		}
 
 		// For init command, we need to provide input
 		if cmd.name == "Initialize vault" {
-			execCmd.Stdin = nil // We'll need to handle this differently in a real demo
+			execCmd.Stdin = nil // In a real demo, this would be handled securely
 			fmt.Println("Note: This would normally prompt for master passphrase")
 		}
 

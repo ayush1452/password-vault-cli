@@ -167,7 +167,7 @@ func TestTamperDetection(t *testing.T) {
 			tamperedData := tt.tamperFunc(append([]byte(nil), originalData...))
 			tamperedPath := suite.VaultPath + ".tampered"
 
-			err := os.WriteFile(tamperedPath, tamperedData, 0644)
+			err := os.WriteFile(tamperedPath, tamperedData, 0600)
 			if err != nil {
 				t.Fatalf("Failed to write tampered file: %v", err)
 			}

@@ -668,7 +668,7 @@ func TestRecoveryScenarios(t *testing.T) {
 
 		// Corrupt the vault file
 		corruptedData := append([]byte("CORRUPTED"), originalData[10:]...)
-		err = os.WriteFile(suite.VaultPath, corruptedData, 0644)
+		err = os.WriteFile(suite.VaultPath, corruptedData, 0600)
 		if err != nil {
 			t.Fatalf("Failed to corrupt vault file: %v", err)
 		}
@@ -684,7 +684,7 @@ func TestRecoveryScenarios(t *testing.T) {
 		}
 
 		// Restore original file
-		err = os.WriteFile(suite.VaultPath, originalData, 0644)
+		err = os.WriteFile(suite.VaultPath, originalData, 0600)
 		if err != nil {
 			t.Fatalf("Failed to restore vault file: %v", err)
 		}

@@ -1158,12 +1158,14 @@ func (bs *BoltStore) ExportVault(path string, includeSecrets bool) error {
 		return fmt.Errorf("failed to encode export data: %w", err)
 	}
 
+	// Ensure directory exists with secure permissions (0o700)
 	if dir := filepath.Dir(path); dir != "." && dir != "" {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return fmt.Errorf("failed to create export directory: %w", err)
 		}
 	}
 
+	// Write file with secure permissions (read/write for owner only)
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write export file: %w", err)
 	}
@@ -1184,6 +1186,23 @@ func (bs *BoltStore) ImportVault(path string, conflictResolution string) error {
 	}
 	if strings.TrimSpace(path) == "" {
 		return fmt.Errorf("import path cannot be empty")
+	}
+
+	// Verify file exists and is accessible
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("failed to access import file: %w", err)
+	}
+
+	// Check file permissions (should be readable only by owner)
+	if mode := fileInfo.Mode(); mode.Perm()&0077 != 0 {
+		return fmt.Errorf("insecure file permissions on %s: %v (should be 600 or more restrictive)", path, mode.Perm())
+	}
+
+	// Read file with size limit (100MB)
+	const maxFileSize = 100 << 20 // 100MB
+	if fileInfo.Size() > maxFileSize {
+		return fmt.Errorf("import file too large: %d bytes (max %d MB)", fileInfo.Size(), maxFileSize>>20)
 	}
 
 	data, err := os.ReadFile(path)

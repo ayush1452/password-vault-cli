@@ -363,7 +363,7 @@ security:
 		tempDir := t.TempDir()
 		configPath := filepath.Join(tempDir, "config.yaml")
 
-		err := os.WriteFile(configPath, configData, 0o644)
+		err := os.WriteFile(configPath, configData, 0o600)
 		if err != nil {
 			t.Skip("Failed to write config file")
 		}
@@ -519,7 +519,7 @@ func testFileOperations(t *testing.T, path string) {
 	testData := []byte("test data")
 
 	// Write
-	err := os.WriteFile(path, testData, 0o644)
+	err := os.WriteFile(path, testData, 0o600)
 	if err != nil {
 		return // Expected for invalid paths
 	}
