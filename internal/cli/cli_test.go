@@ -436,10 +436,7 @@ func TestGetCommand(t *testing.T) {
 					t.Errorf("Expected error but got none")
 					return
 				}
-				errMsg := ""
-				if err != nil {
-					errMsg = err.Error()
-				}
+				errMsg := err.Error()
 				if !strings.Contains(errMsg, tt.errContains) && !strings.Contains(stderr, tt.errContains) {
 					t.Errorf("Error '%v' and stderr '%s' do not contain '%s'", err, stderr, tt.errContains)
 				}

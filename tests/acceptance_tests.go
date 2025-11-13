@@ -39,12 +39,31 @@ func NewAcceptanceTestSuite(t *testing.T) *AcceptanceTestSuite {
 
 // BuildBinary builds the vault CLI binary for testing
 func (suite *AcceptanceTestSuite) BuildBinary(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", suite.BinaryPath, "./cmd/vault")
-	cmd.Dir = "/workspace"
+	// Use absolute path to go binary
+	goPath, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatalf("Failed to find 'go' in PATH: %v", err)
+	}
+
+	// Ensure output directory exists
+	if err := os.MkdirAll(filepath.Dir(suite.BinaryPath), 0o700); err != nil {
+		t.Fatalf("Failed to create binary directory: %v", err)
+	}
+
+	cmd := &exec.Cmd{
+		Path: goPath,
+		Args: []string{goPath, "build", "-o", suite.BinaryPath, "./cmd/vault"},
+		Dir:  "/workspace",
+	}
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to build binary: %v\nOutput: %s", err, output)
+	}
+
+	// Set secure permissions on the binary
+	if err := os.Chmod(suite.BinaryPath, 0o700); err != nil {
+		t.Fatalf("Failed to set binary permissions: %v", err)
 	}
 }
 
@@ -163,14 +182,14 @@ func TestCompleteWorkflow(t *testing.T) {
 		// Step 3: List entries
 		t.Log("Step 3: List entries")
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "list")
+		listOut, _, listCode := suite.RunCommandWithInput(t, input, "list")
 
-		if exitCode != 0 {
-			t.Fatalf("List failed: exit code %d\nStdout: %s\nStderr: %s", exitCode, stdout, stderr)
+		if listCode != 0 {
+			t.Errorf("List failed: exit code %d\nOutput: %s", listCode, listOut)
 		}
 
 		for _, entry := range entries {
-			if !strings.Contains(stdout, entry.name) {
+			if !strings.Contains(listOut, entry.name) {
 				t.Errorf("Entry %s not found in list output", entry.name)
 			}
 		}
@@ -203,20 +222,22 @@ func TestCompleteWorkflow(t *testing.T) {
 
 		// Verify update
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "get", "github.com")
+		var getExitCode int
+		stdout, _, getExitCode = suite.RunCommandWithInput(t, input, "get", "github.com")
 
-		if exitCode == 0 && !strings.Contains(stdout, "updated-user") {
+		if getExitCode == 0 && !strings.Contains(stdout, "updated-user") {
 			t.Error("Entry was not updated properly")
 		}
 
 		// Step 6: Search entries
 		t.Log("Step 6: Search entries")
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "list", "--search", "gmail")
+		searchOut, _, searchCode := suite.RunCommandWithInput(t, input, "list", "--search", "gmail")
+		if searchCode != 0 {
+			t.Errorf("Search failed: exit code %d\nOutput: %s", searchCode, searchOut)
+		}
 
-		if exitCode != 0 {
-			t.Errorf("Search failed: exit code %d\nStdout: %s\nStderr: %s", exitCode, stdout, stderr)
-		} else if !strings.Contains(stdout, "gmail.com") {
+		if !strings.Contains(searchOut, "gmail.com") {
 			t.Error("Search did not find expected entry")
 		}
 
@@ -246,20 +267,20 @@ func TestCompleteWorkflow(t *testing.T) {
 
 		// Verify deletion
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "get", "aws.amazon.com")
+		getOut, getErr, getCode := suite.RunCommandWithInput(t, input, "get", "aws.amazon.com")
 
-		if exitCode == 0 {
-			t.Error("Entry was not deleted properly")
+		if getCode == 0 {
+			t.Errorf("Entry was not deleted properly. Output: %s, Error: %s", getOut, getErr)
 		}
 
 		// Step 9: Export data
 		t.Log("Step 9: Export data")
 		exportPath := filepath.Join(suite.TempDir, "export.json")
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "export", exportPath)
+		exportOut, _, exportCode := suite.RunCommandWithInput(t, input, "export", exportPath)
 
-		if exitCode != 0 {
-			t.Errorf("Export failed: exit code %d\nStdout: %s\nStderr: %s", exitCode, stdout, stderr)
+		if exportCode != 0 {
+			t.Errorf("Export failed: exit code %d\nOutput: %s", exportCode, exportOut)
 		} else {
 			// Verify export file exists
 			if _, err := os.Stat(exportPath); os.IsNotExist(err) {
@@ -289,7 +310,7 @@ func TestErrorHandling(t *testing.T) {
 		stdout, stderr, exitCode := suite.RunCommandWithInput(t, input, "list")
 
 		if exitCode == 0 {
-			t.Error("Should fail with wrong passphrase")
+			t.Errorf("Should fail with wrong passphrase")
 		}
 
 		if !strings.Contains(stderr, "authentication failed") && !strings.Contains(stdout, "authentication failed") {
@@ -299,19 +320,19 @@ func TestErrorHandling(t *testing.T) {
 		// Test 2: Non-existent entry
 		t.Log("Test 2: Non-existent entry")
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "get", "non-existent-entry")
+		getOut, getErr, getCode := suite.RunCommandWithInput(t, input, "get", "non-existent-entry")
 
-		if exitCode == 0 {
-			t.Error("Should fail for non-existent entry")
+		if getCode == 0 {
+			t.Errorf("Should fail for non-existent entry. Output: %s, Error: %s", getOut, getErr)
 		}
 
 		// Test 3: Invalid entry name
 		t.Log("Test 3: Invalid entry name")
 		input = fmt.Sprintf("https://test.com\nuser\npass\nnotes\n%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "add", "../invalid/name")
+		addOut, addErr, addCode := suite.RunCommandWithInput(t, input, "add", "../invalid/name")
 
-		if exitCode == 0 {
-			t.Error("Should fail for invalid entry name")
+		if addCode == 0 {
+			t.Errorf("Should fail for invalid entry name. Output: %s, Error: %s", addOut, addErr)
 		}
 
 		// Test 4: Duplicate entry
@@ -323,26 +344,28 @@ func TestErrorHandling(t *testing.T) {
 
 		// Try to add the same entry again
 		input = fmt.Sprintf("https://test.com\nuser2\npass2\nnotes2\n%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "add", "test-entry")
+		addOut, addErr, addCode = suite.RunCommandWithInput(t, input, "add", "test-entry")
 
-		if exitCode == 0 {
-			t.Error("Should fail for duplicate entry")
+		if addCode == 0 {
+			t.Errorf("Should fail for duplicate entry. Output: %s, Error: %s", addOut, addErr)
 		}
 
 		// Test 5: Missing arguments
 		t.Log("Test 5: Missing arguments")
-		stdout, stderr, exitCode = suite.RunCommand(t, "get")
+		cmdOut, cmdErr, cmdCode := suite.RunCommand(t, "get")
 
-		if exitCode == 0 {
-			t.Error("Should fail when entry name is missing")
+		if cmdCode == 0 {
+			t.Errorf("Should fail when entry name is missing. Output: %s, Error: %s", cmdOut, cmdErr)
 		}
 
 		// Test 6: Invalid command
 		t.Log("Test 6: Invalid command")
-		stdout, stderr, exitCode = suite.RunCommand(t, "invalid-command")
+		invalidOut, invalidErr, invalidCode := suite.RunCommand(t, "invalid-command")
 
-		if exitCode == 0 {
-			t.Error("Should fail for invalid command")
+		if invalidCode == 0 {
+			t.Errorf("Should fail for invalid command. Output: %s, Error: %s", invalidOut, invalidErr)
+		} else {
+			t.Logf("Invalid command test passed with status %d", invalidCode)
 		}
 
 		t.Log("✅ Error handling tests passed")
@@ -491,11 +514,11 @@ func TestPerformanceAcceptance(t *testing.T) {
 
 		start = time.Now()
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode := suite.RunCommandWithInput(t, input, "list")
+		listOut, _, listCode := suite.RunCommandWithInput(t, input, "list")
 		listDuration := time.Since(start)
 
-		if exitCode != 0 {
-			t.Errorf("List failed: exit code %d\nStdout: %s\nStderr: %s", exitCode, stdout, stderr)
+		if listCode != 0 {
+			t.Errorf("List failed: exit code %d\nOutput: %s", listCode, listOut)
 		} else {
 			t.Logf("List performance: %v for %d entries", listDuration, numEntries)
 		}
@@ -646,10 +669,10 @@ func TestRecoveryScenarios(t *testing.T) {
 		// Create backup
 		backupPath := filepath.Join(suite.TempDir, "manual_backup.vault")
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode := suite.RunCommandWithInput(t, input, "backup", backupPath)
+		backupOut, _, backupCode := suite.RunCommandWithInput(t, input, "backup", backupPath)
 
-		if exitCode != 0 {
-			t.Logf("Backup command failed (may not be implemented): %s", stderr)
+		if backupCode != 0 {
+			t.Errorf("Backup failed: exit code %d\nOutput: %s", backupCode, backupOut)
 		} else {
 			// Verify backup file exists
 			if _, err := os.Stat(backupPath); os.IsNotExist(err) {
@@ -675,10 +698,10 @@ func TestRecoveryScenarios(t *testing.T) {
 
 		// Try to access corrupted vault
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "list")
+		corruptOut, corruptErr, corruptCode := suite.RunCommandWithInput(t, input, "list")
 
-		if exitCode == 0 {
-			t.Error("Corrupted vault should not be accessible")
+		if corruptCode == 0 {
+			t.Errorf("Corrupted vault should not be accessible. Output: %s, Error: %s", corruptOut, corruptErr)
 		} else {
 			t.Log("✅ Corrupted vault properly rejected")
 		}
@@ -691,14 +714,14 @@ func TestRecoveryScenarios(t *testing.T) {
 
 		// Verify data integrity after restore
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "list")
+		restoreOut, restoreErr, restoreCode := suite.RunCommandWithInput(t, input, "list")
 
-		if exitCode != 0 {
-			t.Errorf("Failed to access restored vault: %s", stderr)
+		if restoreCode != 0 {
+			t.Errorf("Failed to access restored vault. Error: %s, Output: %s", restoreErr, restoreOut)
 		} else {
 			for _, entryName := range testEntries {
-				if !strings.Contains(stdout, entryName) {
-					t.Errorf("Entry %s missing after restore", entryName)
+				if !strings.Contains(restoreOut, entryName) {
+					t.Errorf("Entry %s missing after restore. Output: %s", entryName, restoreOut)
 				}
 			}
 		}
@@ -708,10 +731,11 @@ func TestRecoveryScenarios(t *testing.T) {
 
 		exportPath := filepath.Join(suite.TempDir, "export_test.json")
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "export", exportPath)
+		exportOut, exportErr, exportCode := suite.RunCommandWithInput(t, input, "export", exportPath)
 
-		if exitCode != 0 {
-			t.Logf("Export command failed (may not be implemented): %s", stderr)
+		if exportCode != 0 {
+			t.Logf("Export command failed (may not be implemented): %s", exportErr)
+			t.Logf("Export output: %s", exportOut)
 		} else {
 			// Verify export file
 			if _, err := os.Stat(exportPath); os.IsNotExist(err) {
@@ -722,6 +746,7 @@ func TestRecoveryScenarios(t *testing.T) {
 				if err != nil {
 					t.Errorf("Failed to read export file: %v", err)
 				} else {
+					t.Logf("Export file size: %d bytes", len(exportData))
 					// Should contain entry data
 					for _, entryName := range testEntries {
 						if !strings.Contains(string(exportData), entryName) {
