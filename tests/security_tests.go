@@ -341,6 +341,7 @@ func TestTimingAttacks(t *testing.T) {
 		}
 	})
 }
+
 // TestMemoryLeaks verifies that sensitive data is properly cleared from memory
 func TestMemoryLeaks(t *testing.T) {
 	suite := NewSecurityTestSuite(t)
@@ -416,7 +417,7 @@ func TestMemoryLeaks(t *testing.T) {
 				continue
 			}
 
-				// Ensure decrypted data is zeroed after use
+			// Ensure decrypted data is zeroed after use
 			if decrypted != nil {
 				defer runtime.KeepAlive(decrypted)
 				defer vault.Zeroize(decrypted)

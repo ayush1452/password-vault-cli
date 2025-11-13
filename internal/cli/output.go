@@ -15,7 +15,7 @@ const MaxOutputSize = 10 * 1024 * 1024 // 10MB
 func writeString(w io.Writer, s string) error {
 	// Check output size to prevent potential memory exhaustion
 	if len(s) > MaxOutputSize {
-		return fmt.Errorf("output size %d exceeds maximum allowed size %d", 
+		return fmt.Errorf("output size %d exceeds maximum allowed size %d",
 			len(s), MaxOutputSize)
 	}
 
@@ -24,7 +24,7 @@ func writeString(w io.Writer, s string) error {
 	if err != nil {
 		return fmt.Errorf("failed to write output (wrote %d bytes): %w", n, err)
 	}
-	
+
 	// Ensure the output is flushed if it's a file
 	if f, ok := w.(interface{ Flush() error }); ok {
 		if flushErr := f.Flush(); flushErr != nil {
@@ -53,12 +53,12 @@ func checkDeferredErr(err *error, op string, cerr error) {
 		} else {
 			log.Printf("Warning: error in deferred %s: %v", op, cerr)
 		}
-		
+
 		// Only override the error if it's not already set
 		if *err == nil {
 			*err = fmt.Errorf("%s: %w", op, cerr)
 		}
-		
+
 		// For critical errors, consider exiting
 		if isCriticalError(cerr) {
 			os.Exit(1) // Using 1 as a generic error code
@@ -91,7 +91,7 @@ func SecurePrint(w io.Writer, format string, args ...interface{}) error {
 			}
 		}
 	}()
-	
+
 	return writeOutput(w, format, args...)
 }
 

@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
 	"github.com/vault-cli/vault/internal/clipboard"
 	"github.com/vault-cli/vault/internal/config"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var (
