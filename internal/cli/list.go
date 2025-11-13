@@ -16,6 +16,17 @@ import (
 	"github.com/vault-cli/vault/internal/vault"
 )
 
+// truncateString shortens a string to the specified length and adds "..." if truncated
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen > 3 {
+		return s[:maxLen-3] + "..."
+	}
+	return s[:maxLen]
+}
+
 var (
 	listTags   []string
 	search     string
@@ -210,18 +221,20 @@ func outputEntriesTableLong(out io.Writer, entries []*domain.Entry) error {
 		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
 	})
 
+	// Define table format constants
+	const (
+		headerFormat = "%s\t%s\t%s\t%s\n"
+		separator    = "----\t--------\t----\t----------\n"
+	)
+
 	// Write table header
 	headers := []string{"NAME", "USERNAME", "TAGS", "UPDATED_AT"}
-	headerLine := strings.Join(headers, "\t") + "\n"
-	separator := strings.Repeat("-", 4) + "\t" +
-		strings.Repeat("-", 8) + "\t" +
-		strings.Repeat("-", 4) + "\t" +
-		strings.Repeat("-", 10) + "\n"
+	headerLine := fmt.Sprintf(headerFormat, headers[0], headers[1], headers[2], headers[3])
 
-	if err := writeOutput(w, headerLine); err != nil {
+	if err := writeString(w, headerLine); err != nil {
 		return fmt.Errorf("failed to write table header: %w", err)
 	}
-	if err := writeOutput(w, separator); err != nil {
+	if err := writeString(w, separator); err != nil {
 		return fmt.Errorf("failed to write header separator: %w", err)
 	}
 
@@ -229,12 +242,14 @@ func outputEntriesTableLong(out io.Writer, entries []*domain.Entry) error {
 	for _, entry := range entries {
 		updatedAt := entry.UpdatedAt.Format("2006-01-02")
 		tags := strings.Join(entry.Tags, ", ")
-		if err := writeOutput(w, "%s\t%s\t%s\t%s\n",
+		// Format the row with proper alignment
+		row := fmt.Sprintf("%-20s\t%-20s\t%-20s\t%s\n",
 			entry.Name,
 			entry.Username,
-			tags,
+			truncateString(tags, 20),
 			updatedAt,
-		); err != nil {
+		)
+		if err := writeString(w, row); err != nil {
 			return fmt.Errorf("failed to write entry '%s': %w", entry.Name, err)
 		}
 	}
@@ -259,7 +274,7 @@ func outputEntriesJSON(out io.Writer, entries []*domain.Entry) error {
 		UpdatedAt string   `json:"updatedAt"`
 	}
 
-	var output []EntryOutput
+	output := make([]EntryOutput, 0, len(entries))
 
 	for _, entry := range entries {
 		output = append(output, EntryOutput{

@@ -93,7 +93,7 @@ func runDelete(entryName string) error {
 		}
 
 		if !confirmed {
-			if err := writeOutput(os.Stdout, "Entry deletion cancelled\n"); err != nil {
+			if err := writeOutput(os.Stdout, "Entry deletion canceled\n"); err != nil {
 				return err
 			}
 			return nil

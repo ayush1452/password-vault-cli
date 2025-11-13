@@ -12,7 +12,7 @@ import (
 
 // PromptPassword prompts for a password without echoing to terminal
 func PromptPassword(prompt string) (string, error) {
-	if err := writeOutput(os.Stdout, prompt); err != nil {
+	if err := writeString(os.Stdout, prompt); err != nil {
 		return "", fmt.Errorf("failed to display prompt: %w", err)
 	}
 
@@ -26,7 +26,8 @@ func PromptPassword(prompt string) (string, error) {
 	}
 
 	// Always print a newline after password input
-	if err := writeOutput(os.Stdout, "\n"); err != nil {
+	// Use fmt.Fprintln directly for the newline
+	if _, err := fmt.Fprintln(os.Stdout); err != nil {
 		return "", fmt.Errorf("failed to write newline: %w", err)
 	}
 
@@ -54,7 +55,7 @@ func PromptPasswordConfirm(prompt string) (string, error) {
 
 // PromptInput prompts for regular input
 func PromptInput(prompt string) (string, error) {
-	if err := writeOutput(os.Stdout, prompt); err != nil {
+	if err := writeString(os.Stdout, prompt); err != nil {
 		return "", fmt.Errorf("failed to display prompt: %w", err)
 	}
 
