@@ -30,11 +30,16 @@ func NewSecurityTestSuite(t *testing.T) *SecurityTestSuite {
 	tempDir := t.TempDir()
 	vaultPath := filepath.Join(tempDir, "security_test.vault")
 
+	// Ensure the temp directory has secure permissions
+	if err := os.Chmod(tempDir, 0o700); err != nil {
+		t.Fatalf("Failed to set secure permissions on temp directory: %v", err)
+	}
+
 	return &SecurityTestSuite{
 		TempDir:    tempDir,
 		VaultPath:  vaultPath,
 		Crypto:     vault.NewDefaultCryptoEngine(),
-		Passphrase: "security-test-passphrase-2024",
+		Passphrase: "security-test-passphrase-2024!@#$%^&*()", // More complex passphrase
 	}
 }
 
@@ -44,7 +49,11 @@ func TestTamperDetection(t *testing.T) {
 
 	// Initialize vault with test data
 	vaultStore := store.NewBoltStore()
-	defer vaultStore.CloseVault()
+	defer func() {
+		if err := vaultStore.CloseVault(); err != nil {
+			t.Logf("Warning: error closing vault: %v", err)
+		}
+	}()
 
 	// Derive master key from passphrase
 	salt, err := vault.GenerateSalt()
@@ -332,10 +341,24 @@ func TestTimingAttacks(t *testing.T) {
 		}
 	})
 }
-
-// TestMemoryLeaks tests for sensitive data in memory
+// TestMemoryLeaks verifies that sensitive data is properly cleared from memory
 func TestMemoryLeaks(t *testing.T) {
 	suite := NewSecurityTestSuite(t)
+
+	// Test data - use cryptographically secure random data
+	secretBytes := make([]byte, 32)
+	if _, err := rand.Read(secretBytes); err != nil {
+		t.Fatalf("Failed to generate random secret: %v", err)
+	}
+
+	// Clear sensitive data from memory when done
+	defer func() {
+		// Use runtime.KeepAlive to prevent the compiler from optimizing away the zeroization
+		runtime.KeepAlive(secretBytes)
+		for i := range secretBytes {
+			secretBytes[i] = 0
+		}
+	}()
 
 	t.Run("Memory cleanup after operations", func(t *testing.T) {
 		// Force garbage collection before test
@@ -348,18 +371,38 @@ func TestMemoryLeaks(t *testing.T) {
 			"confidential-data-789",
 		}
 
+		// Track memory usage before operations
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+
 		// Perform operations with sensitive data
 		for _, secret := range sensitiveData {
+			// Create a copy of the secret to prevent it from being optimized away
+			secretBytes := []byte(secret)
+			defer func(s []byte) {
+				runtime.KeepAlive(s)
+				vault.Zeroize(s)
+			}(secretBytes)
+
 			// Key derivation
-			salt, _ := vault.GenerateSalt()
-			key, err := suite.Crypto.DeriveKey(secret, salt)
+			salt, err := vault.GenerateSalt()
+			if err != nil {
+				t.Fatalf("Failed to generate salt: %v", err)
+			}
+
+			key, err := suite.Crypto.DeriveKey(string(secretBytes), salt)
 			if err != nil {
 				t.Errorf("Key derivation failed: %v", err)
 				continue
 			}
 
+			// Ensure key is zeroed after use
+			defer vault.Zeroize(key)
+
 			// Encryption
 			plaintext := []byte("test data for " + secret)
+			defer vault.Zeroize(plaintext)
+
 			envelope, err := suite.Crypto.Seal(plaintext, key)
 			if err != nil {
 				t.Errorf("Encryption failed: %v", err)
@@ -367,23 +410,31 @@ func TestMemoryLeaks(t *testing.T) {
 			}
 
 			// Decryption
-			_, err = suite.Crypto.Open(envelope, key)
+			decrypted, err := suite.Crypto.Open(envelope, key)
 			if err != nil {
 				t.Errorf("Decryption failed: %v", err)
 				continue
 			}
 
-			// Explicit cleanup
-			vault.Zeroize(key)
-			vault.Zeroize(plaintext)
+				// Ensure decrypted data is zeroed after use
+			if decrypted != nil {
+				defer runtime.KeepAlive(decrypted)
+				defer vault.Zeroize(decrypted)
+			}
 		}
 
-		// Force garbage collection
+		// Force garbage collection after all operations
 		runtime.GC()
 		runtime.GC()
 
+		// Check memory usage after operations
+		runtime.ReadMemStats(&after)
+
+		// Calculate memory usage difference
+		memUsed := after.Alloc - before.Alloc
+		t.Logf("Memory used during test: %d bytes", memUsed)
+
 		// Check for sensitive data in memory (basic check)
-		// Note: This is a simplified check - in practice, you'd use more sophisticated tools
 		memStats := &runtime.MemStats{}
 		runtime.ReadMemStats(memStats)
 
@@ -404,8 +455,15 @@ func TestMemoryLeaks(t *testing.T) {
 		originalContent := make([]byte, len(testData))
 		copy(originalContent, testData)
 
+		// Get memory protection status before zeroization
+		var m1, m2 runtime.MemStats
+		runtime.ReadMemStats(&m1)
+
 		// Zeroize the data
 		vault.Zeroize(testData)
+
+		// Get memory protection status after zeroization
+		runtime.ReadMemStats(&m2)
 
 		// Verify all bytes are zero
 		for i, b := range testData {
@@ -419,7 +477,31 @@ func TestMemoryLeaks(t *testing.T) {
 			t.Error("Zeroization did not modify the original data")
 		}
 
-		t.Logf("✅ Zeroization effective at memory address %x", originalPtr)
+		// Check if memory was actually modified by comparing before/after stats
+		if m1.Mallocs == m2.Mallocs && m1.Frees == m2.Frees {
+			t.Log("✅ Memory allocation patterns suggest in-place modification")
+		} else {
+			t.Log("⚠️  Memory allocation changed during zeroization (may indicate reallocation)")
+		}
+
+		// Try to force garbage collection to see if the memory is still protected
+		runtime.GC()
+		runtime.GC()
+
+		// Verify again after GC
+		stillZeros := true
+		for _, b := range testData {
+			if b != 0 {
+				stillZeros = false
+				break
+			}
+		}
+
+		if !stillZeros {
+			t.Error("Zeroized memory was modified after garbage collection")
+		}
+
+		t.Logf("✅ Zeroization effective at memory address %x (length: %d)", originalPtr, len(testData))
 	})
 }
 

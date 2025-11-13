@@ -296,8 +296,9 @@ func ValidateArgon2Params(params Argon2Params) error {
 	if params.Parallelism < 1 {
 		return errors.New("parallelism parameter too low (minimum 1)")
 	}
-	if params.Parallelism >= 255 {
-		return errors.New("parallelism parameter too high (maximum 254)")
+	// Limit parallelism to a reasonable number of CPU cores
+	if params.Parallelism > 16 {
+		return errors.New("parallelism parameter too high (maximum 16)")
 	}
 	return nil
 }

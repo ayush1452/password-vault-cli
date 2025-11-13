@@ -247,7 +247,7 @@ func runProfilesDelete(name string) error {
 	}
 
 	if !confirmed {
-		fmt.Println("Profile deletion cancelled")
+		fmt.Println("Profile deletion canceled")
 		return nil
 	}
 

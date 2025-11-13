@@ -131,10 +131,13 @@ func FuzzEnvelopeSerialization(f *testing.F) {
 
 		// Try to use the envelope (should fail gracefully if invalid)
 		testKey := make([]byte, 32)
-		rand.Read(testKey)
+		if _, err := rand.Read(testKey); err != nil {
+			t.Fatalf("Failed to generate test key: %v", err)
+		}
 
-		_, err = crypto.Open(&envelope, testKey)
-		// Error is expected for invalid envelopes - just ensure no panic
+		// We're not checking the error here as it's expected to fail for invalid envelopes
+		// The purpose is to ensure the function doesn't panic with malformed input
+		_, _ = crypto.Open(&envelope, testKey)
 	})
 }
 
@@ -178,7 +181,8 @@ func FuzzEntryValidation(f *testing.F) {
 		// Test serialization (should not panic)
 		_, err := json.Marshal(entry)
 		if err != nil {
-			// Some characters may not be serializable - that's OK
+			// Log serialization errors for debugging, but don't fail the test
+			t.Logf("JSON serialization warning: %v", err)
 		}
 
 		// Log validation result for debugging

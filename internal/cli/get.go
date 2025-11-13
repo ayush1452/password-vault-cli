@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"github.com/vault-cli/vault/internal/clipboard"
 	"github.com/vault-cli/vault/internal/config"
 )
@@ -141,7 +143,7 @@ func runGet(cmd *cobra.Command, entryName string) (err error) {
 
 		// Write the success message
 		out := cmd.OutOrStdout()
-		if err := writeOutput(out, "✓ %s for '%s' copied to clipboard", strings.Title(field), entryName); err != nil {
+		if err := writeOutput(out, "✓ %s for '%s' copied to clipboard", cases.Title(language.English).String(field), entryName); err != nil {
 			return err
 		}
 
@@ -166,7 +168,7 @@ func runGet(cmd *cobra.Command, entryName string) (err error) {
 			}
 		}
 
-		if err := writeOutput(out, "%s: %s\n", strings.Title(field), value); err != nil {
+		if err := writeOutput(out, "%s: %s\n", cases.Title(language.English).String(field), value); err != nil {
 			return fmt.Errorf("failed to write %s: %w", field, err)
 		}
 	}
