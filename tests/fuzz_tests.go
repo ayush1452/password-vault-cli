@@ -42,7 +42,7 @@ func FuzzCryptoEngine(f *testing.F) {
 	f.Add([]byte("unicode-密码-🔐"), []byte("unicode data 测试"))
 	f.Add([]byte("very long passphrase with many characters"), []byte("large data block"))
 
-	f.Fuzz(func(t *testing.T, passphrase []byte, plaintext []byte) {
+	f.Fuzz(func(t *testing.T, passphrase, plaintext []byte) {
 		crypto := vault.NewDefaultCryptoEngine()
 
 		// Skip if inputs are too large (prevent OOM)

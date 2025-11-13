@@ -390,7 +390,7 @@ func TestCrossplatformCompatibility(t *testing.T) {
 		for i, testPath := range testPaths {
 			// Create directory if needed
 			dir := filepath.Dir(testPath)
-			os.MkdirAll(dir, 0755)
+			os.MkdirAll(dir, 0o755)
 
 			// Set vault path
 			os.Setenv("VAULT_PATH", testPath)
@@ -461,7 +461,7 @@ func TestCrossplatformCompatibility(t *testing.T) {
 		} else {
 			mode := info.Mode()
 			// Vault file should not be world-readable
-			if mode&0044 != 0 {
+			if mode&0o044 != 0 {
 				t.Errorf("Vault file has insecure permissions: %v", mode)
 			}
 		}
@@ -635,7 +635,7 @@ func TestSecurityAcceptance(t *testing.T) {
 				t.Errorf("Failed to stat backup file: %v", err)
 			} else {
 				mode := info.Mode()
-				if mode&0044 != 0 {
+				if mode&0o044 != 0 {
 					t.Errorf("Backup file has insecure permissions: %v", mode)
 				}
 			}
@@ -691,7 +691,7 @@ func TestRecoveryScenarios(t *testing.T) {
 
 		// Corrupt the vault file
 		corruptedData := append([]byte("CORRUPTED"), originalData[10:]...)
-		err = os.WriteFile(suite.VaultPath, corruptedData, 0600)
+		err = os.WriteFile(suite.VaultPath, corruptedData, 0o600)
 		if err != nil {
 			t.Fatalf("Failed to corrupt vault file: %v", err)
 		}
@@ -707,7 +707,7 @@ func TestRecoveryScenarios(t *testing.T) {
 		}
 
 		// Restore original file
-		err = os.WriteFile(suite.VaultPath, originalData, 0600)
+		err = os.WriteFile(suite.VaultPath, originalData, 0o600)
 		if err != nil {
 			t.Fatalf("Failed to restore vault file: %v", err)
 		}

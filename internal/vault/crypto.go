@@ -127,7 +127,7 @@ func (ce *CryptoEngine) DeriveKey(passphrase string, salt []byte) ([]byte, error
 }
 
 // Seal encrypts plaintext using AES-256-GCM
-func (ce *CryptoEngine) Seal(plaintext []byte, key []byte) (*Envelope, error) {
+func (ce *CryptoEngine) Seal(plaintext, key []byte) (*Envelope, error) {
 	if len(key) != KeySize {
 		return nil, ErrInvalidKeySize
 	}

@@ -120,7 +120,7 @@ func PromptChoice(prompt string, choices []string) (string, error) {
 	// Try to match as string
 	input = strings.ToLower(input)
 	for _, choice := range choices {
-		if strings.ToLower(choice) == input {
+		if strings.EqualFold(choice, input) {
 			return choice, nil
 		}
 	}

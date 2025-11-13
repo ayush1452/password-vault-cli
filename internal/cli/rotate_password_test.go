@@ -63,7 +63,7 @@ func (m *rotatePasswordVaultStore) LogOperation(op *domain.Operation) error     
 func (m *rotatePasswordVaultStore) GetAuditLog() ([]*domain.Operation, error)          { return nil, nil }
 func (m *rotatePasswordVaultStore) VerifyAuditIntegrity() error                        { return nil }
 func (m *rotatePasswordVaultStore) ExportVault(path string, includeSecrets bool) error { return nil }
-func (m *rotatePasswordVaultStore) ImportVault(path string, conflictResolution string) error {
+func (m *rotatePasswordVaultStore) ImportVault(path, conflictResolution string) error {
 	return nil
 }
 func (m *rotatePasswordVaultStore) CompactVault() error                        { return nil }

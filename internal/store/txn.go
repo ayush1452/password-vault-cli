@@ -22,12 +22,12 @@ func NewAtomicWriter(targetPath string) (*AtomicWriter, error) {
 	tempPath := filepath.Join(dir, fmt.Sprintf(".%s.tmp.%d", base, os.Getpid()))
 
 	// Create directory if it doesn't exist
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("failed to create directory: %w", err)
 	}
 
 	// Create temporary file with secure permissions
-	tempFile, err := os.OpenFile(tempPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0600)
+	tempFile, err := os.OpenFile(tempPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
@@ -117,9 +117,9 @@ func EnsureFilePermissions(path string) error {
 
 	// Check if permissions are too permissive
 	mode := info.Mode().Perm()
-	if mode&0077 != 0 {
+	if mode&0o077 != 0 {
 		// Fix permissions to 0600 (owner read/write only)
-		return os.Chmod(path, 0600)
+		return os.Chmod(path, 0o600)
 	}
 
 	return nil

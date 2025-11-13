@@ -68,11 +68,11 @@ func runDoctor() error {
 		} else {
 			perm := info.Mode().Perm()
 			switch {
-			case perm == 0600:
+			case perm == 0o600:
 				if err := printStatus("   ✅ Vault file permissions: %o (secure)\n", perm); err != nil {
 					return err
 				}
-			case perm&0077 != 0:
+			case perm&0o077 != 0:
 				if err := printStatus("   ❌ Vault file permissions: %o (too permissive, should be 0600)\n", perm); err != nil {
 					return err
 				}
@@ -97,11 +97,11 @@ func runDoctor() error {
 		if info, err := os.Stat(cfgFile); err == nil {
 			perm := info.Mode().Perm()
 			switch {
-			case perm == 0600:
+			case perm == 0o600:
 				if err := printStatus("   ✅ Config file permissions: %o (secure)\n", perm); err != nil {
 					return err
 				}
-			case perm&0077 != 0:
+			case perm&0o077 != 0:
 				if err := printStatus("   ❌ Config file permissions: %o (too permissive, should be 0600)\n", perm); err != nil {
 					return err
 				}
@@ -129,7 +129,7 @@ func runDoctor() error {
 	vaultDir := filepath.Dir(vaultPath)
 	if info, err := os.Stat(vaultDir); err == nil {
 		perm := info.Mode().Perm()
-		if perm&0077 == 0 {
+		if perm&0o077 == 0 {
 			if err := printStatus("   ✅ Vault directory permissions: %o (secure)\n", perm); err != nil {
 				return err
 			}

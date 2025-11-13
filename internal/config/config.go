@@ -113,7 +113,7 @@ func LoadConfig(configPath string) (*Config, error) {
 func SaveConfig(cfg *Config, configPath string) error {
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(configPath)
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -124,7 +124,7 @@ func SaveConfig(cfg *Config, configPath string) error {
 	}
 
 	// Write to file with secure permissions
-	if err := os.WriteFile(configPath, data, 0600); err != nil {
+	if err := os.WriteFile(configPath, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 

@@ -176,7 +176,7 @@ func TestTamperDetection(t *testing.T) {
 			tamperedData := tt.tamperFunc(append([]byte(nil), originalData...))
 			tamperedPath := suite.VaultPath + ".tampered"
 
-			err := os.WriteFile(tamperedPath, tamperedData, 0600)
+			err := os.WriteFile(tamperedPath, tamperedData, 0o600)
 			if err != nil {
 				t.Fatalf("Failed to write tampered file: %v", err)
 			}
@@ -265,7 +265,7 @@ func TestTimingAttacks(t *testing.T) {
 			}
 
 			var total time.Duration
-			var min, max time.Duration = durations[0], durations[0]
+			min, max := durations[0], durations[0]
 
 			for _, d := range durations {
 				total += d

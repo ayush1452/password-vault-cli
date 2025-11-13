@@ -147,10 +147,10 @@ func runProfilesList() error {
 		strings.Repeat("-", 7) + "\t" +
 		strings.Repeat("-", 6) + "\n"
 
-	if err := writeOutput(w, headerLine); err != nil {
+	if err := writeOutput(w, "%s", headerLine); err != nil {
 		return fmt.Errorf("failed to write table header: %w", err)
 	}
-	if err := writeOutput(w, separator); err != nil {
+	if err := writeOutput(w, "%s", separator); err != nil {
 		return fmt.Errorf("failed to write header separator: %w", err)
 	}
 

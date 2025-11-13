@@ -29,14 +29,14 @@ type VaultStore interface {
 
 	// Entry operations
 	CreateEntry(profile string, entry *domain.Entry) error
-	GetEntry(profile string, entryID string) (*domain.Entry, error)
+	GetEntry(profile, entryID string) (*domain.Entry, error)
 	ListEntries(profile string, filter *domain.Filter) ([]*domain.Entry, error)
-	UpdateEntry(profile string, entryID string, entry *domain.Entry) error
-	DeleteEntry(profile string, entryID string) error
-	EntryExists(profile string, entryID string) bool
+	UpdateEntry(profile, entryID string, entry *domain.Entry) error
+	DeleteEntry(profile, entryID string) error
+	EntryExists(profile, entryID string) bool
 
 	// Profile operations
-	CreateProfile(name string, description string) error
+	CreateProfile(name, description string) error
 	GetProfile(name string) (*domain.Profile, error)
 	ListProfiles() ([]*domain.Profile, error)
 	DeleteProfile(name string) error
@@ -53,7 +53,7 @@ type VaultStore interface {
 
 	// Backup/restore operations
 	ExportVault(path string, includeSecrets bool) error
-	ImportVault(path string, conflictResolution string) error
+	ImportVault(path, conflictResolution string) error
 
 	// Maintenance operations
 	CompactVault() error

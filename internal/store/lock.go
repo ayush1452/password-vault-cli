@@ -37,7 +37,7 @@ func (fl *FileLock) Lock(timeout time.Duration) error {
 
 	// Create lock file directory if it doesn't exist
 	dir := filepath.Dir(fl.path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 
@@ -45,7 +45,7 @@ func (fl *FileLock) Lock(timeout time.Duration) error {
 	start := time.Now()
 	for {
 		// Try to create exclusive lock file
-		file, err := os.OpenFile(fl.path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		file, err := os.OpenFile(fl.path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err == nil {
 			// Successfully created lock file
 			fl.lockFile = file

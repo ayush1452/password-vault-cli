@@ -260,7 +260,7 @@ func RemainingSessionTTL() time.Duration {
 // EnsureVaultDirectory creates the vault directory if it doesn't exist
 func EnsureVaultDirectory(vaultPath string) error {
 	dir := filepath.Dir(vaultPath)
-	return os.MkdirAll(dir, 0700)
+	return os.MkdirAll(dir, 0o700)
 }
 
 // persistSession saves the current session state to disk in a secure manner.
@@ -283,7 +283,7 @@ func persistSession() error {
 
 	// Ensure the directory exists with secure permissions
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("failed to create session directory: %w", err)
 	}
 
@@ -349,7 +349,7 @@ func persistSession() error {
 	}
 
 	// Set restrictive permissions on the final file
-	if err := os.Chmod(path, 0600); err != nil {
+	if err := os.Chmod(path, 0o600); err != nil {
 		log.Printf("Warning: failed to set permissions on session file: %v", err)
 		// Not a fatal error, but log it
 	}

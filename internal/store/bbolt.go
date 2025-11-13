@@ -313,7 +313,7 @@ func (bs *BoltStore) CreateEntry(profile string, entry *domain.Entry) error {
 }
 
 // GetEntry retrieves an entry from the specified profile
-func (bs *BoltStore) GetEntry(profile string, entryID string) (*domain.Entry, error) {
+func (bs *BoltStore) GetEntry(profile, entryID string) (*domain.Entry, error) {
 	if !bs.isOpen {
 		return nil, fmt.Errorf("vault is not open")
 	}
@@ -440,7 +440,7 @@ func (bs *BoltStore) ListEntries(profile string, filter *domain.Filter) ([]*doma
 }
 
 // UpdateEntry updates an existing entry
-func (bs *BoltStore) UpdateEntry(profile string, entryID string, entry *domain.Entry) error {
+func (bs *BoltStore) UpdateEntry(profile, entryID string, entry *domain.Entry) error {
 	if !bs.isOpen {
 		return fmt.Errorf("vault is not open")
 	}
@@ -488,7 +488,7 @@ func (bs *BoltStore) UpdateEntry(profile string, entryID string, entry *domain.E
 }
 
 // DeleteEntry deletes an entry from the specified profile
-func (bs *BoltStore) DeleteEntry(profile string, entryID string) error {
+func (bs *BoltStore) DeleteEntry(profile, entryID string) error {
 	if !bs.isOpen {
 		return fmt.Errorf("vault is not open")
 	}
@@ -511,7 +511,7 @@ func (bs *BoltStore) DeleteEntry(profile string, entryID string) error {
 }
 
 // EntryExists checks if an entry exists in the specified profile
-func (bs *BoltStore) EntryExists(profile string, entryID string) bool {
+func (bs *BoltStore) EntryExists(profile, entryID string) bool {
 	if !bs.isOpen {
 		return false
 	}
@@ -530,7 +530,7 @@ func (bs *BoltStore) EntryExists(profile string, entryID string) bool {
 }
 
 // CreateProfile creates a new profile
-func (bs *BoltStore) CreateProfile(name string, description string) error {
+func (bs *BoltStore) CreateProfile(name, description string) error {
 	if !bs.isOpen {
 		return fmt.Errorf("vault is not open")
 	}
@@ -1180,7 +1180,7 @@ func (bs *BoltStore) ExportVault(path string, includeSecrets bool) error {
 }
 
 // ImportVault restores data from a previously exported JSON snapshot.
-func (bs *BoltStore) ImportVault(path string, conflictResolution string) error {
+func (bs *BoltStore) ImportVault(path, conflictResolution string) error {
 	if !bs.isOpen {
 		return fmt.Errorf("vault is not open")
 	}
@@ -1195,7 +1195,7 @@ func (bs *BoltStore) ImportVault(path string, conflictResolution string) error {
 	}
 
 	// Check file permissions (should be readable only by owner)
-	if mode := fileInfo.Mode(); mode.Perm()&0077 != 0 {
+	if mode := fileInfo.Mode(); mode.Perm()&0o077 != 0 {
 		return fmt.Errorf("insecure file permissions on %s: %v (should be 600 or more restrictive)", path, mode.Perm())
 	}
 
