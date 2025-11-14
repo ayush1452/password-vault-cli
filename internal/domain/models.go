@@ -1,3 +1,5 @@
+// Package domain defines the core data structures and interfaces for the password vault.
+// It contains the main business entities and their relationships.
 package domain
 
 import (

@@ -1,3 +1,5 @@
+// Package tests contains acceptance tests for the password vault CLI.
+// These tests verify end-to-end functionality by executing the CLI commands.
 package tests
 
 import (

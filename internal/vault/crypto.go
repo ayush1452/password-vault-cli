@@ -1,3 +1,5 @@
+// Package vault implements the core vault functionality for the password manager.
+// It handles encryption, decryption, and management of password entries.
 package vault
 
 import (

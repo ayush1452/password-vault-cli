@@ -1,3 +1,5 @@
+// Package store provides the storage layer for the password vault.
+// It defines the interfaces and implementations for secure data persistence.
 package store
 
 import (

@@ -1,3 +1,5 @@
+// Package config handles the configuration management for the password vault.
+// It provides functionality to load, save, and manage application configuration.
 package config
 
 import (

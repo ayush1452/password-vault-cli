@@ -1,3 +1,5 @@
+// Package clipboard provides cross-platform clipboard operations for the password vault.
+// It allows secure copying of sensitive data to the system clipboard with automatic clearing.
 package clipboard
 
 import (

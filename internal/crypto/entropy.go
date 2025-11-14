@@ -1,3 +1,5 @@
+// Package crypto provides cryptographic primitives and utilities for the password vault.
+// It includes functions for key derivation, encryption, decryption, and entropy measurement.
 package crypto
 
 import (
