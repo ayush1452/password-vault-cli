@@ -430,7 +430,7 @@ func ensureSessionRestored() {
 	}
 
 	// Verify the master key by opening and immediately closing the vault.
-	if store := GetVaultStore(); store != nil {
+	if vaultStore := GetVaultStore(); vaultStore != nil {
 		if err := CloseSessionStore(); err != nil {
 			log.Printf("Failed to release vault store after restore: %v", err)
 		}

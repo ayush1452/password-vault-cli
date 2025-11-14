@@ -29,7 +29,7 @@ var passgenCmd = newPassgenCommand(nil)
 func newPassgenCommand(conf *config.Config) *cobra.Command {
 	opts := &passgenOptions{
 		length:  20,
-		charset: string(internalcrypto.CharsetAlnumSym),
+		charset: string(internalcrypto.CharsetAlnumSpecial),
 		ttl:     -1,
 	}
 
@@ -47,7 +47,7 @@ Diceware-style passphrases, with optional clipboard support.`,
 	cmd.Flags().IntVar(&opts.words, "words", 0, "Number of words for Diceware passphrase")
 	cmd.Flags().BoolVar(&opts.copy, "copy", false, "Copy the generated value to the clipboard")
 	cmd.Flags().IntVar(&opts.ttl, "ttl", opts.ttl, "Clipboard clear timeout in seconds (-1 to use config default)")
-	cmd.Flags().StringVar(&opts.charset, "charset", opts.charset, "Character set (alpha|alnum|alnumsym)")
+	cmd.Flags().StringVar(&opts.charset, "charset", opts.charset, "Character set (alpha|alnum|alnum_special)")
 
 	return cmd
 }
@@ -86,9 +86,9 @@ func runPassgen(cmd *cobra.Command, opts *passgenOptions, conf *config.Config) e
 
 	charset := internalcrypto.Charset(strings.ToLower(opts.charset))
 	switch charset {
-	case internalcrypto.CharsetAlpha, internalcrypto.CharsetAlnum, internalcrypto.CharsetAlnumSym:
+	case internalcrypto.CharsetAlpha, internalcrypto.CharsetAlnum, internalcrypto.CharsetAlnumSpecial:
 	default:
-		return fmt.Errorf("invalid charset: %s (valid: alpha, alnum, alnumsym)", opts.charset)
+		return fmt.Errorf("invalid charset: %s (valid: alpha, alnum, alnum_special)", opts.charset)
 	}
 
 	if opts.length <= 0 {

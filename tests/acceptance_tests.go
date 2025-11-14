@@ -115,7 +115,7 @@ func validateCommandArgs(args ...string) error {
 	// Validate arguments based on the command
 	for i, arg := range args[1:] {
 		// Skip empty arguments
-		if len(arg) == 0 {
+		if arg == "" {
 			continue
 		}
 
@@ -149,7 +149,11 @@ func validateCommandArgs(args ...string) error {
 }
 
 // RunCommand executes a vault CLI command and returns the result
-func (suite *AcceptanceTestSuite) RunCommand(t *testing.T, args ...string) (string, string, int) {
+// Returns:
+//   - stdout: The standard output of the command
+//   - stderr: The standard error output of the command
+//   - exitCode: The exit code of the command
+func (suite *AcceptanceTestSuite) RunCommand(t *testing.T, args ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
 
 	// Make a copy of args to avoid modifying the original
@@ -252,7 +256,7 @@ func (suite *AcceptanceTestSuite) RunCommand(t *testing.T, args ...string) (stri
 	wg.Wait()
 
 	// Get exit code
-	exitCode := 0
+	exitCode = 0
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
 			if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
@@ -286,8 +290,12 @@ func (suite *AcceptanceTestSuite) RunCommand(t *testing.T, args ...string) (stri
 	return stdoutStr, stderrStr, exitCode
 }
 
-// RunCommandWithInput executes a command with stdin input
-func (suite *AcceptanceTestSuite) RunCommandWithInput(t *testing.T, input string, args ...string) (string, string, int) {
+// RunCommandWithInput executes a command with stdin input and returns the result
+// Returns:
+//   - stdout: The standard output of the command
+//   - stderr: The standard error output of the command
+//   - exitCode: The exit code of the command
+func (suite *AcceptanceTestSuite) RunCommandWithInput(t *testing.T, input string, args ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
 
 	// Sanitize input
@@ -421,7 +429,7 @@ func (suite *AcceptanceTestSuite) RunCommandWithInput(t *testing.T, input string
 	wg.Wait()
 
 	// Get exit code
-	exitCode := 0
+	exitCode = 0
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
 			if status, ok := exitError.Sys().(syscall.WaitStatus); ok {

@@ -272,23 +272,23 @@ func TestTimingAttacks(t *testing.T) {
 			}
 
 			var total time.Duration
-			min, max := durations[0], durations[0]
+			minVal, maxDuration := durations[0], durations[0]
 
 			for _, d := range durations {
 				total += d
-				if d < min {
-					min = d
+				if d < minVal {
+					minVal = d
 				}
-				if d > max {
-					max = d
+				if d > maxDuration {
+					maxDuration = d
 				}
 			}
 
 			avg := total / time.Duration(len(durations))
-			variance := max - min
+			variance := maxDuration - minVal
 
 			t.Logf("Passphrase length %d: avg=%v, min=%v, max=%v, variance=%v",
-				len(passphrase), avg, min, max, variance)
+				len(passphrase), avg, minVal, maxDuration, variance)
 
 			// Check for suspicious timing patterns
 			if variance > avg/2 {
@@ -385,50 +385,55 @@ func TestMemoryLeaks(t *testing.T) {
 
 		// Perform operations with sensitive data
 		for _, secret := range sensitiveData {
-			// Create a copy of the secret to prevent it from being optimized away
-			secretBytes := []byte(secret)
-			defer func(s []byte) {
-				runtime.KeepAlive(s)
-				vault.Zeroize(s)
-			}(secretBytes)
+			// Create a function to handle the sensitive operations and ensure cleanup
+			func(secret string) {
+				// Create a copy of the secret to prevent it from being optimized away
+				secretBytes := []byte(secret)
 
-			// Key derivation
-			salt, err := vault.GenerateSalt()
-			if err != nil {
-				t.Fatalf("Failed to generate salt: %v", err)
-			}
+				// Clean up secretBytes when this function returns
+				defer func() {
+					runtime.KeepAlive(secretBytes) // Ensure secretBytes isn't optimized away
+					vault.Zeroize(secretBytes)     // Zero out the secret
+				}()
 
-			key, err := suite.Crypto.DeriveKey(string(secretBytes), salt)
-			if err != nil {
-				t.Errorf("Key derivation failed: %v", err)
-				continue
-			}
+				// Key derivation
+				salt, err := vault.GenerateSalt()
+				if err != nil {
+					t.Fatalf("Failed to generate salt: %v", err)
+				}
 
-			// Ensure key is zeroed after use
-			defer vault.Zeroize(key)
+				key, err := suite.Crypto.DeriveKey(string(secretBytes), salt)
+				if err != nil {
+					t.Errorf("Key derivation failed: %v", err)
+					return
+				}
 
-			// Encryption
-			plaintext := []byte("test data for " + secret)
-			defer vault.Zeroize(plaintext)
+				// Clean up key when this function returns
+				defer vault.Zeroize(key)
 
-			envelope, err := suite.Crypto.Seal(plaintext, key)
-			if err != nil {
-				t.Errorf("Encryption failed: %v", err)
-				continue
-			}
+				// Encryption
+				plaintext := []byte("test data for " + secret)
+				defer vault.Zeroize(plaintext)
 
-			// Decryption
-			decrypted, err := suite.Crypto.Open(envelope, key)
-			if err != nil {
-				t.Errorf("Decryption failed: %v", err)
-				continue
-			}
+				envelope, err := suite.Crypto.Seal(plaintext, key)
+				if err != nil {
+					t.Errorf("Encryption failed: %v", err)
+					return
+				}
 
-			// Ensure decrypted data is zeroed after use
-			if decrypted != nil {
-				defer runtime.KeepAlive(decrypted)
-				defer vault.Zeroize(decrypted)
-			}
+				// Decryption
+				decrypted, err := suite.Crypto.Open(envelope, key)
+				if err != nil {
+					t.Errorf("Decryption failed: %v", err)
+					return
+				}
+
+				// Ensure decrypted data is zeroed after use
+				if decrypted != nil {
+					defer runtime.KeepAlive(decrypted)
+					defer vault.Zeroize(decrypted)
+				}
+			}(secret)
 		}
 
 		// Force garbage collection after all operations
@@ -853,7 +858,7 @@ func isValidEntryName(name string) bool {
 		}
 	}
 
-	return len(name) > 0 && len(name) <= 255
+	return name != "" && len(name) <= 255
 }
 
 func sanitizeNotes(notes string) string {
@@ -863,11 +868,4 @@ func sanitizeNotes(notes string) string {
 	notes = strings.ReplaceAll(notes, "<", "&lt;")
 	notes = strings.ReplaceAll(notes, ">", "&gt;")
 	return notes
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

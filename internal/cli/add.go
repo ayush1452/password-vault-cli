@@ -88,7 +88,9 @@ Example:
 }
 
 func runAdd(entryName string) (err error) {
-	defer checkDeferredErr(&err, "CloseSessionStore", CloseSessionStore())
+	defer func() {
+		err = checkDeferredErr(err, "CloseSessionStore", CloseSessionStore())
+	}()
 
 	// Use the shared writeOutput function for consistent error handling
 	printStatus := func(format string, args ...interface{}) error {

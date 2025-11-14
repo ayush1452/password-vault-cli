@@ -739,7 +739,7 @@ func (bs *BoltStore) RotateMasterKey(newPassphrase string) error {
 	if !bs.isOpen {
 		return fmt.Errorf("vault is not open")
 	}
-	if len(newPassphrase) == 0 {
+	if newPassphrase == "" {
 		return fmt.Errorf("new passphrase cannot be empty")
 	}
 	if len(bs.masterKey) == 0 {
@@ -1373,7 +1373,8 @@ func (bs *BoltStore) ImportVault(path, conflictResolution string) error {
 			}
 		}
 
-		for _, exported := range list {
+		for i := range list {
+			exported := &list[i]
 			if exported.ID == "" {
 				continue
 			}

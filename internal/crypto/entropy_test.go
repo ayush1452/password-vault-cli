@@ -33,7 +33,7 @@ func TestGeneratePasswordCharsets(t *testing.T) {
 	}{
 		{"alpha", CharsetAlpha, 16, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"},
 		{"alnum", CharsetAlnum, 24, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"},
-		{"alnumsym", CharsetAlnumSym, 32, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}<>?,.:;/'\"|\\~"},
+		{"alnum_special", CharsetAlnumSpecial, 32, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}<>?,.:;/'\"|\\~"},
 	}
 
 	for _, tt := range tests {
@@ -115,7 +115,7 @@ func BenchmarkGeneratePassword(b *testing.B) {
 		b.Run(fmt.Sprintf("len=%d", size), func(b *testing.B) {
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
-				if _, err := GeneratePassword(size, CharsetAlnumSym); err != nil {
+				if _, err := GeneratePassword(size, CharsetAlnumSpecial); err != nil {
 					b.Fatalf("GeneratePassword() error = %v", err)
 				}
 			}

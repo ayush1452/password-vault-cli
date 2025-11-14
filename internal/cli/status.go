@@ -179,11 +179,11 @@ func runStatus() error {
 
 func loadMetadataInfo() (*vault.MetadataInfo, error) {
 	if IsUnlocked() {
-		store := GetVaultStore()
-		if store == nil {
+		vaultStore := GetVaultStore()
+		if vaultStore == nil {
 			return nil, fmt.Errorf("failed to access unlocked vault store")
 		}
-		metadata, err := store.GetVaultMetadata()
+		metadata, err := vaultStore.GetVaultMetadata()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get vault metadata: %w", err)
 		}

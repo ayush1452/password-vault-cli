@@ -44,32 +44,24 @@ func writeOutput(w io.Writer, format string, args ...interface{}) error {
 
 // checkDeferredErr checks and logs errors from deferred function calls.
 // It's designed to be used with named return values in functions.
-// Example: defer checkDeferredErr(&err, "CloseSessionStore", CloseSessionStore())
-func checkDeferredErr(err *error, op string, cerr error) {
-	if cerr != nil {
-		// Log the error with a stack trace in debug mode
-		if isDebugEnabled() {
-			log.Printf("DEBUG: error in deferred %s: %+v", op, cerr)
-		} else {
-			log.Printf("Warning: error in deferred %s: %v", op, cerr)
-		}
-
-		// Only override the error if it's not already set
-		if *err == nil {
-			*err = fmt.Errorf("%s: %w", op, cerr)
-		}
-
-		// For critical errors, consider exiting
-		if isCriticalError(cerr) {
-			os.Exit(1) // Using 1 as a generic error code
-		}
+// Example: defer func() { err = checkDeferredErr(err, "CloseSessionStore", CloseSessionStore()) }()
+func checkDeferredErr(err error, op string, cerr error) error {
+	if cerr == nil {
+		return err
 	}
-}
 
-// isCriticalError determines if an error is critical enough to exit the program
-func isCriticalError(err error) bool {
-	// Add conditions for critical errors
-	return os.IsPermission(err) || os.IsNotExist(err)
+	// Log the error with a stack trace in debug mode
+	if isDebugEnabled() {
+		log.Printf("DEBUG: error in deferred %s: %+v", op, cerr)
+	} else {
+		log.Printf("Warning: error in deferred %s: %v", op, cerr)
+	}
+
+	// Only return the error if it's not already set
+	if err == nil {
+		return fmt.Errorf("%s: %w", op, cerr)
+	}
+	return err
 }
 
 // isDebugEnabled checks if debug mode is enabled via environment variable

@@ -55,7 +55,7 @@ func runRotatePassword(cmd *cobra.Command, name string, length int, copyToClip b
 	vaultStore := GetVaultStore()
 
 	// Generate new password using the same logic as passgen
-	newPassword, err := crypto.GeneratePassword(length, crypto.CharsetAlnumSym)
+	newPassword, err := crypto.GeneratePassword(length, crypto.CharsetAlnumSpecial)
 	if err != nil {
 		return fmt.Errorf("failed to generate password: %w", err)
 	}

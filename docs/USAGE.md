@@ -279,7 +279,7 @@ Use `vault passgen` to create strong passwords or passphrases without storing th
 #### Quick Examples
 
 ```bash
-# Generate a 20-character password (default alnumsym charset)
+# Generate a 20-character password (default alnum_special charset)
 vault passgen
 
 # Generate a 32-character alphanumeric password
@@ -298,7 +298,7 @@ vault passgen --copy --ttl 45
   Length of the generated password. Ignored when `--words` is supplied.
 - **`--words <n>`**
   Generate a Diceware-style passphrase with `<n>` hyphenated adjective–noun words. Cannot be combined with `--length` or `--charset`.
-- **`--charset <alpha|alnum|alnumsym>`** (default: `alnumsym`)
+- **`--charset <alpha|alnum|alnum_special>`** (default: `alnum_special`)
   Character set used for password generation when `--length` is active.
 - **`--copy`**
   Copy the generated output to the clipboard using `internal/clipboard/clipboard.go`. Falls back to printing when omitted.

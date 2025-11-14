@@ -34,7 +34,8 @@ func main() {
 	// Use absolute path to the Go binary for security
 	goPath, err := exec.LookPath("go")
 	if err != nil {
-		log.Fatal("Could not find 'go' in PATH")
+		log.Printf("Could not find 'go' in PATH: %v", err)
+		return
 	}
 
 	buildCmd := &exec.Cmd{
@@ -48,13 +49,14 @@ func main() {
 
 	output, err := buildCmd.CombinedOutput()
 	if err != nil {
-		log.Printf("Build output: %s", output)
-		log.Fatal("Failed to build vault binary:", err)
+		log.Printf("Build output: %s\nFailed to build vault binary: %v", output, err)
+		return
 	}
 
 	// Ensure the binary has secure permissions
 	if err := os.Chmod(vaultBinaryPath, 0o600); err != nil {
-		log.Fatal("Failed to set binary permissions:", err)
+		log.Printf("Failed to set binary permissions: %v", err)
+		return
 	}
 
 	fmt.Println("✓ Vault binary built successfully")
@@ -140,11 +142,7 @@ func joinArgs(args []string) string {
 		if i > 0 {
 			result += " "
 		}
-		if len(arg) == 0 || arg[0] != '-' {
-			result += arg
-		} else {
-			result += arg
-		}
+		result += arg
 	}
 	return result
 }

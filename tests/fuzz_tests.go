@@ -195,7 +195,7 @@ func FuzzEntryValidation(f *testing.F) {
 		}
 
 		// Log validation result for debugging
-		if !isValid && len(name) > 0 && len(name) < 1000 {
+		if !isValid && name != "" && len(name) < 1000 {
 			t.Logf("Entry validation failed for name: %q", name[:min(len(name), 50)])
 		}
 	})

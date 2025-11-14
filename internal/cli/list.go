@@ -100,7 +100,7 @@ func runList(cmd *cobra.Command) (err error) {
 	// Handle cleanup and error reporting for deferred functions
 	defer func() {
 		// Check deferred CloseSessionStore error
-		checkDeferredErr(&err, "CloseSessionStore", CloseSessionStore())
+		err = checkDeferredErr(err, "CloseSessionStore", CloseSessionStore())
 
 		// Reset global flags
 		listTags = nil

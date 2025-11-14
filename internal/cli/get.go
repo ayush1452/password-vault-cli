@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	field string
-	copy  bool
-	show  bool
+	field      string
+	shouldCopy bool
+	show       bool
 )
 
 var getCmd = &cobra.Command{
@@ -39,7 +39,7 @@ Example:
 
 func init() {
 	getCmd.Flags().StringVar(&field, "field", "secret", "Field to retrieve (secret|username|url|notes)")
-	getCmd.Flags().BoolVar(&copy, "copy", false, "Copy to clipboard instead of displaying")
+	getCmd.Flags().BoolVar(&shouldCopy, "copy", false, "Copy to clipboard instead of displaying")
 	getCmd.Flags().BoolVar(&show, "show", false, "Show secret in terminal (security warning)")
 }
 
@@ -72,14 +72,16 @@ Example:
 	}
 
 	cmd.Flags().StringVar(&field, "field", "secret", "Field to retrieve (secret|username|url|notes)")
-	cmd.Flags().BoolVar(&copy, "copy", false, "Copy to clipboard instead of displaying")
+	cmd.Flags().BoolVar(&shouldCopy, "copy", false, "Copy to clipboard instead of displaying")
 	cmd.Flags().BoolVar(&show, "show", false, "Show secret in terminal (security warning)")
 
 	return cmd
 }
 
 func runGet(cmd *cobra.Command, entryName string) (err error) {
-	defer checkDeferredErr(&err, "CloseSessionStore", CloseSessionStore())
+	defer func() {
+		err = checkDeferredErr(err, "CloseSessionStore", CloseSessionStore())
+	}()
 
 	// Use the shared writeOutput function for consistent error handling
 
@@ -125,12 +127,12 @@ func runGet(cmd *cobra.Command, entryName string) (err error) {
 	}
 
 	// Handle output based on flags and field sensitivity
-	if sensitive && !show && !copy {
+	if sensitive && !show && !shouldCopy {
 		// Default behavior for secrets: copy to clipboard
-		copy = true
+		shouldCopy = true
 	}
 
-	if copy || (!show && sensitive) {
+	if shouldCopy || (!show && sensitive) {
 		// Copy to clipboard
 		if !clipboard.IsAvailable() {
 			return fmt.Errorf("clipboard not available, use --show to display in terminal")
