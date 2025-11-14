@@ -71,7 +71,10 @@ func (aw *AtomicWriter) Write(data []byte) (int, error) {
 	}
 	n, err := aw.tempFile.Write(data)
 	if err != nil {
-		_ = aw.Abort() // Clean up on write error
+		// Try to clean up, but ignore any error from Abort
+		if abortErr := aw.Abort(); abortErr != nil {
+			log.Printf("Warning: failed to abort after write error: %v", abortErr)
+		}
 	}
 	return n, err
 }
@@ -84,13 +87,19 @@ func (aw *AtomicWriter) Commit() error {
 
 	// Sync to ensure data is written to disk
 	if err := aw.tempFile.Sync(); err != nil {
-		_ = aw.Abort() // Clean up on sync error
+		// Try to clean up, but ignore any error from Abort
+		if abortErr := aw.Abort(); abortErr != nil {
+			log.Printf("Warning: failed to abort after sync error: %v", abortErr)
+		}
 		return fmt.Errorf("failed to sync temp file: %w", err)
 	}
 
 	// Close temp file
 	if err := aw.tempFile.Close(); err != nil {
-		_ = aw.Abort() // Clean up on close error
+		// Try to clean up, but ignore any error from Abort
+		if abortErr := aw.Abort(); abortErr != nil {
+			log.Printf("Warning: failed to abort after close error: %v", abortErr)
+		}
 		return fmt.Errorf("failed to close temp file: %w", err)
 	}
 	aw.tempFile = nil

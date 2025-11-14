@@ -146,7 +146,10 @@ func FuzzEnvelopeSerialization(f *testing.F) {
 
 		// We're not checking the error here as it's expected to fail for invalid envelopes
 		// The purpose is to ensure the function doesn't panic with malformed input
-		_, _ = crypto.Open(&envelope, testKey)
+		if _, err := crypto.Open(&envelope, testKey); err != nil {
+			// Expected to fail for invalid inputs, so we don't fail the test
+			t.Logf("Expected error with malformed input: %v", err)
+		}
 	})
 }
 
@@ -226,14 +229,20 @@ func FuzzStoreOperations(f *testing.F) {
 		// Create and open vault
 		crypto := vault.NewDefaultCryptoEngine()
 		passphrase := "fuzz-test-passphrase"
-		salt, _ := vault.GenerateSalt()
-		masterKey, _ := crypto.DeriveKey(passphrase, salt)
+		salt, err := vault.GenerateSalt()
+		if err != nil {
+			t.Fatalf("Failed to generate salt: %v", err)
+		}
+		masterKey, err := crypto.DeriveKey(passphrase, salt)
+		if err != nil {
+			t.Fatalf("Failed to derive key: %v", err)
+		}
 
 		kdfParams := map[string]interface{}{
 			"algorithm": "argon2id",
 		}
 
-		err := s.CreateVault(vaultPath, masterKey, kdfParams)
+		err = s.CreateVault(vaultPath, masterKey, kdfParams)
 		if err != nil {
 			t.Skip("Failed to create vault")
 		}

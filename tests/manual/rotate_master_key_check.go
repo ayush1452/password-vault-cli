@@ -112,10 +112,28 @@ func TestBoltStoreRotateMasterKey(t *testing.T) {
 		t.Fatalf("failed to decode rotated salt: %v", err)
 	}
 
+	// Helper function to safely get uint32 from interface{}
+	getUint32 := func(m map[string]interface{}, key string) uint32 {
+		if val, ok := m[key].(float64); ok {
+			return uint32(val)
+		}
+		t.Fatalf("invalid type for %s: expected float64, got %T", key, m[key])
+		return 0
+	}
+
+	// Helper function to safely get uint8 from interface{}
+	getUint8 := func(m map[string]interface{}, key string) uint8 {
+		if val, ok := m[key].(float64); ok {
+			return uint8(val)
+		}
+		t.Fatalf("invalid type for %s: expected float64, got %T", key, m[key])
+		return 0
+	}
+
 	rotatedParams := vault.Argon2Params{
-		Memory:      uint32(rotatedMetadata.KDFParams["memory"].(float64)),
-		Iterations:  uint32(rotatedMetadata.KDFParams["iterations"].(float64)),
-		Parallelism: uint8(rotatedMetadata.KDFParams["parallelism"].(float64)),
+		Memory:      getUint32(rotatedMetadata.KDFParams, "memory"),
+		Iterations:  getUint32(rotatedMetadata.KDFParams, "iterations"),
+		Parallelism: getUint8(rotatedMetadata.KDFParams, "parallelism"),
 	}
 
 	rotatedCrypto := vault.NewCryptoEngine(rotatedParams)

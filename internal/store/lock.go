@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -58,7 +59,10 @@ func (fl *FileLock) Lock(timeout time.Duration) error {
 
 			// Write process ID to lock file
 			if _, err := file.WriteString(string(rune(os.Getpid()))); err != nil {
-				_ = fl.Unlock() // Clean up on error, ignore error from Unlock
+				// Try to clean up, but ignore any error from Unlock
+				if unlockErr := fl.Unlock(); unlockErr != nil {
+					log.Printf("Warning: failed to unlock during cleanup: %v", unlockErr)
+				}
 				return fmt.Errorf("failed to write to lock file: %w", err)
 			}
 

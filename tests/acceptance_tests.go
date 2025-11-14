@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -150,6 +151,13 @@ func validateCommandArgs(args ...string) error {
 	return nil
 }
 
+// copyOutput handles copying from a reader to a buffer and logs any errors
+func copyOutput(dst *bytes.Buffer, src io.Reader, name string) {
+    if _, err := io.Copy(dst, src); err != nil {
+        log.Printf("Warning: error copying %s: %v", name, err)
+    }
+}
+
 // RunCommand executes a vault CLI command and returns the result
 // Returns:
 //   - stdout: The standard output of the command
@@ -249,12 +257,12 @@ func (suite *AcceptanceTestSuite) RunCommand(t *testing.T, args ...string) (stdo
 
 	go func() {
 		defer wg.Done()
-		_, _ = io.Copy(&stdoutBuf, stdoutPipe)
+		copyOutput(&stdoutBuf, stdoutPipe, "stdout")
 	}()
 
 	go func() {
 		defer wg.Done()
-		_, _ = io.Copy(&stderrBuf, stderrPipe)
+		copyOutput(&stderrBuf, stderrPipe, "stderr")
 	}()
 
 	// Wait for command to complete
@@ -421,12 +429,12 @@ func (suite *AcceptanceTestSuite) RunCommandWithInput(t *testing.T, input string
 
 	go func() {
 		defer wg.Done()
-		_, _ = io.Copy(&stdoutBuf, stdoutPipe)
+		copyOutput(&stdoutBuf, stdoutPipe, "stdout")
 	}()
 
 	go func() {
 		defer wg.Done()
-		_, _ = io.Copy(&stderrBuf, stderrPipe)
+		copyOutput(&stderrBuf, stderrPipe, "stderr")
 	}()
 
 	// Wait for input to be written

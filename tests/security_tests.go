@@ -601,7 +601,10 @@ func TestConcurrentAttacks(t *testing.T) {
 	})
 
 	t.Run("Race condition in key derivation", func(t *testing.T) {
-		salt, _ := vault.GenerateSalt()
+		salt, err := vault.GenerateSalt()
+		if err != nil {
+			t.Fatalf("Failed to generate salt: %v", err)
+		}
 		numGoroutines := 50
 		var wg sync.WaitGroup
 		results := make([][]byte, numGoroutines)
