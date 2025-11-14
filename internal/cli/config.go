@@ -142,7 +142,8 @@ func runConfigGetAll(cmd *cobra.Command) error {
 	}
 
 	// Collect all write operations and execute them at the end
-	var writeOps []func() error
+	// Pre-allocate with capacity for header (1) + number of config values (11)
+	writeOps := make([]func() error, 0, 12)
 
 	// Add configuration header
 	writeOps = append(writeOps, func() error {
