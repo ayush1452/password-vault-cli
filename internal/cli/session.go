@@ -315,11 +315,16 @@ func persistSession() error {
 	}
 
 	// Prepare session data
+	envelopeBytes, err := vault.EnvelopeToBytes(envelope)
+	if err != nil {
+		return fmt.Errorf("failed to serialize master key envelope: %w", err)
+	}
+
 	data := sessionFileData{
 		VaultPath:         sessionManager.vaultPath,
 		UnlockTime:        sessionManager.unlockTime,
 		TTLSeconds:        int64(sessionManager.ttl / time.Second),
-		MasterKeyEnvelope: vault.EnvelopeToBytes(envelope),
+		MasterKeyEnvelope: envelopeBytes,
 	}
 
 	// Serialize and write to temporary file
@@ -435,10 +440,10 @@ func ensureSessionRestored() {
 func loadSessionFile(path string) (*sessionFileData, error) {
 	// Clean the file path to prevent directory traversal
 	cleanPath := filepath.Clean(path)
-	
+
 	// Optional: Add additional path validation here if needed
 	// For example, ensure the path is within an allowed directory
-	
+
 	content, err := os.ReadFile(cleanPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"sync"
@@ -131,48 +132,69 @@ func dicewareWords() []string {
 	return dicewareList
 }
 
+// randomIndex generates a uniformly distributed random number in the range [0, max-1]
+// using rejection sampling to ensure uniform distribution and prevent modulo bias.
 func randomIndex(r io.Reader, max int) (int, error) {
 	if max <= 0 {
-		return 0, errInvalidLength
+		return 0, fmt.Errorf("max must be positive")
 	}
 
-	if max <= 256 {
+	switch {
+	// For small ranges (up to 256), use a single byte
+	case max <= 1:
+		return 0, nil // Only one possible value
+	case max <= 256:
 		var buf [1]byte
 		usable := 256 - (256 % max)
 		for {
 			if _, err := io.ReadFull(r, buf[:]); err != nil {
-				return 0, err
+				return 0, fmt.Errorf("failed to read random byte: %w", err)
 			}
-			if int(buf[0]) < usable {
-				return int(buf[0]) % max, nil
+			val := int(buf[0])
+			if val < usable {
+				return val % max, nil
 			}
 		}
-	}
 
-	if max <= 65536 {
+	// For medium ranges (up to 65536), use two bytes
+	case max <= 65536:
 		var buf [2]byte
 		usable := 65536 - (65536 % max)
 		for {
 			if _, err := io.ReadFull(r, buf[:]); err != nil {
-				return 0, err
+				return 0, fmt.Errorf("failed to read random bytes: %w", err)
 			}
 			val := int(binary.BigEndian.Uint16(buf[:]))
 			if val < usable {
 				return val % max, nil
 			}
 		}
-	}
 
-	var buf [4]byte
-	const maxUint32 = ^uint32(0)
-	limit := maxUint32 - (maxUint32 % uint32(max))
-	for {
-		if _, err := io.ReadFull(r, buf[:]); err != nil {
-			return 0, err
-		}
-		val := binary.BigEndian.Uint32(buf[:])
-		if val < limit {
-			return int(val % uint32(max)), nil
+	// For larger ranges, use 8 bytes (uint64)
+	default:
+		var buf [8]byte
+		// Calculate the maximum value that is a multiple of max
+		const maxUint64 = ^uint64(0)
+		limit := maxUint64 - (maxUint64 % uint64(max))
+
+		for {
+			// Read random bytes
+			if _, err := io.ReadFull(r, buf[:]); err != nil {
+				return 0, fmt.Errorf("failed to read random bytes: %w", err)
+			}
+
+			// Convert to uint64 in a safe way
+			val := binary.BigEndian.Uint64(buf[:])
+
+			// Use rejection sampling to ensure uniform distribution
+			if val < limit {
+				// Safe conversion since we know val < limit and limit is a multiple of max
+				result := val % uint64(max)
+				if result > uint64(^uint(0)>>1) {
+					return 0, fmt.Errorf("random value %d overflows int", result)
+				}
+				return int(result), nil
+			}
 		}
 	}
 }

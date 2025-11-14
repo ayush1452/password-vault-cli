@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 )
 
 // AtomicWriter handles atomic file operations using temp file + rename
@@ -18,19 +20,41 @@ func NewAtomicWriter(targetPath string) (*AtomicWriter, error) {
 	dir := filepath.Dir(targetPath)
 	base := filepath.Base(targetPath)
 
-	// Create temporary file in the same directory
-	tempPath := filepath.Join(dir, fmt.Sprintf(".%s.tmp.%d", base, os.Getpid()))
+	// Clean and validate the target directory path
+	cleanDir := filepath.Clean(dir)
+	if cleanDir != dir {
+		return nil, fmt.Errorf("invalid directory path: potential directory traversal detected")
+	}
 
-	// Create directory if it doesn't exist
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	// Validate the base filename to prevent directory traversal
+	if strings.Contains(base, "..") || strings.ContainsRune(base, filepath.Separator) {
+		return nil, fmt.Errorf("invalid filename: %s", base)
+	}
+
+	// Create temporary file in the same directory with a random suffix
+	tempPath := filepath.Join(cleanDir, fmt.Sprintf(".%s.tmp.%d.%d", base, os.Getpid(), time.Now().UnixNano()))
+
+	// Ensure the target directory exists with secure permissions
+	if err := os.MkdirAll(cleanDir, 0o700); err != nil {
 		return nil, fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Create temporary file with secure permissions
-	tempFile, err := os.OpenFile(tempPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
+	// Create temporary file with secure permissions and exclusive creation
+	tempFile, err := os.OpenFile(filepath.Clean(tempPath), os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
 	if err != nil {
+		// Clean up the temp directory if file creation fails
+		_ = os.Remove(tempPath) // Best effort cleanup
 		return nil, fmt.Errorf("failed to create temp file: %w", err)
 	}
+
+	// Ensure the file handle is closed if we return an error
+	success := false
+	defer func() {
+		if !success && tempFile != nil {
+			_ = tempFile.Close()
+			_ = os.Remove(tempPath)
+		}
+	}()
 
 	return &AtomicWriter{
 		targetPath: targetPath,

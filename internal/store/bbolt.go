@@ -5,9 +5,13 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -204,7 +208,7 @@ func (bs *BoltStore) OpenVault(path string, masterKey []byte) error {
 		return nil
 	})
 	if err != nil {
-		_ = db.Close() // Ignore error from Close in error path
+		_ = db.Close()    // Ignore error from Close in error path
 		_ = lock.Unlock() // Ignore error from Unlock in error path
 		return fmt.Errorf("failed to initialize vault: %w", err)
 	}
@@ -298,7 +302,10 @@ func (bs *BoltStore) CreateEntry(profile string, entry *domain.Entry) error {
 		}
 
 		// Serialize envelope
-		envelopeData := vault.EnvelopeToBytes(envelope)
+		envelopeData, err := vault.EnvelopeToBytes(envelope)
+		if err != nil {
+			return fmt.Errorf("failed to serialize envelope: %w", err)
+		}
 
 		// Store encrypted entry
 		if err := bucket.Put([]byte(entry.ID), envelopeData); err != nil {
@@ -473,7 +480,10 @@ func (bs *BoltStore) UpdateEntry(profile, entryID string, entry *domain.Entry) e
 		}
 
 		// Serialize envelope
-		envelopeData := vault.EnvelopeToBytes(envelope)
+		envelopeData, err := vault.EnvelopeToBytes(envelope)
+		if err != nil {
+			return fmt.Errorf("failed to serialize envelope: %w", err)
+		}
 
 		// Store updated entry
 		if err := bucket.Put([]byte(entryID), envelopeData); err != nil {
@@ -850,7 +860,12 @@ func reencryptEntries(tx *bbolt.Tx, oldPassphrase, newPassphrase string, cryptoE
 				return fmt.Errorf("failed to re-encrypt entry %s: %w", string(k), err)
 			}
 
-			if err := bucket.Put(k, vault.EnvelopeToBytes(newEnvelope)); err != nil {
+			envelopeBytes, err := vault.EnvelopeToBytes(newEnvelope)
+			if err != nil {
+				return fmt.Errorf("failed to serialize rotated entry %s: %w", string(k), err)
+			}
+
+			if err := bucket.Put(k, envelopeBytes); err != nil {
 				return fmt.Errorf("failed to store rotated entry %s: %w", string(k), err)
 			}
 
@@ -879,6 +894,11 @@ func parseArgon2Params(kdf map[string]interface{}) (vault.Argon2Params, error) {
 		return vault.Argon2Params{}, err
 	}
 
+	// Ensure parallelism is within valid range for uint8 (0-255)
+	if parallelVal > math.MaxUint8 {
+		return vault.Argon2Params{}, fmt.Errorf("parallelism value %d exceeds maximum allowed value of %d", parallelVal, math.MaxUint8)
+	}
+
 	return vault.Argon2Params{
 		Memory:      memoryVal,
 		Iterations:  iterationsVal,
@@ -887,51 +907,119 @@ func parseArgon2Params(kdf map[string]interface{}) (vault.Argon2Params, error) {
 }
 
 func getUint32Param(kdf map[string]interface{}, primary string, aliases ...string) (uint32, error) {
-	value, ok := kdf[primary]
-	if !ok {
+	// Try to find the parameter value using primary key first, then aliases
+	var value interface{}
+	var found bool
+
+	if value, found = kdf[primary]; !found {
 		for _, alias := range aliases {
-			if v, found := kdf[alias]; found {
+			if v, exists := kdf[alias]; exists {
 				value = v
-				ok = true
+				found = true
 				break
 			}
 		}
 	}
-	if !ok {
+
+	if !found || value == nil {
 		return 0, fmt.Errorf("missing or invalid %s parameter", primary)
 	}
 
 	switch v := value.(type) {
 	case float64:
+		if v < 0 || v > float64(math.MaxUint32) || math.IsNaN(v) || math.IsInf(v, 0) {
+			return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
+		}
 		return uint32(v), nil
+
 	case float32:
+		if v < 0 || v > float32(math.MaxUint32) || math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+			return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
+		}
 		return uint32(v), nil
+
 	case int:
+		if v < 0 || uint64(v) > math.MaxUint32 {
+			return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
+		}
+		// Safe to convert after bounds check
 		return uint32(v), nil
+
+	case int8:
+		if v < 0 {
+			return 0, fmt.Errorf("value for %s cannot be negative", primary)
+		}
+		// int8 is always within uint32 range when non-negative
+		return uint32(v), nil
+
+	case int16:
+		if v < 0 {
+			return 0, fmt.Errorf("value for %s cannot be negative", primary)
+		}
+		return uint32(v), nil
+
 	case int32:
+		if v < 0 {
+			return 0, fmt.Errorf("value for %s cannot be negative", primary)
+		}
 		return uint32(v), nil
+
 	case int64:
+		if v < 0 || uint64(v) > math.MaxUint32 {
+			return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
+		}
+		// Safe to convert after bounds check
 		return uint32(v), nil
+
 	case uint:
+		if uint64(v) > math.MaxUint32 {
+			return 0, fmt.Errorf("value for %s exceeds maximum allowed value of %d", primary, math.MaxUint32)
+		}
+		// Safe to convert after bounds check
 		return uint32(v), nil
-	case uint32:
-		return v, nil
+
+	case uint8, uint16, uint32:
+		// These types are guaranteed to fit in uint32
+		return uint32(reflect.ValueOf(v).Uint()), nil
+
 	case uint64:
+		if v > math.MaxUint32 {
+			return 0, fmt.Errorf("value for %s exceeds maximum allowed value of %d", primary, math.MaxUint32)
+		}
+		// Safe to convert after bounds check
 		return uint32(v), nil
+
 	case json.Number:
 		i64, err := v.Int64()
 		if err != nil {
-			return 0, fmt.Errorf("invalid numeric value for %s", primary)
+			return 0, fmt.Errorf("invalid numeric value for %s: %v", primary, err)
+		}
+		if i64 < 0 || uint64(i64) > math.MaxUint32 {
+			return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
 		}
 		return uint32(i64), nil
+
 	case string:
-		var i float64
-		if _, err := fmt.Sscanf(v, "%f", &i); err != nil {
-			return 0, fmt.Errorf("invalid string value for %s", primary)
+		// Try to parse as float first to handle decimal points and scientific notation
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			if f < 0 || f > float64(math.MaxUint32) || math.IsNaN(f) || math.IsInf(f, 0) {
+				return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
+			}
+			return uint32(f), nil
+		}
+
+		// If not a float, try parsing as an integer
+		i, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid numeric string for %s: %v", primary, err)
+		}
+		if i < 0 || uint64(i) > math.MaxUint32 {
+			return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
 		}
 		return uint32(i), nil
+
 	default:
-		return 0, fmt.Errorf("unsupported type for %s parameter", primary)
+		return 0, fmt.Errorf("unsupported type %T for parameter %s", value, primary)
 	}
 }
 
@@ -1165,9 +1253,22 @@ func (bs *BoltStore) ExportVault(path string, includeSecrets bool) error {
 		}
 	}
 
+	// Check if the data size is too large (max 100MB)
+	const maxExportSize = 100 * 1024 * 1024 // 100MB
+	if uint64(len(data)) > maxExportSize {
+		return fmt.Errorf("export data too large: %d bytes (max %d MB)", len(data), maxExportSize/(1024*1024))
+	}
+
 	// Write file with secure permissions (read/write for owner only)
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write export file: %w", err)
+	}
+
+	// Atomically rename the temporary file to the final destination
+	if err := os.Rename(tmpPath, path); err != nil {
+		os.Remove(tmpPath) // Clean up temp file on error
+		return fmt.Errorf("failed to finalize export: %w", err)
 	}
 
 	_ = bs.LogOperation(&domain.Operation{
@@ -1199,15 +1300,36 @@ func (bs *BoltStore) ImportVault(path, conflictResolution string) error {
 		return fmt.Errorf("insecure file permissions on %s: %v (should be 600 or more restrictive)", path, mode.Perm())
 	}
 
+	// Clean and validate the file path
+	cleanPath := filepath.Clean(path)
+	if cleanPath != path {
+		return fmt.Errorf("invalid file path: potential directory traversal detected")
+	}
+
 	// Read file with size limit (100MB)
 	const maxFileSize = 100 << 20 // 100MB
 	if fileInfo.Size() > maxFileSize {
 		return fmt.Errorf("import file too large: %d bytes (max %d MB)", fileInfo.Size(), maxFileSize>>20)
 	}
+	if fileInfo.Size() < 1 {
+		return fmt.Errorf("import file is empty")
+	}
 
-	data, err := os.ReadFile(path)
+	// Use a size-limited reader to prevent potential OOM with malformed files
+	file, err := os.Open(cleanPath)
+	if err != nil {
+		return fmt.Errorf("failed to open import file: %w", err)
+	}
+	defer file.Close()
+
+	// Read the file with a limit
+	limitedReader := io.LimitReader(file, maxFileSize+1)
+	data, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return fmt.Errorf("failed to read import file: %w", err)
+	}
+	if len(data) > maxFileSize {
+		return fmt.Errorf("import file exceeds size limit: %d bytes (max %d MB)", len(data), maxFileSize>>20)
 	}
 
 	var payload vaultExport

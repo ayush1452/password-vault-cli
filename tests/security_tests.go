@@ -30,7 +30,7 @@ func NewSecurityTestSuite(t *testing.T) *SecurityTestSuite {
 	tempDir := t.TempDir()
 	vaultPath := filepath.Join(tempDir, "security_test.vault")
 
-	// Ensure the temp directory has secure permissions (0750 is more restrictive than 0700)
+	// Ensure the temp directory has secure permissions (0750 is more secure than 0755 but allows group access)
 	if err := os.Chmod(tempDir, 0o750); err != nil {
 		t.Fatalf("Failed to set secure permissions on temp directory: %v", err)
 	}
@@ -151,7 +151,9 @@ func TestTamperDetection(t *testing.T) {
 					start := len(data) / 2
 					end := start + 50
 					randomBytes := make([]byte, 50)
-					rand.Read(randomBytes)
+					if _, err := rand.Read(randomBytes); err != nil {
+						t.Fatalf("Failed to generate random bytes: %v", err)
+					}
 					copy(data[start:end], randomBytes)
 				}
 				return data

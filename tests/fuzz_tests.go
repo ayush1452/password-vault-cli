@@ -96,10 +96,19 @@ func FuzzEnvelopeSerialization(f *testing.F) {
 	// Create valid envelope for seed
 	crypto := vault.NewDefaultCryptoEngine()
 	key := make([]byte, 32)
-	rand.Read(key)
+	if _, err := rand.Read(key); err != nil {
+		f.Fatalf("Failed to generate random key: %v", err)
+	}
 
-	envelope, _ := crypto.Seal([]byte("test data"), key)
-	validJSON, _ := json.Marshal(envelope)
+	envelope, err := crypto.Seal([]byte("test data"), key)
+	if err != nil {
+		f.Fatalf("Failed to seal test data: %v", err)
+	}
+
+	validJSON, err := json.Marshal(envelope)
+	if err != nil {
+		f.Fatalf("Failed to marshal envelope: %v", err)
+	}
 
 	// Seed corpus
 	f.Add(validJSON)
@@ -432,7 +441,7 @@ func validateEntry(entry *domain.Entry) bool {
 	}
 
 	// Basic validation
-	if len(entry.Name) == 0 || len(entry.Name) > 255 {
+	if entry.Name == "" || len(entry.Name) > 255 {
 		return false
 	}
 
@@ -477,9 +486,15 @@ func validateArgument(arg string) bool {
 }
 
 func parseConfiguration(configPath string) error {
+	// Clean and validate the config path
+	cleanPath := filepath.Clean(configPath)
+	if cleanPath != configPath {
+		return fmt.Errorf("invalid config path: potential directory traversal detected")
+	}
+
 	// Placeholder for configuration parsing
 	// In real implementation, this would parse YAML/JSON config
-	data, err := os.ReadFile(configPath)
+	data, err := os.ReadFile(cleanPath)
 	if err != nil {
 		return err
 	}
@@ -493,7 +508,7 @@ func parseConfiguration(configPath string) error {
 }
 
 func validateVaultPath(path string) bool {
-	if len(path) == 0 || len(path) > 4096 {
+	if path == "" || len(path) > 4096 {
 		return false
 	}
 
@@ -552,7 +567,10 @@ func testFileOperations(t *testing.T, path string) {
 func BenchmarkKeyDerivation(b *testing.B) {
 	crypto := vault.NewDefaultCryptoEngine()
 	passphrase := "benchmark-test-passphrase"
-	salt, _ := vault.GenerateSalt()
+	salt, err := vault.GenerateSalt()
+	if err != nil {
+		b.Fatalf("Failed to generate salt: %v", err)
+	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -570,7 +588,9 @@ func BenchmarkKeyDerivation(b *testing.B) {
 func BenchmarkEncryption(b *testing.B) {
 	crypto := vault.NewDefaultCryptoEngine()
 	key := make([]byte, 32)
-	rand.Read(key)
+	if _, err := rand.Read(key); err != nil {
+		b.Fatalf("Failed to generate random key: %v", err)
+	}
 
 	// Test different data sizes
 	sizes := []int{16, 64, 256, 1024, 4096, 16384}
@@ -578,7 +598,9 @@ func BenchmarkEncryption(b *testing.B) {
 	for _, size := range sizes {
 		b.Run(fmt.Sprintf("size-%d", size), func(b *testing.B) {
 			data := make([]byte, size)
-			rand.Read(data)
+			if _, err := rand.Read(data); err != nil {
+				b.Fatalf("Failed to generate random data: %v", err)
+			}
 
 			b.ResetTimer()
 			b.ReportAllocs()
@@ -599,7 +621,9 @@ func BenchmarkEncryption(b *testing.B) {
 func BenchmarkDecryption(b *testing.B) {
 	crypto := vault.NewDefaultCryptoEngine()
 	key := make([]byte, 32)
-	rand.Read(key)
+	if _, err := rand.Read(key); err != nil {
+		b.Fatalf("Failed to generate random key: %v", err)
+	}
 
 	// Test different data sizes
 	sizes := []int{16, 64, 256, 1024, 4096, 16384}

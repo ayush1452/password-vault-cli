@@ -79,7 +79,10 @@ func main() {
 	// Demo 4: Serialization
 	fmt.Println("\n4. Serialization Demo")
 
-	serialized := vault.EnvelopeToBytes(envelope)
+	serialized, err := vault.EnvelopeToBytes(envelope)
+	if err != nil {
+		log.Fatal("Failed to serialize envelope:", err)
+	}
 	fmt.Printf("Serialized envelope size: %d bytes\n", len(serialized))
 
 	deserialized, err := vault.EnvelopeFromBytes(serialized)

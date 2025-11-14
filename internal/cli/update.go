@@ -3,8 +3,8 @@ package cli
 import (
 	"fmt"
 	"io"
-	"path/filepath"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -102,7 +102,7 @@ func runUpdate(cmd *cobra.Command, entryName string) error {
 				cleanPath := filepath.Clean(updateSecretFile)
 				// Optional: Add additional path validation here if needed
 				// For example, ensure the path is within an allowed directory
-				
+
 				data, err = os.ReadFile(cleanPath)
 			}
 			if err != nil {

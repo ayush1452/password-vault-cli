@@ -53,7 +53,7 @@ func main() {
 	}
 
 	// Ensure the binary has secure permissions
-	if err := os.Chmod(vaultBinaryPath, 0o750); err != nil {
+	if err := os.Chmod(vaultBinaryPath, 0o600); err != nil {
 		log.Fatal("Failed to set binary permissions:", err)
 	}
 

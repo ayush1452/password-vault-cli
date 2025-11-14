@@ -7,7 +7,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -61,22 +63,48 @@ func (suite *AcceptanceTestSuite) BuildBinary(t *testing.T) {
 		t.Fatalf("Failed to build binary: %v\nOutput: %s", err, output)
 	}
 
-	// Set secure permissions on the binary (0750 is more restrictive than 0700)
-	if err := os.Chmod(suite.BinaryPath, 0o750); err != nil {
+	// Set secure permissions on the binary (0600 is the most restrictive for files)
+	if err := os.Chmod(suite.BinaryPath, 0o600); err != nil {
 		t.Fatalf("Failed to set binary permissions: %v", err)
 	}
 }
 
+// validateCommandArgs ensures command arguments are safe to use
+func validateCommandArgs(args ...string) error {
+	// Define a safe pattern for command arguments
+	safePattern := regexp.MustCompile(`^[a-zA-Z0-9_\-\.@=:+/ ]+$`)
+
+	for _, arg := range args {
+		if !safePattern.MatchString(arg) {
+			return fmt.Errorf("invalid characters in command argument: %s", arg)
+		}
+	}
+	return nil
+}
+
 // RunCommand executes a vault CLI command and returns the result
 func (suite *AcceptanceTestSuite) RunCommand(t *testing.T, args ...string) (string, string, int) {
+	// Validate command arguments
+	if err := validateCommandArgs(args...); err != nil {
+		return "", fmt.Sprintf("Command argument validation failed: %v", err), 1
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Use the full path to the binary and explicitly set the command name
 	cmd := exec.CommandContext(ctx, suite.BinaryPath, args...)
+
+	// Set a clean environment
 	cmd.Env = append(os.Environ(),
-		fmt.Sprintf("VAULT_PATH=%s", suite.VaultPath),
-		fmt.Sprintf("VAULT_CONFIG=%s", suite.ConfigPath),
+		fmt.Sprintf("VAULT_PATH=%s", filepath.Clean(suite.VaultPath)),
+		fmt.Sprintf("VAULT_CONFIG=%s", filepath.Clean(suite.ConfigPath)),
 	)
+	
+	// Set process attributes for additional security
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Setpgid: true,
+	}
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -390,7 +418,7 @@ func TestCrossplatformCompatibility(t *testing.T) {
 		for i, testPath := range testPaths {
 			// Create directory if needed
 			dir := filepath.Dir(testPath)
-			if err := os.MkdirAll(dir, 0o755); err != nil {
+			if err := os.MkdirAll(dir, 0o750); err != nil {
 				t.Errorf("Failed to create test directory: %v", err)
 				continue
 			}
@@ -745,12 +773,18 @@ func TestRecoveryScenarios(t *testing.T) {
 			t.Logf("Export command failed (may not be implemented): %s", exportErr)
 			t.Logf("Export output: %s", exportOut)
 		} else {
+			// Clean and validate the export path
+			cleanExportPath := filepath.Clean(exportPath)
+			if cleanExportPath != exportPath {
+				t.Fatal("Invalid export path: potential directory traversal detected")
+			}
+
 			// Verify export file
-			if _, err := os.Stat(exportPath); os.IsNotExist(err) {
+			if _, err := os.Stat(cleanExportPath); os.IsNotExist(err) {
 				t.Error("Export file was not created")
 			} else {
 				// Read and validate export content
-				exportData, err := os.ReadFile(exportPath)
+				exportData, err := os.ReadFile(cleanExportPath)
 				if err != nil {
 					t.Errorf("Failed to read export file: %v", err)
 				} else {

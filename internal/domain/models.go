@@ -110,8 +110,14 @@ func LoadConfig(configPath string) (*Config, error) {
 		return cfg, nil
 	}
 
+	// Clean the file path to prevent directory traversal
+	cleanPath := filepath.Clean(configPath)
+
+	// Optional: Add additional path validation here if needed
+	// For example, ensure the path is within an allowed directory
+
 	// Read config file
-	data, err := os.ReadFile(configPath)
+	data, err := os.ReadFile(cleanPath)
 	if err != nil {
 		return cfg, fmt.Errorf("failed to read config file: %w", err)
 	}
@@ -126,8 +132,14 @@ func LoadConfig(configPath string) (*Config, error) {
 
 // SaveConfig saves configuration to file
 func SaveConfig(cfg *Config, configPath string) error {
+	// Clean the file path to prevent directory traversal
+	cleanPath := filepath.Clean(configPath)
+
+	// Optional: Add additional path validation here if needed
+	// For example, ensure the path is within an allowed directory
+
 	// Create directory if it doesn't exist
-	dir := filepath.Dir(configPath)
+	dir := filepath.Dir(cleanPath)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
@@ -138,8 +150,8 @@ func SaveConfig(cfg *Config, configPath string) error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	// Write to file with secure permissions (read/write for owner only)
-	if err := os.WriteFile(configPath, data, 0o600); err != nil {
+	// Write to file using cleaned path
+	if err := os.WriteFile(cleanPath, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 

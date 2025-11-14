@@ -348,7 +348,10 @@ func TestEnvelopeSerialization(t *testing.T) {
 	}
 
 	// Serialize
-	data := EnvelopeToBytes(envelope)
+	data, err := EnvelopeToBytes(envelope)
+	if err != nil {
+		t.Fatalf("Failed to serialize envelope: %v", err)
+	}
 	if len(data) == 0 {
 		t.Error("Serialized data should not be empty")
 	}
