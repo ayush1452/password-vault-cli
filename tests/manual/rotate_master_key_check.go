@@ -1,4 +1,6 @@
-package store_test
+// Package manual contains manual test cases for the password vault.
+// These tests are not run automatically and require manual verification.
+package manualstore_test
 
 import (
 	"encoding/base64"
