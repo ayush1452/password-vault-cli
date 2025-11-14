@@ -187,11 +187,19 @@ func TestTamperDetection(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Failed to write tampered file: %v", err)
 			}
-			defer os.Remove(tamperedPath)
+			defer func() {
+				if err := os.Remove(tamperedPath); err != nil {
+					t.Logf("Warning: failed to remove tampered file: %v", err)
+				}
+			}()
 
 			// Try to open tampered store
 			tamperedStore := store.NewBoltStore()
-			defer tamperedStore.CloseVault()
+			defer func() {
+				if err := tamperedStore.CloseVault(); err != nil {
+					t.Logf("Warning: failed to close tampered store: %v", err)
+				}
+			}()
 
 			// Try to open tampered vault
 			err = tamperedStore.OpenVault(tamperedPath, masterKey)
@@ -527,7 +535,11 @@ func TestConcurrentAttacks(t *testing.T) {
 
 	// Initialize vault
 	vaultStore := store.NewBoltStore()
-	defer vaultStore.CloseVault()
+	defer func() {
+		if err := vaultStore.CloseVault(); err != nil {
+			t.Logf("Warning: failed to close vault: %v", err)
+		}
+	}()
 
 	// Derive master key from passphrase
 	salt, err := vault.GenerateSalt()
@@ -562,7 +574,11 @@ func TestConcurrentAttacks(t *testing.T) {
 
 				// Create separate store instance for each goroutine
 				testStore := store.NewBoltStore()
-				defer testStore.CloseVault()
+				defer func() {
+					if err := testStore.CloseVault(); err != nil {
+						t.Logf("Warning: failed to close test store: %v", err)
+					}
+				}()
 
 				// Attempt to open vault
 				err := testStore.OpenVault(suite.VaultPath, masterKey)
@@ -653,7 +669,9 @@ func TestCryptographicAttacks(t *testing.T) {
 
 	t.Run("Nonce reuse detection", func(t *testing.T) {
 		key := make([]byte, 32)
-		rand.Read(key)
+		if _, err := rand.Read(key); err != nil {
+			t.Fatalf("Failed to generate random key: %v", err)
+		}
 
 		plaintext := []byte("test message for nonce reuse")
 
@@ -750,9 +768,13 @@ func TestInputValidation(t *testing.T) {
 
 	// Part 2: Integration tests - verify vault actually enforces validation
 	t.Run("Vault-level validation enforcement", func(t *testing.T) {
-		// Initialize vault
+		// Create a new vault store for testing
 		vaultStore := store.NewBoltStore()
-		defer vaultStore.CloseVault()
+		defer func() {
+			if err := vaultStore.CloseVault(); err != nil {
+				t.Logf("Warning: failed to close vault: %v", err)
+			}
+		}()
 
 		// Derive master key
 		salt, err := vault.GenerateSalt()
@@ -801,7 +823,9 @@ func TestInputValidation(t *testing.T) {
 			if err == nil {
 				t.Logf("⚠️  Warning: Vault accepted potentially malicious name '%s' - should add validation", maliciousName)
 				// Clean up
-				vaultStore.DeleteEntry("default", entry.ID)
+				if err := vaultStore.DeleteEntry("default", entry.ID); err != nil {
+					t.Logf("Warning: failed to delete entry: %v", err)
+				}
 			} else {
 				t.Logf("✅ Vault correctly rejected malicious name '%s'", maliciousName)
 			}

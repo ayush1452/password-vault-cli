@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -129,7 +130,10 @@ func AtomicWriteFile(path string, data []byte) error {
 	}
 
 	if _, err := writer.Write(data); err != nil {
-		writer.Abort()
+		abortErr := writer.Abort()
+		if abortErr != nil {
+			log.Printf("Warning: failed to abort atomic writer: %v", abortErr)
+		}
 		return err
 	}
 

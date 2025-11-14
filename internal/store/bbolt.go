@@ -1274,7 +1274,9 @@ func (bs *BoltStore) ExportVault(path string, includeSecrets bool) error {
 
 	// Atomically rename the temporary file to the final destination
 	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath) // Clean up temp file on error
+		if removeErr := os.Remove(tmpPath); removeErr != nil {
+			log.Printf("Warning: failed to clean up temp file %s: %v", tmpPath, removeErr)
+		}
 		return fmt.Errorf("failed to finalize export: %w", err)
 	}
 
@@ -1327,7 +1329,11 @@ func (bs *BoltStore) ImportVault(path, conflictResolution string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open import file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("Warning: failed to close file %s: %v", cleanPath, err)
+		}
+	}()
 
 	// Read the file with a limit
 	limitedReader := io.LimitReader(file, maxFileSize+1)

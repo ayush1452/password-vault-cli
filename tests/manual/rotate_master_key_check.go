@@ -131,7 +131,11 @@ func TestBoltStoreRotateMasterKey(t *testing.T) {
 	if err := bsNew.OpenVault(vaultPath, rotatedMasterKey); err != nil {
 		t.Fatalf("failed to open with rotated key: %v", err)
 	}
-	defer bsNew.CloseVault()
+	defer func() {
+		if err := bsNew.CloseVault(); err != nil {
+			t.Logf("Warning: failed to close new vault: %v", err)
+		}
+	}()
 
 	fetched, err := bsNew.GetEntry("default", entry.ID)
 	if err != nil {
@@ -145,7 +149,11 @@ func TestBoltStoreRotateMasterKey(t *testing.T) {
 	if err := bsOld.OpenVault(vaultPath, oldKeyCopy); err != nil {
 		t.Fatalf("old key open should succeed for comparison: %v", err)
 	}
-	defer bsOld.CloseVault()
+	defer func() {
+		if err := bsOld.CloseVault(); err != nil {
+			t.Logf("Warning: failed to close old vault: %v", err)
+		}
+	}()
 
 	if _, err := bsOld.GetEntry("default", entry.ID); err == nil {
 		t.Fatalf("expected decrypt failure when using old master key")

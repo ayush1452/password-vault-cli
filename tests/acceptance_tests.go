@@ -188,7 +188,11 @@ func (suite *AcceptanceTestSuite) RunCommand(t *testing.T, args ...string) (stdo
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("Warning: failed to remove temp directory: %v", err)
+		}
+	}()
 
 	// Set a clean, minimal environment
 	cmd.Env = []string{
@@ -336,7 +340,11 @@ func (suite *AcceptanceTestSuite) RunCommandWithInput(t *testing.T, input string
 	if err != nil {
 		t.Fatalf("Failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("Warning: failed to remove temp directory: %v", err)
+		}
+	}()
 
 	// Set a clean, minimal environment
 	cmd.Env = []string{

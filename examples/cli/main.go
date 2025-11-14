@@ -19,7 +19,11 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to create temp directory:", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			log.Printf("Warning: failed to remove temp directory: %v", err)
+		}
+	}()
 
 	vaultPath := filepath.Join(tempDir, "demo.vault")
 	configPath := filepath.Join(tempDir, "config.yaml")

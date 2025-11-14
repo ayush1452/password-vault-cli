@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,7 +41,11 @@ Example:
 }
 
 func runUpdate(cmd *cobra.Command, entryName string) error {
-	defer CloseSessionStore()
+	defer func() {
+		if err := CloseSessionStore(); err != nil {
+			log.Printf("Warning: failed to close session store: %v", err)
+		}
+	}()
 
 	// Check if vault is unlocked
 	if !IsUnlocked() {

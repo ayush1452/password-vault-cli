@@ -166,7 +166,9 @@ func FuzzEntryValidation(f *testing.F) {
 
 		// Parse tags
 		var tags []string
-		json.Unmarshal([]byte(tagsJSON), &tags) // Ignore errors
+		if err := json.Unmarshal([]byte(tagsJSON), &tags); err != nil {
+			tags = []string{} // Use empty slice if unmarshal fails
+		}
 
 		// Create entry (should not panic)
 		defer func() {
@@ -235,7 +237,11 @@ func FuzzStoreOperations(f *testing.F) {
 		if err != nil {
 			t.Skip("Failed to create vault")
 		}
-		defer s.CloseVault()
+		defer func() {
+			if err := s.CloseVault(); err != nil {
+				t.Logf("Warning: failed to close vault: %v", err)
+			}
+		}()
 
 		err = s.OpenVault(vaultPath, masterKey)
 		if err != nil {
@@ -261,17 +267,23 @@ func FuzzStoreOperations(f *testing.F) {
 					Username: username,
 					Password: []byte(password),
 				}
-				s.CreateEntry(profile, entry) // Ignore errors - may be invalid
+				if err := s.CreateEntry(profile, entry); err != nil {
+					t.Logf("Warning: failed to create entry: %v", err)
+				}
 			}
 
 		case "get":
 			if entryName != "" {
-				s.GetEntry(profile, entryName) // Ignore errors - may not exist
+				if _, err := s.GetEntry(profile, entryName); err != nil {
+					t.Logf("Warning: failed to get entry: %v", err)
+				}
 			}
 
 		case "delete":
 			if entryName != "" {
-				s.DeleteEntry(profile, entryName) // Ignore errors - may not exist
+				if err := s.DeleteEntry(profile, entryName); err != nil {
+					t.Logf("Warning: failed to delete entry: %v", err)
+				}
 			}
 
 		case "list":
@@ -282,7 +294,9 @@ func FuzzStoreOperations(f *testing.F) {
 		case "search":
 			if entryName != "" {
 				filter := &domain.Filter{Search: entryName}
-				s.ListEntries(profile, filter) // Use filtered list instead
+				if _, err := s.ListEntries(profile, filter); err != nil {
+					t.Logf("Warning: failed to list entries: %v", err)
+				}
 			}
 		}
 	})
@@ -675,7 +689,11 @@ func BenchmarkStoreOperations(b *testing.B) {
 	if err != nil {
 		b.Fatalf("Failed to create vault: %v", err)
 	}
-	defer s.CloseVault()
+	defer func() {
+		if err := s.CloseVault(); err != nil {
+			b.Logf("Warning: failed to close vault: %v", err)
+		}
+	}()
 
 	err = s.OpenVault(vaultPath, masterKey)
 	if err != nil {
@@ -710,7 +728,9 @@ func BenchmarkStoreOperations(b *testing.B) {
 			Username: fmt.Sprintf("user-%d", i),
 			Password: []byte(fmt.Sprintf("pass-%d", i)),
 		}
-		s.CreateEntry(profile, entry)
+		if err := s.CreateEntry(profile, entry); err != nil {
+			b.Logf("Warning: failed to create entry: %v", err)
+		}
 	}
 
 	// Benchmark get operations

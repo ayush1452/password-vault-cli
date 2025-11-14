@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -69,7 +70,11 @@ func runStatus() error {
 		if vaultStore == nil {
 			return fmt.Errorf("failed to access unlocked vault store")
 		}
-		defer CloseSessionStore()
+		defer func() {
+			if err := CloseSessionStore(); err != nil {
+				log.Printf("Warning: failed to close session store: %v", err)
+			}
+		}()
 
 		entries, err := vaultStore.ListEntries(profile, nil)
 		if err != nil {
@@ -192,7 +197,11 @@ func loadMetadataInfo() (*vault.MetadataInfo, error) {
 	}
 
 	boltStore := store.NewBoltStore()
-	defer boltStore.CloseVault()
+	defer func() {
+		if err := boltStore.CloseVault(); err != nil {
+			log.Printf("Warning: failed to close bolt store: %v", err)
+		}
+	}()
 
 	dummyKey := make([]byte, vault.KeySize)
 	if err := boltStore.OpenVault(vaultPath, dummyKey); err != nil {

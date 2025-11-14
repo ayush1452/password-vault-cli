@@ -28,7 +28,11 @@ func main() {
 	fmt.Printf("Demo vault: %s\n", vaultPath)
 
 	// Only set up cleanup after we know the temp directory was created successfully
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			log.Printf("Warning: failed to remove temp directory: %v", err)
+		}
+	}()
 
 	// Demo 1: Create and initialize vault
 	fmt.Println("\n1. Creating New Vault")
@@ -77,7 +81,11 @@ func main() {
 		return
 	}
 	fmt.Println("   ✓ Vault opened successfully")
-	defer vaultStore.CloseVault()
+	defer func() {
+		if err := vaultStore.CloseVault(); err != nil {
+			log.Printf("Warning: failed to close vault: %v", err)
+		}
+	}()
 
 	// Demo 3: Get vault metadata
 	fmt.Println("\n3. Vault Metadata")
