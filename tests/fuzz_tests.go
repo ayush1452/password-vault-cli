@@ -687,14 +687,21 @@ func BenchmarkStoreOperations(b *testing.B) {
 
 	crypto := vault.NewDefaultCryptoEngine()
 	passphrase := "benchmark-passphrase"
-	salt, _ := vault.GenerateSalt()
-	masterKey, _ := crypto.DeriveKey(passphrase, salt)
+	salt, err := vault.GenerateSalt()
+	if err != nil {
+		b.Fatalf("Failed to generate salt: %v", err)
+	}
+	masterKey, err := crypto.DeriveKey(passphrase, salt)
+	if err != nil {
+		b.Fatalf("Failed to derive key: %v", err)
+	}
+	defer vault.Zeroize(masterKey)
 
 	kdfParams := map[string]interface{}{
 		"algorithm": "argon2id",
 	}
 
-	err := s.CreateVault(vaultPath, masterKey, kdfParams)
+	err = s.CreateVault(vaultPath, masterKey, kdfParams)
 	if err != nil {
 		b.Fatalf("Failed to create vault: %v", err)
 	}

@@ -153,9 +153,9 @@ func validateCommandArgs(args ...string) error {
 
 // copyOutput handles copying from a reader to a buffer and logs any errors
 func copyOutput(dst *bytes.Buffer, src io.Reader, name string) {
-    if _, err := io.Copy(dst, src); err != nil {
-        log.Printf("Warning: error copying %s: %v", name, err)
-    }
+	if _, err := io.Copy(dst, src); err != nil {
+		log.Printf("Warning: error copying %s: %v", name, err)
+	}
 }
 
 // RunCommand executes a vault CLI command and returns the result
