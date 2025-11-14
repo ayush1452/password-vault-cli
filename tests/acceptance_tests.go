@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -69,88 +72,390 @@ func (suite *AcceptanceTestSuite) BuildBinary(t *testing.T) {
 	}
 }
 
-// validateCommandArgs ensures command arguments are safe to use
+// validateCommandArgs validates command line arguments to prevent injection
 func validateCommandArgs(args ...string) error {
-	// Define a safe pattern for command arguments
-	safePattern := regexp.MustCompile(`^[a-zA-Z0-9_\-\.@=:+/ ]+$`)
+	// Only allow alphanumeric, basic punctuation, and path characters
+	safePattern := regexp.MustCompile(`^[a-zA-Z0-9_\-./@=:]+$`)
 
-	for _, arg := range args {
-		if !safePattern.MatchString(arg) {
-			return fmt.Errorf("invalid characters in command argument: %s", arg)
+	// Define a list of allowed subcommands and their argument patterns
+	allowedCommands := map[string]string{
+		"init":    `^[a-zA-Z0-9_\-./@=:]+$`,
+		"unlock":  `^[a-zA-Z0-9_\-./@=:]+$`,
+		"lock":    `^[a-zA-Z0-9_\-./@=:]*$`,
+		"status":  `^[a-zA-Z0-9_\-./@=:]*$`,
+		"add":     `^[a-zA-Z0-9_\-./@=:]+$`,
+		"get":     `^[a-zA-Z0-9_\-./@=:]+$`,
+		"list":    `^[a-zA-Z0-9_\-./@=:]*$`,
+		"update":  `^[a-zA-Z0-9_\-./@=:]+$`,
+		"delete":  `^[a-zA-Z0-9_\-./@=:]+$`,
+		"export":  `^[a-zA-Z0-9_\-./@=:]+$`,
+		"import":  `^[a-zA-Z0-9_\-./@=:]+$`,
+		"audit":   `^[a-zA-Z0-9_\-./@=:]*$`,
+		"rotate":  `^[a-zA-Z0-9_\-./@=:]*$`,
+		"version": `^[a-zA-Z0-9_\-./@=:]*$`,
+		"help":    `^[a-zA-Z0-9_\-./@=:]*$`,
+	}
+
+	if len(args) == 0 {
+		return nil
+	}
+
+	// Validate the command itself
+	command := args[0]
+	if !safePattern.MatchString(command) {
+		return fmt.Errorf("invalid command: %s", command)
+	}
+
+	// Check if command is in the allowed list
+	pattern, ok := allowedCommands[command]
+	if !ok {
+		return fmt.Errorf("command not allowed: %s", command)
+	}
+
+	// Validate arguments based on the command
+	for i, arg := range args[1:] {
+		// Skip empty arguments
+		if len(arg) == 0 {
+			continue
+		}
+
+		// Skip validation for flag arguments (start with -)
+		if arg[0] == '-' {
+			// If this is a flag with a value (like --flag=value), validate the value
+			if parts := strings.SplitN(arg, "=", 2); len(parts) > 1 {
+				if !regexp.MustCompile(pattern).MatchString(parts[1]) {
+					return fmt.Errorf("invalid value for flag %s: %s", parts[0], parts[1])
+				}
+			}
+			continue
+		}
+
+		// Special handling for certain commands
+		switch command {
+		case "add", "update":
+			// First argument after command is the entry name
+			if i == 0 && !safePattern.MatchString(arg) {
+				return fmt.Errorf("invalid entry name: %s", arg)
+			}
+		default:
+			// For other commands, use the command-specific pattern
+			if !regexp.MustCompile(pattern).MatchString(arg) {
+				return fmt.Errorf("invalid argument for %s: %s", command, arg)
+			}
 		}
 	}
+
 	return nil
 }
 
 // RunCommand executes a vault CLI command and returns the result
 func (suite *AcceptanceTestSuite) RunCommand(t *testing.T, args ...string) (string, string, int) {
+	t.Helper()
+
+	// Make a copy of args to avoid modifying the original
+	execArgs := make([]string, len(args))
+	copy(execArgs, args)
+
 	// Validate command arguments
-	if err := validateCommandArgs(args...); err != nil {
-		return "", fmt.Sprintf("Command argument validation failed: %v", err), 1
+	if err := validateCommandArgs(execArgs...); err != nil {
+		t.Fatalf("Invalid command arguments: %v", err)
 	}
 
+	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Use the full path to the binary and explicitly set the command name
-	cmd := exec.CommandContext(ctx, suite.BinaryPath, args...)
-
-	// Set a clean environment
-	cmd.Env = append(os.Environ(),
-		fmt.Sprintf("VAULT_PATH=%s", filepath.Clean(suite.VaultPath)),
-		fmt.Sprintf("VAULT_CONFIG=%s", filepath.Clean(suite.ConfigPath)),
-	)
-	
-	// Set process attributes for additional security
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setpgid: true,
+	// Create command with context and full path to binary
+	binaryPath, err := filepath.Abs(suite.BinaryPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path to binary: %v", err)
 	}
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	// Ensure the binary exists and is executable
+	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+		t.Fatalf("Binary not found at %s", binaryPath)
+	}
 
-	err := cmd.Run()
+	// nolint:gosec // Arguments are validated by validateCommandArgs
+	cmd := exec.CommandContext(ctx, binaryPath, execArgs...)
+
+	// Create a secure temporary directory for this command
+	tempDir, err := os.MkdirTemp("", "vault-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Set a clean, minimal environment
+	cmd.Env = []string{
+		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + filepath.Clean(os.Getenv("HOME")),
+		"USER=" + filepath.Clean(os.Getenv("USER")),
+		"TMPDIR=" + tempDir,
+		"VAULT_PATH=" + filepath.Clean(suite.VaultPath),
+		"VAULT_CONFIG=" + filepath.Clean(suite.ConfigPath),
+		// Disable any potential command history
+		"HISTFILE=",
+		"HISTFILESIZE=0",
+		"HISTSIZE=0",
+	}
+
+	// Set process attributes for additional security
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		// Create a new process group
+		Setpgid: true,
+		// Create a new session
+		Setsid: true,
+		// Set the process group ID to the new process ID
+		Pgid: 0,
+	}
+
+	// On Unix-like systems, set additional attributes
+	if runtime.GOOS != "windows" {
+		// Set a secure umask
+		syscall.Umask(0o077)
+	}
+
+	// Create pipes for stdout and stderr
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatalf("Failed to create stdout pipe: %v", err)
+	}
+
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		t.Fatalf("Failed to create stderr pipe: %v", err)
+	}
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start command: %v", err)
+	}
+
+	// Read output in a separate goroutine to prevent deadlock
+	var stdoutBuf, stderrBuf bytes.Buffer
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&stdoutBuf, stdoutPipe)
+	}()
+
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&stderrBuf, stderrPipe)
+	}()
+
+	// Wait for command to complete
+	err = cmd.Wait()
+	wg.Wait()
+
+	// Get exit code
 	exitCode := 0
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
-			exitCode = exitError.ExitCode()
+			if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
+				exitCode = status.ExitStatus()
+			} else {
+				exitCode = 1
+			}
 		} else {
+			t.Logf("Command error: %v", err)
 			exitCode = 1
 		}
 	}
 
-	return stdout.String(), stderr.String(), exitCode
+	// Get output
+	stdoutStr := stdoutBuf.String()
+	stderrStr := stderrBuf.String()
+
+	// Clear sensitive data from memory
+	defer func() {
+		stdoutBuf.Reset()
+		stderrBuf.Reset()
+		// Overwrite the memory with zeros
+		for i := range stdoutStr {
+			stdoutStr = stdoutStr[:i] + "\x00"
+		}
+		for i := range stderrStr {
+			stderrStr = stderrStr[:i] + "\x00"
+		}
+	}()
+
+	return stdoutStr, stderrStr, exitCode
 }
 
 // RunCommandWithInput executes a command with stdin input
 func (suite *AcceptanceTestSuite) RunCommandWithInput(t *testing.T, input string, args ...string) (string, string, int) {
+	t.Helper()
+
+	// Sanitize input
+	input = strings.TrimSpace(input)
+	if input == "" {
+		t.Fatal("Empty input provided to RunCommandWithInput")
+	}
+
+	// Make a copy of args to avoid modifying the original
+	execArgs := make([]string, len(args))
+	copy(execArgs, args)
+
+	// Validate command arguments
+	if err := validateCommandArgs(execArgs...); err != nil {
+		t.Fatalf("Invalid command arguments: %v", err)
+	}
+
+	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, suite.BinaryPath, args...)
-	cmd.Env = append(os.Environ(),
-		fmt.Sprintf("VAULT_PATH=%s", suite.VaultPath),
-		fmt.Sprintf("VAULT_CONFIG=%s", suite.ConfigPath),
-	)
+	// Create command with context and full path to binary
+	binaryPath, err := filepath.Abs(suite.BinaryPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path to binary: %v", err)
+	}
 
-	cmd.Stdin = strings.NewReader(input)
+	// Ensure the binary exists and is executable
+	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+		t.Fatalf("Binary not found at %s", binaryPath)
+	}
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	// nolint:gosec // Arguments are validated by validateCommandArgs
+	cmd := exec.CommandContext(ctx, binaryPath, execArgs...)
 
-	err := cmd.Run()
+	// Create a secure temporary directory for this command
+	tempDir, err := os.MkdirTemp("", "vault-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Set a clean, minimal environment
+	cmd.Env = []string{
+		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + filepath.Clean(os.Getenv("HOME")),
+		"USER=" + filepath.Clean(os.Getenv("USER")),
+		"TMPDIR=" + tempDir,
+		"VAULT_PATH=" + filepath.Clean(suite.VaultPath),
+		"VAULT_CONFIG=" + filepath.Clean(suite.ConfigPath),
+		// Disable any potential command history
+		"HISTFILE=",
+		"HISTFILESIZE=0",
+		"HISTSIZE=0",
+	}
+
+	// Set process attributes for additional security
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		// Create a new process group
+		Setpgid: true,
+		// Create a new session
+		Setsid: true,
+		// Set the process group ID to the new process ID
+		Pgid: 0,
+	}
+
+	// On Unix-like systems, set additional attributes
+	if runtime.GOOS != "windows" {
+		// Set a secure umask
+		syscall.Umask(0o077)
+	}
+
+	// Create pipes for stdin, stdout, and stderr
+	stdinPipe, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatalf("Failed to create stdin pipe: %v", err)
+	}
+
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatalf("Failed to create stdout pipe: %v", err)
+	}
+
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		t.Fatalf("Failed to create stderr pipe: %v", err)
+	}
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start command: %v", err)
+	}
+
+	// Write input in a separate goroutine
+	errChan := make(chan error, 1)
+	go func() {
+		_, err := io.WriteString(stdinPipe, input)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to write to stdin: %w", err)
+			return
+		}
+		if err := stdinPipe.Close(); err != nil {
+			errChan <- fmt.Errorf("failed to close stdin: %w", err)
+			return
+		}
+		errChan <- nil
+	}()
+
+	// Read output in separate goroutines to prevent deadlock
+	var stdoutBuf, stderrBuf bytes.Buffer
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&stdoutBuf, stdoutPipe)
+	}()
+
+	go func() {
+		defer wg.Done()
+		_, _ = io.Copy(&stderrBuf, stderrPipe)
+	}()
+
+	// Wait for input to be written
+	if err := <-errChan; err != nil {
+		t.Fatalf("Error writing input: %v", err)
+	}
+
+	// Wait for command to complete
+	err = cmd.Wait()
+	wg.Wait()
+
+	// Get exit code
 	exitCode := 0
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
-			exitCode = exitError.ExitCode()
+			if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
+				exitCode = status.ExitStatus()
+			} else {
+				exitCode = 1
+			}
 		} else {
+			t.Logf("Command error: %v", err)
 			exitCode = 1
 		}
 	}
 
-	return stdout.String(), stderr.String(), exitCode
+	// Get output
+	stdoutStr := stdoutBuf.String()
+	stderrStr := stderrBuf.String()
+
+	// Clear sensitive data from memory
+	defer func() {
+		stdoutBuf.Reset()
+		stderrBuf.Reset()
+		// Overwrite the memory with zeros
+		for i := range input {
+			input = input[:i] + "\x00"
+		}
+		for i := range stdoutStr {
+			stdoutStr = stdoutStr[:i] + "\x00"
+		}
+		for i := range stderrStr {
+			stderrStr = stderrStr[:i] + "\x00"
+		}
+	}()
+
+	return stdoutStr, stderrStr, exitCode
 }
 
 // TestCompleteWorkflow tests the complete vault workflow

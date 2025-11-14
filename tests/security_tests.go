@@ -30,8 +30,8 @@ func NewSecurityTestSuite(t *testing.T) *SecurityTestSuite {
 	tempDir := t.TempDir()
 	vaultPath := filepath.Join(tempDir, "security_test.vault")
 
-	// Ensure the temp directory has secure permissions (0750 is more secure than 0755 but allows group access)
-	if err := os.Chmod(tempDir, 0o750); err != nil {
+	// Ensure the temp directory has secure permissions (0600 for maximum security)
+	if err := os.Chmod(tempDir, 0o600); err != nil {
 		t.Fatalf("Failed to set secure permissions on temp directory: %v", err)
 	}
 

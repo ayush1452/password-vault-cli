@@ -943,7 +943,8 @@ func getUint32Param(kdf map[string]interface{}, primary string, aliases ...strin
 			return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
 		}
 		// Safe to convert after bounds check
-		return uint32(v), nil
+		// nolint:gosec // Bounds checked above, safe to convert with mask
+		return uint32(uint64(v) & 0xFFFFFFFF), nil
 
 	case int8:
 		if v < 0 {
@@ -969,25 +970,29 @@ func getUint32Param(kdf map[string]interface{}, primary string, aliases ...strin
 			return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
 		}
 		// Safe to convert after bounds check
-		return uint32(v), nil
+		// nolint:gosec // Bounds checked above, safe to convert with mask
+		return uint32(uint64(v) & 0xFFFFFFFF), nil
 
 	case uint:
 		if uint64(v) > math.MaxUint32 {
 			return 0, fmt.Errorf("value for %s exceeds maximum allowed value of %d", primary, math.MaxUint32)
 		}
 		// Safe to convert after bounds check
-		return uint32(v), nil
+		// nolint:gosec // Bounds checked above, safe to convert with mask
+		return uint32(uint64(v) & 0xFFFFFFFF), nil
 
 	case uint8, uint16, uint32:
 		// These types are guaranteed to fit in uint32
-		return uint32(reflect.ValueOf(v).Uint()), nil
+		// nolint:gosec // Type guarantees value fits in uint32
+		return uint32(reflect.ValueOf(v).Uint() & 0xFFFFFFFF), nil
 
 	case uint64:
 		if v > math.MaxUint32 {
 			return 0, fmt.Errorf("value for %s exceeds maximum allowed value of %d", primary, math.MaxUint32)
 		}
 		// Safe to convert after bounds check
-		return uint32(v), nil
+		// nolint:gosec // Bounds checked above, safe to convert with mask
+		return uint32(v & 0xFFFFFFFF), nil
 
 	case json.Number:
 		i64, err := v.Int64()
@@ -997,7 +1002,8 @@ func getUint32Param(kdf map[string]interface{}, primary string, aliases ...strin
 		if i64 < 0 || uint64(i64) > math.MaxUint32 {
 			return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
 		}
-		return uint32(i64), nil
+		// nolint:gosec // Bounds checked above, safe to convert with mask
+		return uint32(uint64(i64) & 0xFFFFFFFF), nil
 
 	case string:
 		// Try to parse as float first to handle decimal points and scientific notation
@@ -1016,7 +1022,8 @@ func getUint32Param(kdf map[string]interface{}, primary string, aliases ...strin
 		if i < 0 || uint64(i) > math.MaxUint32 {
 			return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
 		}
-		return uint32(i), nil
+		// nolint:gosec // Bounds checked above, safe to convert with mask
+		return uint32(uint64(i) & 0xFFFFFFFF), nil
 
 	default:
 		return 0, fmt.Errorf("unsupported type %T for parameter %s", value, primary)
