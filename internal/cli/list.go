@@ -212,8 +212,11 @@ func outputEntriesTableLong(out io.Writer, entries []*domain.Entry) error {
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	defer func() {
 		// Handle flush error using shared writeOutput
-		if err := w.Flush(); err != nil {
-			_ = writeOutput(os.Stderr, "warning: failed to flush tabwriter: %v\n", err)
+		if flushErr := w.Flush(); flushErr != nil {
+			if writeErr := writeOutput(os.Stderr, "warning: failed to flush tabwriter: %v\n", flushErr); writeErr != nil {
+				// If we can't write the error, there's not much we can do
+				log.Printf("Failed to write flush error: %v", writeErr)
+			}
 		}
 	}()
 

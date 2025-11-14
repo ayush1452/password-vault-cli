@@ -66,7 +66,11 @@ func checkDeferredErr(err error, op string, cerr error) error {
 
 // isDebugEnabled checks if debug mode is enabled via environment variable
 func isDebugEnabled() bool {
-	dbg, _ := strconv.ParseBool(os.Getenv("VAULT_DEBUG"))
+	dbg, err := strconv.ParseBool(os.Getenv("VAULT_DEBUG"))
+	if err != nil {
+		// If VAULT_DEBUG is not set or invalid, default to false
+		return false
+	}
 	return dbg
 }
 

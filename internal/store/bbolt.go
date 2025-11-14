@@ -535,7 +535,7 @@ func (bs *BoltStore) EntryExists(profile, entryID string) bool {
 	}
 
 	exists := false
-	_ = bs.db.View(func(tx *bbolt.Tx) error {
+	err := bs.db.View(func(tx *bbolt.Tx) error {
 		bucketName := fmt.Sprintf("entries:%s", profile)
 		bucket := tx.Bucket([]byte(bucketName))
 		if bucket != nil {
@@ -543,6 +543,10 @@ func (bs *BoltStore) EntryExists(profile, entryID string) bool {
 		}
 		return nil
 	})
+	if err != nil {
+		// Log the error but don't fail the existence check
+		log.Printf("Warning: error checking if entry exists (profile=%s, id=%s): %v", profile, entryID, err)
+	}
 
 	return exists
 }
@@ -684,13 +688,17 @@ func (bs *BoltStore) ProfileExists(name string) bool {
 	}
 
 	exists := false
-	_ = bs.db.View(func(tx *bbolt.Tx) error {
+	err := bs.db.View(func(tx *bbolt.Tx) error {
 		profilesBucket := tx.Bucket(ProfilesBucket)
 		if profilesBucket != nil {
 			exists = profilesBucket.Get([]byte(name)) != nil
 		}
 		return nil
 	})
+	if err != nil {
+		// Log the error but don't fail the existence check
+		log.Printf("Warning: error checking if profile exists (name=%s): %v", name, err)
+	}
 
 	return exists
 }
@@ -1477,9 +1485,14 @@ func (bs *BoltStore) ImportVault(path, conflictResolution string) error {
 		}
 	}
 
-	if meta, err := bs.GetVaultMetadata(); err == nil {
+	meta, err := bs.GetVaultMetadata()
+	if err != nil {
+		log.Printf("Warning: failed to get vault metadata during import: %v", err)
+	} else {
 		meta.UpdatedAt = time.Now().UTC()
-		_ = bs.UpdateVaultMetadata(meta)
+		if updateErr := bs.UpdateVaultMetadata(meta); updateErr != nil {
+			log.Printf("Warning: failed to update vault metadata during import: %v", updateErr)
+		}
 	}
 
 	if err := bs.LogOperation(&domain.Operation{
