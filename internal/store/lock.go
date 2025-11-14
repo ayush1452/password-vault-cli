@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -57,8 +58,8 @@ func (fl *FileLock) Lock(timeout time.Duration) error {
 
 			// Write process ID to lock file
 			if _, err := file.WriteString(string(rune(os.Getpid()))); err != nil {
-				fl.Unlock() // Clean up on error
-				return err
+				_ = fl.Unlock() // Clean up on error, ignore error from Unlock
+				return fmt.Errorf("failed to write to lock file: %w", err)
 			}
 
 			return platformLock(file)
@@ -72,7 +73,7 @@ func (fl *FileLock) Lock(timeout time.Duration) error {
 		// Check if lock file is stale
 		if fl.isLockStale() {
 			// Remove stale lock file and try again
-			os.Remove(fl.path)
+			_ = os.Remove(fl.path) // Ignore error from Remove
 			continue
 		}
 

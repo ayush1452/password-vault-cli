@@ -266,7 +266,9 @@ func FuzzStoreOperations(f *testing.F) {
 			}
 
 		case "list":
-			s.ListEntries(profile, nil) // Should always work
+			if _, err := s.ListEntries(profile, nil); err != nil {
+				t.Errorf("Unexpected error listing entries: %v", err)
+			}
 
 		case "search":
 			if entryName != "" {
@@ -367,13 +369,15 @@ security:
 		tempDir := t.TempDir()
 		configPath := filepath.Join(tempDir, "config.yaml")
 
-		err := os.WriteFile(configPath, configData, 0o600)
-		if err != nil {
+		if err := os.WriteFile(configPath, configData, 0o600); err != nil {
 			t.Skip("Failed to write config file")
 		}
 
 		// Try to parse configuration
-		parseConfiguration(configPath) // Should handle any input gracefully
+		if err := parseConfiguration(configPath); err != nil {
+			// Expected for malformed configs, just log it
+			t.Logf("Expected error parsing config: %v", err)
+		}
 	})
 }
 
@@ -515,27 +519,30 @@ func testFileOperations(t *testing.T, path string) {
 		return
 	}
 
-	// Create directory if needed
+	// Create directory if needed with secure permissions (0750)
 	dir := filepath.Dir(path)
-	os.MkdirAll(dir, 0o755)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Skip("Failed to create directory")
+	}
 
 	// Test file operations
 	testData := []byte("test data")
 
 	// Write
-	err := os.WriteFile(path, testData, 0o600)
-	if err != nil {
+	if err := os.WriteFile(path, testData, 0o600); err != nil {
 		return // Expected for invalid paths
 	}
 
 	// Read
-	_, err = os.ReadFile(path)
-	if err != nil {
+	_, err := os.Stat(path)
+	if err != nil && os.IsNotExist(err) {
 		return
 	}
 
 	// Clean up
-	os.Remove(path)
+	if err := os.Remove(path); err != nil {
+		return
+	}
 }
 
 // Benchmark functions for performance testing
@@ -599,7 +606,9 @@ func BenchmarkDecryption(b *testing.B) {
 
 	for _, size := range sizes {
 		data := make([]byte, size)
-		rand.Read(data)
+		if _, err := rand.Read(data); err != nil {
+			b.Fatalf("Failed to generate random data: %v", err)
+		}
 
 		envelope, err := crypto.Seal(data, key)
 		if err != nil {

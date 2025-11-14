@@ -44,7 +44,11 @@ func (aw *AtomicWriter) Write(data []byte) (int, error) {
 	if aw.tempFile == nil {
 		return 0, fmt.Errorf("writer is closed")
 	}
-	return aw.tempFile.Write(data)
+	n, err := aw.tempFile.Write(data)
+	if err != nil {
+		_ = aw.Abort() // Clean up on write error
+	}
+	return n, err
 }
 
 // Commit finalizes the write by syncing and atomically renaming
@@ -55,20 +59,20 @@ func (aw *AtomicWriter) Commit() error {
 
 	// Sync to ensure data is written to disk
 	if err := aw.tempFile.Sync(); err != nil {
-		aw.Abort()
+		_ = aw.Abort() // Clean up on sync error
 		return fmt.Errorf("failed to sync temp file: %w", err)
 	}
 
 	// Close temp file
 	if err := aw.tempFile.Close(); err != nil {
-		aw.Abort()
+		_ = aw.Abort() // Clean up on close error
 		return fmt.Errorf("failed to close temp file: %w", err)
 	}
 	aw.tempFile = nil
 
 	// Atomically rename temp file to target
 	if err := os.Rename(aw.tempPath, aw.targetPath); err != nil {
-		os.Remove(aw.tempPath) // Clean up on failure
+		_ = os.Remove(aw.tempPath) // Clean up on failure, ignore error
 		return fmt.Errorf("failed to rename temp file: %w", err)
 	}
 

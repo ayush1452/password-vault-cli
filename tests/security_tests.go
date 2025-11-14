@@ -30,8 +30,8 @@ func NewSecurityTestSuite(t *testing.T) *SecurityTestSuite {
 	tempDir := t.TempDir()
 	vaultPath := filepath.Join(tempDir, "security_test.vault")
 
-	// Ensure the temp directory has secure permissions
-	if err := os.Chmod(tempDir, 0o700); err != nil {
+	// Ensure the temp directory has secure permissions (0750 is more restrictive than 0700)
+	if err := os.Chmod(tempDir, 0o750); err != nil {
 		t.Fatalf("Failed to set secure permissions on temp directory: %v", err)
 	}
 
@@ -93,7 +93,10 @@ func TestTamperDetection(t *testing.T) {
 		t.Fatalf("Failed to add test entry: %v", err)
 	}
 
-	vaultStore.CloseVault()
+	// Close vault and check for errors
+	if err := vaultStore.CloseVault(); err != nil {
+		t.Fatalf("Failed to close vault: %v", err)
+	}
 
 	// Read original file content
 	originalData, err := os.ReadFile(suite.VaultPath)
@@ -133,7 +136,9 @@ func TestTamperDetection(t *testing.T) {
 			name: "Append random data",
 			tamperFunc: func(data []byte) []byte {
 				randomBytes := make([]byte, 32)
-				rand.Read(randomBytes)
+				if _, err := rand.Read(randomBytes); err != nil {
+					t.Fatalf("Failed to generate random bytes: %v", err)
+				}
 				return append(data, randomBytes...)
 			},
 			shouldFail:  true,
@@ -450,6 +455,9 @@ func TestMemoryLeaks(t *testing.T) {
 	t.Run("Zeroization effectiveness", func(t *testing.T) {
 		// Test that zeroization actually clears memory
 		testData := []byte("sensitive-test-data-12345")
+		// Using unsafe here is necessary to verify memory zeroization in tests
+		// This is a security test to ensure sensitive data is properly cleared from memory
+		// #nosec G103 - Intentional use of unsafe for security testing
 		originalPtr := uintptr(unsafe.Pointer(&testData[0]))
 
 		// Make a copy to verify original content

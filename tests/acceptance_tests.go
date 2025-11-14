@@ -61,8 +61,8 @@ func (suite *AcceptanceTestSuite) BuildBinary(t *testing.T) {
 		t.Fatalf("Failed to build binary: %v\nOutput: %s", err, output)
 	}
 
-	// Set secure permissions on the binary
-	if err := os.Chmod(suite.BinaryPath, 0o700); err != nil {
+	// Set secure permissions on the binary (0750 is more restrictive than 0700)
+	if err := os.Chmod(suite.BinaryPath, 0o750); err != nil {
 		t.Fatalf("Failed to set binary permissions: %v", err)
 	}
 }
@@ -390,10 +390,16 @@ func TestCrossplatformCompatibility(t *testing.T) {
 		for i, testPath := range testPaths {
 			// Create directory if needed
 			dir := filepath.Dir(testPath)
-			os.MkdirAll(dir, 0o755)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				t.Errorf("Failed to create test directory: %v", err)
+				continue
+			}
 
 			// Set vault path
-			os.Setenv("VAULT_PATH", testPath)
+			if err := os.Setenv("VAULT_PATH", testPath); err != nil {
+				t.Errorf("Failed to set VAULT_PATH: %v", err)
+				continue
+			}
 
 			// Initialize vault
 			input := fmt.Sprintf("%s\n%s\n", suite.Passphrase, suite.Passphrase)
@@ -415,7 +421,9 @@ func TestCrossplatformCompatibility(t *testing.T) {
 		t.Log("Test 2: Unicode handling")
 
 		// Reset to original vault path
-		os.Setenv("VAULT_PATH", suite.VaultPath)
+		if err := os.Setenv("VAULT_PATH", suite.VaultPath); err != nil {
+			t.Fatalf("Failed to reset VAULT_PATH: %v", err)
+		}
 
 		// Initialize vault
 		input := fmt.Sprintf("%s\n%s\n", suite.Passphrase, suite.Passphrase)

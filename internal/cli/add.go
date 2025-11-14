@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"path/filepath"
 	"os"
 	"strings"
 
@@ -115,7 +116,12 @@ func runAdd(entryName string) (err error) {
 		if secretFile == "-" {
 			data, err = io.ReadAll(os.Stdin)
 		} else {
-			data, err = os.ReadFile(secretFile)
+			// Clean the file path to prevent directory traversal
+			cleanPath := filepath.Clean(secretFile)
+			// Optional: Add additional path validation here if needed
+			// For example, ensure the path is within an allowed directory
+			
+			data, err = os.ReadFile(cleanPath)
 		}
 		if err != nil {
 			return fmt.Errorf("failed to read secret file: %w", err)

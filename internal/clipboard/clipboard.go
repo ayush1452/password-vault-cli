@@ -21,7 +21,8 @@ func CopyWithTimeout(text string, timeout time.Duration) error {
 		// Check if clipboard still contains our text before clearing
 		current, err := clipboard.ReadAll()
 		if err == nil && current == text {
-			clipboard.WriteAll("")
+			// Best effort clear, ignore any errors
+			_ = clipboard.WriteAll("")
 		}
 	}()
 

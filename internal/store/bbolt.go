@@ -143,8 +143,8 @@ func (bs *BoltStore) CreateVault(path string, masterKey []byte, kdfParams map[st
 		return nil
 	})
 	if err != nil {
-		os.Remove(path) // Clean up on failure
-		return err
+		_ = os.Remove(path) // Clean up on failure, ignore error from Remove
+		return fmt.Errorf("failed to create vault database: %w", err)
 	}
 
 	// Ensure proper file permissions
@@ -179,7 +179,7 @@ func (bs *BoltStore) OpenVault(path string, masterKey []byte) error {
 		ReadOnly: false,
 	})
 	if err != nil {
-		lock.Unlock()
+		_ = lock.Unlock() // Ignore error from Unlock in error path
 		return fmt.Errorf("failed to open vault database: %w", err)
 	}
 
@@ -204,9 +204,9 @@ func (bs *BoltStore) OpenVault(path string, masterKey []byte) error {
 		return nil
 	})
 	if err != nil {
-		db.Close()
-		lock.Unlock()
-		return err
+		_ = db.Close() // Ignore error from Close in error path
+		_ = lock.Unlock() // Ignore error from Unlock in error path
+		return fmt.Errorf("failed to initialize vault: %w", err)
 	}
 
 	bs.db = db
@@ -517,7 +517,7 @@ func (bs *BoltStore) EntryExists(profile, entryID string) bool {
 	}
 
 	exists := false
-	bs.db.View(func(tx *bbolt.Tx) error {
+	_ = bs.db.View(func(tx *bbolt.Tx) error {
 		bucketName := fmt.Sprintf("entries:%s", profile)
 		bucket := tx.Bucket([]byte(bucketName))
 		if bucket != nil {
@@ -666,7 +666,7 @@ func (bs *BoltStore) ProfileExists(name string) bool {
 	}
 
 	exists := false
-	bs.db.View(func(tx *bbolt.Tx) error {
+	_ = bs.db.View(func(tx *bbolt.Tx) error {
 		profilesBucket := tx.Bucket(ProfilesBucket)
 		if profilesBucket != nil {
 			exists = profilesBucket.Get([]byte(name)) != nil

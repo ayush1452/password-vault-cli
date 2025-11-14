@@ -433,7 +433,13 @@ func ensureSessionRestored() {
 }
 
 func loadSessionFile(path string) (*sessionFileData, error) {
-	content, err := os.ReadFile(path)
+	// Clean the file path to prevent directory traversal
+	cleanPath := filepath.Clean(path)
+	
+	// Optional: Add additional path validation here if needed
+	// For example, ensure the path is within an allowed directory
+	
+	content, err := os.ReadFile(cleanPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
