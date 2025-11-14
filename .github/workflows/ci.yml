@@ -405,7 +405,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1,24.10'  # Match the version used in test job
+        go-version: '1.24.10'  # Match the version used in test job
         cache: true
       env:
         GO111MODULE: on
