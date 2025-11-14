@@ -1,4 +1,4 @@
-// Package manual contains manual test cases for the password vault.
+// Package manualstore_test contains manual test cases for the password vault.
 // These tests are not run automatically and require manual verification.
 package manualstore_test
 
