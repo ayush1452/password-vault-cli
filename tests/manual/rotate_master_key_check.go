@@ -12,6 +12,12 @@ import (
 	"github.com/vault-cli/vault/internal/vault"
 )
 
+// TestBoltStoreRotateMasterKey verifies the master key rotation functionality of the BoltStore.
+// It tests the following scenarios:
+// 1. Creating a new vault with an initial master key
+// 2. Adding test data to the vault
+// 3. Rotating the master key to a new passphrase
+// 4. Verifying the data can still be accessed with the new key
 func TestBoltStoreRotateMasterKey(t *testing.T) {
 	tempDir := t.TempDir()
 	vaultPath := filepath.Join(tempDir, "vault.db")

@@ -13,28 +13,44 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
+// KeySize is the size of the AES-256 key in bytes
+const KeySize = 32
+
+// SaltSize is the size of the salt for Argon2id in bytes
+const SaltSize = 32
+
+// NonceSize is the size of the GCM nonce in bytes
+const NonceSize = 12
+
+// TagSize is the size of the GCM authentication tag in bytes
+const TagSize = 16
+
+// EnvelopeVersion is the current version of the envelope format
+const EnvelopeVersion = 1
+
+// Default Argon2id parameters (tuned for ~300ms on modern hardware)
 const (
-	// Crypto constants
-	KeySize   = 32 // AES-256 key size
-	SaltSize  = 32 // Salt size for Argon2id
-	NonceSize = 12 // GCM nonce size
-	TagSize   = 16 // GCM tag size
-
-	// Envelope version
-	EnvelopeVersion = 1
-
-	// Default Argon2id parameters (tuned for ~300ms on modern hardware)
-	DefaultArgon2Memory      = 64 * 1024 // 64 MB
-	DefaultArgon2Iterations  = 3
+	// DefaultArgon2Memory is the default memory parameter for Argon2id (64 MB)
+	DefaultArgon2Memory = 64 * 1024
+	// DefaultArgon2Iterations is the default number of iterations for Argon2id
+	DefaultArgon2Iterations = 3
+	// DefaultArgon2Parallelism is the default parallelism factor for Argon2id
 	DefaultArgon2Parallelism = 4
 )
 
+// Error variables for cryptographic operations
 var (
-	ErrInvalidEnvelope   = errors.New("invalid envelope format")
-	ErrInvalidVersion    = errors.New("unsupported envelope version")
-	ErrDecryptionFailed  = errors.New("decryption failed")
-	ErrInvalidKeySize    = errors.New("invalid key size")
-	ErrInvalidNonceSize  = errors.New("invalid nonce size")
+	// ErrInvalidEnvelope is returned when the envelope format is invalid
+	ErrInvalidEnvelope = errors.New("invalid envelope format")
+	// ErrInvalidVersion is returned when the envelope version is not supported
+	ErrInvalidVersion = errors.New("unsupported envelope version")
+	// ErrDecryptionFailed is returned when decryption fails
+	ErrDecryptionFailed = errors.New("decryption failed")
+	// ErrInvalidKeySize is returned when the key size is invalid
+	ErrInvalidKeySize = errors.New("invalid key size")
+	// ErrInvalidNonceSize is returned when the nonce size is invalid
+	ErrInvalidNonceSize = errors.New("invalid nonce size")
+	// ErrInvalidCiphertext is returned when the ciphertext is invalid
 	ErrInvalidCiphertext = errors.New("invalid ciphertext")
 )
 

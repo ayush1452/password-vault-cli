@@ -1343,6 +1343,9 @@ func (bs *BoltStore) ImportVault(path, conflictResolution string) error {
 	return nil
 }
 
+// CompactVault performs maintenance on the vault storage to reclaim space.
+// This is a no-op for BoltDB as it handles compaction automatically.
+// Returns an error if the vault is not open.
 func (bs *BoltStore) CompactVault() error {
 	if !bs.isOpen {
 		return fmt.Errorf("vault is not open")
@@ -1351,6 +1354,8 @@ func (bs *BoltStore) CompactVault() error {
 	return nil
 }
 
+// VerifyIntegrity checks the integrity of the vault by verifying all buckets and their contents.
+// Returns an error if any integrity issues are found or if the vault is not open.
 func (bs *BoltStore) VerifyIntegrity() error {
 	if !bs.isOpen {
 		return fmt.Errorf("vault is not open")

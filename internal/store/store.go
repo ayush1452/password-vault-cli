@@ -6,16 +6,27 @@ import (
 	"github.com/vault-cli/vault/internal/domain"
 )
 
+// Error variables for vault store operations
 var (
-	ErrVaultNotFound     = errors.New("vault not found")
-	ErrVaultExists       = errors.New("vault already exists")
-	ErrEntryNotFound     = errors.New("entry not found")
-	ErrEntryExists       = errors.New("entry already exists")
-	ErrProfileNotFound   = errors.New("profile not found")
-	ErrProfileExists     = errors.New("profile already exists")
-	ErrVaultLocked       = errors.New("vault is locked by another process")
-	ErrVaultCorrupted    = errors.New("vault data is corrupted")
-	ErrInvalidKey        = errors.New("invalid master key")
+	// ErrVaultNotFound is returned when the specified vault does not exist
+	ErrVaultNotFound = errors.New("vault not found")
+	// ErrVaultExists is returned when attempting to create a vault that already exists
+	ErrVaultExists = errors.New("vault already exists")
+	// ErrEntryNotFound is returned when the specified entry does not exist
+	ErrEntryNotFound = errors.New("entry not found")
+	// ErrEntryExists is returned when attempting to create an entry that already exists
+	ErrEntryExists = errors.New("entry already exists")
+	// ErrProfileNotFound is returned when the specified profile does not exist
+	ErrProfileNotFound = errors.New("profile not found")
+	// ErrProfileExists is returned when attempting to create a profile that already exists
+	ErrProfileExists = errors.New("profile already exists")
+	// ErrVaultLocked is returned when the vault is locked by another process
+	ErrVaultLocked = errors.New("vault is locked by another process")
+	// ErrVaultCorrupted is returned when the vault data is corrupted or invalid
+	ErrVaultCorrupted = errors.New("vault data is corrupted")
+	// ErrInvalidKey is returned when the provided master key is invalid
+	ErrInvalidKey = errors.New("invalid master key")
+	// ErrTransactionFailed is returned when a database transaction fails
 	ErrTransactionFailed = errors.New("transaction failed")
 )
 

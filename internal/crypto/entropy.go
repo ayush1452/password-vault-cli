@@ -9,11 +9,15 @@ import (
 	"sync"
 )
 
+// Charset defines the character set to use for password generation
 type Charset string
 
 const (
-	CharsetAlpha    Charset = "alpha"
-	CharsetAlnum    Charset = "alnum"
+	// CharsetAlpha uses only alphabetic characters (a-z, A-Z)
+	CharsetAlpha Charset = "alpha"
+	// CharsetAlnum uses alphanumeric characters (a-z, A-Z, 0-9)
+	CharsetAlnum Charset = "alnum"
+	// CharsetAlnumSym uses alphanumeric and special characters (a-z, A-Z, 0-9, !@#$%^&*()-_=+[]{}<>?,.:;/'\"|\\~)
 	CharsetAlnumSym Charset = "alnumsym"
 )
 
@@ -46,6 +50,8 @@ var (
 	dicewareOnce sync.Once
 )
 
+// SetRandomSource sets the random number generator source.
+// If r is nil, it resets to the default crypto/rand.Reader.
 func SetRandomSource(r io.Reader) {
 	randMux.Lock()
 	if r == nil {
@@ -56,6 +62,8 @@ func SetRandomSource(r io.Reader) {
 	randMux.Unlock()
 }
 
+// GeneratePassword generates a cryptographically secure random password with the specified length and character set.
+// It returns the generated password or an error if the length is invalid or if there's a problem with the random source.
 func GeneratePassword(length int, charset Charset) (string, error) {
 	if length <= 0 {
 		return "", errInvalidLength
@@ -84,6 +92,9 @@ func GeneratePassword(length int, charset Charset) (string, error) {
 	return b.String(), nil
 }
 
+// GenerateDiceware generates a list of random words using the diceware method.
+// wordCount specifies how many words to generate.
+// Returns a slice of words or an error if wordCount is invalid or if there's a problem with the random source.
 func GenerateDiceware(wordCount int) ([]string, error) {
 	if wordCount <= 0 {
 		return nil, errInvalidWordSize

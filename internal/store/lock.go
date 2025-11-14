@@ -7,9 +7,13 @@ import (
 	"time"
 )
 
+// Error variables for file locking operations
 var (
+	// ErrLockTimeout is returned when a lock cannot be acquired within the specified timeout
 	ErrLockTimeout = errors.New("lock acquisition timeout")
-	ErrLockExists  = errors.New("lock file exists")
+	// ErrLockExists is returned when a lock file already exists
+	ErrLockExists = errors.New("lock file exists")
+	// ErrLockNotHeld is returned when attempting to release a lock that isn't held
 	ErrLockNotHeld = errors.New("lock not held")
 )
 

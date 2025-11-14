@@ -540,6 +540,8 @@ func testFileOperations(t *testing.T, path string) {
 
 // Benchmark functions for performance testing
 
+// BenchmarkKeyDerivation measures the performance of the key derivation function.
+// It tests the speed of deriving a cryptographic key from a passphrase and salt.
 func BenchmarkKeyDerivation(b *testing.B) {
 	crypto := vault.NewDefaultCryptoEngine()
 	passphrase := "benchmark-test-passphrase"
@@ -556,6 +558,8 @@ func BenchmarkKeyDerivation(b *testing.B) {
 	}
 }
 
+// BenchmarkEncryption measures the performance of the encryption function.
+// It tests encryption speed with various data sizes to evaluate performance characteristics.
 func BenchmarkEncryption(b *testing.B) {
 	crypto := vault.NewDefaultCryptoEngine()
 	key := make([]byte, 32)
@@ -583,6 +587,8 @@ func BenchmarkEncryption(b *testing.B) {
 	}
 }
 
+// BenchmarkDecryption measures the performance of the decryption function.
+// It tests decryption speed with various data sizes to evaluate performance characteristics.
 func BenchmarkDecryption(b *testing.B) {
 	crypto := vault.NewDefaultCryptoEngine()
 	key := make([]byte, 32)
@@ -615,6 +621,8 @@ func BenchmarkDecryption(b *testing.B) {
 	}
 }
 
+// BenchmarkStoreOperations measures the performance of store operations.
+// It tests the speed of various vault store operations including create, read, update, and delete.
 func BenchmarkStoreOperations(b *testing.B) {
 	tempDir := b.TempDir()
 	vaultPath := filepath.Join(tempDir, "benchmark.vault")
