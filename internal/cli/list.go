@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"sort"
 	"strings"
@@ -172,10 +173,10 @@ func outputEntriesTable(out io.Writer, entries []*domain.Entry) error {
 
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	defer func() {
-		// Use the shared writeOutput for the final flush
+		// Handle tabwriter flush error
 		if err := w.Flush(); err != nil {
-			// Log the error if we can't flush the writer
-			_ = writeOutput(os.Stderr, "warning: failed to flush tabwriter: %v\n", err)
+			// Use log.Printf since we can't use writeOutput (might be in a defer during panic)
+			log.Printf("warning: failed to flush tabwriter: %v\n", err)
 		}
 	}()
 

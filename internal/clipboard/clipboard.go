@@ -4,6 +4,7 @@ package clipboard
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/atotto/clipboard"
@@ -23,8 +24,10 @@ func CopyWithTimeout(text string, timeout time.Duration) error {
 		// Check if clipboard still contains our text before clearing
 		current, err := clipboard.ReadAll()
 		if err == nil && current == text {
-			// Best effort clear, ignore any errors
-			_ = clipboard.WriteAll("")
+			// Best effort clear, log any errors
+			if err := clipboard.WriteAll(""); err != nil {
+				log.Printf("warning: failed to clear clipboard: %v", err)
+			}
 		}
 	}()
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"sort"
 	"strings"
@@ -135,7 +136,7 @@ func runProfilesList() error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	defer func() {
 		if err := w.Flush(); err != nil {
-			_ = writeOutput(os.Stderr, "warning: failed to flush tabwriter: %v\n", err)
+			log.Printf("warning: failed to flush tabwriter: %v\n", err)
 		}
 	}()
 

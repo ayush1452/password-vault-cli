@@ -183,7 +183,10 @@ func (bs *BoltStore) OpenVault(path string, masterKey []byte) error {
 		ReadOnly: false,
 	})
 	if err != nil {
-		_ = lock.Unlock() // Ignore error from Unlock in error path
+		// Log the error from Unlock but don't override the original error
+		if unlockErr := lock.Unlock(); unlockErr != nil {
+			log.Printf("warning: failed to unlock file after database open error: %v", unlockErr)
+		}
 		return fmt.Errorf("failed to open vault database: %w", err)
 	}
 
@@ -208,9 +211,14 @@ func (bs *BoltStore) OpenVault(path string, masterKey []byte) error {
 		return nil
 	})
 	if err != nil {
-		_ = db.Close()    // Ignore error from Close in error path
-		_ = lock.Unlock() // Ignore error from Unlock in error path
-		return fmt.Errorf("failed to initialize vault: %w", err)
+		// Log errors but don't override the original error
+		if closeErr := db.Close(); closeErr != nil {
+			log.Printf("warning: failed to close database after verification error: %v", closeErr)
+		}
+		if unlockErr := lock.Unlock(); unlockErr != nil {
+			log.Printf("warning: failed to unlock file after verification error: %v", unlockErr)
+		}
+		return fmt.Errorf("vault verification failed: %w", err)
 	}
 
 	bs.db = db
@@ -821,11 +829,13 @@ func (bs *BoltStore) RotateMasterKey(newPassphrase string) error {
 	bs.masterKey = make([]byte, len(newMasterKey))
 	copy(bs.masterKey, newMasterKey)
 
-	_ = bs.LogOperation(&domain.Operation{
+	if err := bs.LogOperation(&domain.Operation{
 		Type:      "rotate_master_key",
 		Timestamp: time.Now().UTC(),
 		Success:   true,
-	})
+	}); err != nil {
+		log.Printf("warning: failed to log rotate_master_key operation: %v", err)
+	}
 
 	return nil
 }
@@ -1280,11 +1290,13 @@ func (bs *BoltStore) ExportVault(path string, includeSecrets bool) error {
 		return fmt.Errorf("failed to finalize export: %w", err)
 	}
 
-	_ = bs.LogOperation(&domain.Operation{
+	if err := bs.LogOperation(&domain.Operation{
 		Type:      "export_vault",
 		Timestamp: time.Now().UTC(),
 		Success:   true,
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to log export operation: %w", err)
+	}
 
 	return nil
 }
@@ -1470,11 +1482,13 @@ func (bs *BoltStore) ImportVault(path, conflictResolution string) error {
 		_ = bs.UpdateVaultMetadata(meta)
 	}
 
-	_ = bs.LogOperation(&domain.Operation{
+	if err := bs.LogOperation(&domain.Operation{
 		Type:      "import_vault",
 		Timestamp: time.Now().UTC(),
 		Success:   true,
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to log import operation: %w", err)
+	}
 
 	return nil
 }
