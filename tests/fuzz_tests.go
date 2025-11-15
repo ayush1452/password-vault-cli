@@ -42,7 +42,7 @@ func FuzzCryptoEngine(f *testing.F) {
 	f.Add([]byte("unicode-密码-🔐"), []byte("unicode data 测试"))
 	f.Add([]byte("very long passphrase with many characters"), []byte("large data block"))
 
-	f.Fuzz(func(t *testing.T, passphrase []byte, plaintext []byte) {
+	f.Fuzz(func(t *testing.T, passphrase, plaintext []byte) {
 		crypto := vault.NewDefaultCryptoEngine()
 
 		// Skip if inputs are too large (prevent OOM)
@@ -96,10 +96,19 @@ func FuzzEnvelopeSerialization(f *testing.F) {
 	// Create valid envelope for seed
 	crypto := vault.NewDefaultCryptoEngine()
 	key := make([]byte, 32)
-	rand.Read(key)
+	if _, err := rand.Read(key); err != nil {
+		f.Fatalf("Failed to generate random key: %v", err)
+	}
 
-	envelope, _ := crypto.Seal([]byte("test data"), key)
-	validJSON, _ := json.Marshal(envelope)
+	envelope, err := crypto.Seal([]byte("test data"), key)
+	if err != nil {
+		f.Fatalf("Failed to seal test data: %v", err)
+	}
+
+	validJSON, err := json.Marshal(envelope)
+	if err != nil {
+		f.Fatalf("Failed to marshal envelope: %v", err)
+	}
 
 	// Seed corpus
 	f.Add(validJSON)
@@ -116,7 +125,6 @@ func FuzzEnvelopeSerialization(f *testing.F) {
 
 		var envelope vault.Envelope
 		err := json.Unmarshal(data, &envelope)
-
 		// Unmarshaling may fail with invalid JSON - that's expected
 		if err != nil {
 			return
@@ -132,10 +140,16 @@ func FuzzEnvelopeSerialization(f *testing.F) {
 
 		// Try to use the envelope (should fail gracefully if invalid)
 		testKey := make([]byte, 32)
-		rand.Read(testKey)
+		if _, err := rand.Read(testKey); err != nil {
+			t.Fatalf("Failed to generate test key: %v", err)
+		}
 
-		_, err = crypto.Open(&envelope, testKey)
-		// Error is expected for invalid envelopes - just ensure no panic
+		// We're not checking the error here as it's expected to fail for invalid envelopes
+		// The purpose is to ensure the function doesn't panic with malformed input
+		if _, err := crypto.Open(&envelope, testKey); err != nil {
+			// Expected to fail for invalid inputs, so we don't fail the test
+			t.Logf("Expected error with malformed input: %v", err)
+		}
 	})
 }
 
@@ -155,7 +169,9 @@ func FuzzEntryValidation(f *testing.F) {
 
 		// Parse tags
 		var tags []string
-		json.Unmarshal([]byte(tagsJSON), &tags) // Ignore errors
+		if err := json.Unmarshal([]byte(tagsJSON), &tags); err != nil {
+			tags = []string{} // Use empty slice if unmarshal fails
+		}
 
 		// Create entry (should not panic)
 		defer func() {
@@ -179,11 +195,12 @@ func FuzzEntryValidation(f *testing.F) {
 		// Test serialization (should not panic)
 		_, err := json.Marshal(entry)
 		if err != nil {
-			// Some characters may not be serializable - that's OK
+			// Log serialization errors for debugging, but don't fail the test
+			t.Logf("JSON serialization warning: %v", err)
 		}
 
 		// Log validation result for debugging
-		if !isValid && len(name) > 0 && len(name) < 1000 {
+		if !isValid && name != "" && len(name) < 1000 {
 			t.Logf("Entry validation failed for name: %q", name[:min(len(name), 50)])
 		}
 	})
@@ -208,22 +225,32 @@ func FuzzStoreOperations(f *testing.F) {
 		vaultPath := filepath.Join(tempDir, "fuzz_store.vault")
 
 		s := store.NewBoltStore()
-		
+
 		// Create and open vault
 		crypto := vault.NewDefaultCryptoEngine()
 		passphrase := "fuzz-test-passphrase"
-		salt, _ := vault.GenerateSalt()
-		masterKey, _ := crypto.DeriveKey(passphrase, salt)
-		
+		salt, err := vault.GenerateSalt()
+		if err != nil {
+			t.Fatalf("Failed to generate salt: %v", err)
+		}
+		masterKey, err := crypto.DeriveKey(passphrase, salt)
+		if err != nil {
+			t.Fatalf("Failed to derive key: %v", err)
+		}
+
 		kdfParams := map[string]interface{}{
 			"algorithm": "argon2id",
 		}
-		
-		err := s.CreateVault(vaultPath, masterKey, kdfParams)
+
+		err = s.CreateVault(vaultPath, masterKey, kdfParams)
 		if err != nil {
 			t.Skip("Failed to create vault")
 		}
-		defer s.CloseVault()
+		defer func() {
+			if err := s.CloseVault(); err != nil {
+				t.Logf("Warning: failed to close vault: %v", err)
+			}
+		}()
 
 		err = s.OpenVault(vaultPath, masterKey)
 		if err != nil {
@@ -249,26 +276,36 @@ func FuzzStoreOperations(f *testing.F) {
 					Username: username,
 					Password: []byte(password),
 				}
-				s.CreateEntry(profile, entry) // Ignore errors - may be invalid
+				if err := s.CreateEntry(profile, entry); err != nil {
+					t.Logf("Warning: failed to create entry: %v", err)
+				}
 			}
 
 		case "get":
 			if entryName != "" {
-				s.GetEntry(profile, entryName) // Ignore errors - may not exist
+				if _, err := s.GetEntry(profile, entryName); err != nil {
+					t.Logf("Warning: failed to get entry: %v", err)
+				}
 			}
 
 		case "delete":
 			if entryName != "" {
-				s.DeleteEntry(profile, entryName) // Ignore errors - may not exist
+				if err := s.DeleteEntry(profile, entryName); err != nil {
+					t.Logf("Warning: failed to delete entry: %v", err)
+				}
 			}
 
 		case "list":
-			s.ListEntries(profile, nil) // Should always work
+			if _, err := s.ListEntries(profile, nil); err != nil {
+				t.Errorf("Unexpected error listing entries: %v", err)
+			}
 
 		case "search":
 			if entryName != "" {
 				filter := &domain.Filter{Search: entryName}
-				s.ListEntries(profile, filter) // Use filtered list instead
+				if _, err := s.ListEntries(profile, filter); err != nil {
+					t.Logf("Warning: failed to list entries: %v", err)
+				}
 			}
 		}
 	})
@@ -364,13 +401,15 @@ security:
 		tempDir := t.TempDir()
 		configPath := filepath.Join(tempDir, "config.yaml")
 
-		err := os.WriteFile(configPath, configData, 0644)
-		if err != nil {
+		if err := os.WriteFile(configPath, configData, 0o600); err != nil {
 			t.Skip("Failed to write config file")
 		}
 
 		// Try to parse configuration
-		parseConfiguration(configPath) // Should handle any input gracefully
+		if err := parseConfiguration(configPath); err != nil {
+			// Expected for malformed configs, just log it
+			t.Logf("Expected error parsing config: %v", err)
+		}
 	})
 }
 
@@ -425,7 +464,7 @@ func validateEntry(entry *domain.Entry) bool {
 	}
 
 	// Basic validation
-	if len(entry.Name) == 0 || len(entry.Name) > 255 {
+	if entry.Name == "" || len(entry.Name) > 255 {
 		return false
 	}
 
@@ -470,9 +509,15 @@ func validateArgument(arg string) bool {
 }
 
 func parseConfiguration(configPath string) error {
+	// Clean and validate the config path
+	cleanPath := filepath.Clean(configPath)
+	if cleanPath != configPath {
+		return fmt.Errorf("invalid config path: potential directory traversal detected")
+	}
+
 	// Placeholder for configuration parsing
 	// In real implementation, this would parse YAML/JSON config
-	data, err := os.ReadFile(configPath)
+	data, err := os.ReadFile(cleanPath)
 	if err != nil {
 		return err
 	}
@@ -486,7 +531,7 @@ func parseConfiguration(configPath string) error {
 }
 
 func validateVaultPath(path string) bool {
-	if len(path) == 0 || len(path) > 4096 {
+	if path == "" || len(path) > 4096 {
 		return false
 	}
 
@@ -512,35 +557,43 @@ func testFileOperations(t *testing.T, path string) {
 		return
 	}
 
-	// Create directory if needed
+	// Create directory if needed with secure permissions (0750)
 	dir := filepath.Dir(path)
-	os.MkdirAll(dir, 0755)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Skip("Failed to create directory")
+	}
 
 	// Test file operations
 	testData := []byte("test data")
 
 	// Write
-	err := os.WriteFile(path, testData, 0644)
-	if err != nil {
+	if err := os.WriteFile(path, testData, 0o600); err != nil {
 		return // Expected for invalid paths
 	}
 
 	// Read
-	_, err = os.ReadFile(path)
-	if err != nil {
+	_, err := os.Stat(path)
+	if err != nil && os.IsNotExist(err) {
 		return
 	}
 
 	// Clean up
-	os.Remove(path)
+	if err := os.Remove(path); err != nil {
+		return
+	}
 }
 
 // Benchmark functions for performance testing
 
+// BenchmarkKeyDerivation measures the performance of the key derivation function.
+// It tests the speed of deriving a cryptographic key from a passphrase and salt.
 func BenchmarkKeyDerivation(b *testing.B) {
 	crypto := vault.NewDefaultCryptoEngine()
 	passphrase := "benchmark-test-passphrase"
-	salt, _ := vault.GenerateSalt()
+	salt, err := vault.GenerateSalt()
+	if err != nil {
+		b.Fatalf("Failed to generate salt: %v", err)
+	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
@@ -553,10 +606,14 @@ func BenchmarkKeyDerivation(b *testing.B) {
 	}
 }
 
+// BenchmarkEncryption measures the performance of the encryption function.
+// It tests encryption speed with various data sizes to evaluate performance characteristics.
 func BenchmarkEncryption(b *testing.B) {
 	crypto := vault.NewDefaultCryptoEngine()
 	key := make([]byte, 32)
-	rand.Read(key)
+	if _, err := rand.Read(key); err != nil {
+		b.Fatalf("Failed to generate random key: %v", err)
+	}
 
 	// Test different data sizes
 	sizes := []int{16, 64, 256, 1024, 4096, 16384}
@@ -564,7 +621,9 @@ func BenchmarkEncryption(b *testing.B) {
 	for _, size := range sizes {
 		b.Run(fmt.Sprintf("size-%d", size), func(b *testing.B) {
 			data := make([]byte, size)
-			rand.Read(data)
+			if _, err := rand.Read(data); err != nil {
+				b.Fatalf("Failed to generate random data: %v", err)
+			}
 
 			b.ResetTimer()
 			b.ReportAllocs()
@@ -580,17 +639,23 @@ func BenchmarkEncryption(b *testing.B) {
 	}
 }
 
+// BenchmarkDecryption measures the performance of the decryption function.
+// It tests decryption speed with various data sizes to evaluate performance characteristics.
 func BenchmarkDecryption(b *testing.B) {
 	crypto := vault.NewDefaultCryptoEngine()
 	key := make([]byte, 32)
-	rand.Read(key)
+	if _, err := rand.Read(key); err != nil {
+		b.Fatalf("Failed to generate random key: %v", err)
+	}
 
 	// Test different data sizes
 	sizes := []int{16, 64, 256, 1024, 4096, 16384}
 
 	for _, size := range sizes {
 		data := make([]byte, size)
-		rand.Read(data)
+		if _, err := rand.Read(data); err != nil {
+			b.Fatalf("Failed to generate random data: %v", err)
+		}
 
 		envelope, err := crypto.Seal(data, key)
 		if err != nil {
@@ -612,26 +677,39 @@ func BenchmarkDecryption(b *testing.B) {
 	}
 }
 
+// BenchmarkStoreOperations measures the performance of store operations.
+// It tests the speed of various vault store operations including create, read, update, and delete.
 func BenchmarkStoreOperations(b *testing.B) {
 	tempDir := b.TempDir()
 	vaultPath := filepath.Join(tempDir, "benchmark.vault")
 
 	s := store.NewBoltStore()
-	
+
 	crypto := vault.NewDefaultCryptoEngine()
 	passphrase := "benchmark-passphrase"
-	salt, _ := vault.GenerateSalt()
-	masterKey, _ := crypto.DeriveKey(passphrase, salt)
-	
+	salt, err := vault.GenerateSalt()
+	if err != nil {
+		b.Fatalf("Failed to generate salt: %v", err)
+	}
+	masterKey, err := crypto.DeriveKey(passphrase, salt)
+	if err != nil {
+		b.Fatalf("Failed to derive key: %v", err)
+	}
+	defer vault.Zeroize(masterKey)
+
 	kdfParams := map[string]interface{}{
 		"algorithm": "argon2id",
 	}
-	
-	err := s.CreateVault(vaultPath, masterKey, kdfParams)
+
+	err = s.CreateVault(vaultPath, masterKey, kdfParams)
 	if err != nil {
 		b.Fatalf("Failed to create vault: %v", err)
 	}
-	defer s.CloseVault()
+	defer func() {
+		if err := s.CloseVault(); err != nil {
+			b.Logf("Warning: failed to close vault: %v", err)
+		}
+	}()
 
 	err = s.OpenVault(vaultPath, masterKey)
 	if err != nil {
@@ -666,7 +744,9 @@ func BenchmarkStoreOperations(b *testing.B) {
 			Username: fmt.Sprintf("user-%d", i),
 			Password: []byte(fmt.Sprintf("pass-%d", i)),
 		}
-		s.CreateEntry(profile, entry)
+		if err := s.CreateEntry(profile, entry); err != nil {
+			b.Logf("Warning: failed to create entry: %v", err)
+		}
 	}
 
 	// Benchmark get operations

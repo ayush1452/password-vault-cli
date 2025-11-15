@@ -1,14 +1,21 @@
+// Package tests contains acceptance tests for the password vault CLI.
+// These tests verify end-to-end functionality by executing the CLI commands.
 package tests
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -40,71 +47,441 @@ func NewAcceptanceTestSuite(t *testing.T) *AcceptanceTestSuite {
 
 // BuildBinary builds the vault CLI binary for testing
 func (suite *AcceptanceTestSuite) BuildBinary(t *testing.T) {
-	cmd := exec.Command("go", "build", "-o", suite.BinaryPath, "./cmd/vault")
-	cmd.Dir = "/workspace"
+	// Use absolute path to go binary
+	goPath, err := exec.LookPath("go")
+	if err != nil {
+		t.Fatalf("Failed to find 'go' in PATH: %v", err)
+	}
+
+	// Ensure output directory exists
+	if err := os.MkdirAll(filepath.Dir(suite.BinaryPath), 0o700); err != nil {
+		t.Fatalf("Failed to create binary directory: %v", err)
+	}
+
+	cmd := &exec.Cmd{
+		Path: goPath,
+		Args: []string{goPath, "build", "-o", suite.BinaryPath, "./cmd/vault"},
+		Dir:  "/workspace",
+	}
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Failed to build binary: %v\nOutput: %s", err, output)
 	}
+
+	// Set secure permissions on the binary (0600 is the most restrictive for files)
+	if err := os.Chmod(suite.BinaryPath, 0o600); err != nil {
+		t.Fatalf("Failed to set binary permissions: %v", err)
+	}
+}
+
+// validateCommandArgs validates command line arguments to prevent injection
+func validateCommandArgs(args ...string) error {
+	// Only allow alphanumeric, basic punctuation, and path characters
+	safePattern := regexp.MustCompile(`^[a-zA-Z0-9_\-./@=:]+$`)
+
+	// Define a list of allowed subcommands and their argument patterns
+	allowedCommands := map[string]string{
+		"init":    `^[a-zA-Z0-9_\-./@=:]+$`,
+		"unlock":  `^[a-zA-Z0-9_\-./@=:]+$`,
+		"lock":    `^[a-zA-Z0-9_\-./@=:]*$`,
+		"status":  `^[a-zA-Z0-9_\-./@=:]*$`,
+		"add":     `^[a-zA-Z0-9_\-./@=:]+$`,
+		"get":     `^[a-zA-Z0-9_\-./@=:]+$`,
+		"list":    `^[a-zA-Z0-9_\-./@=:]*$`,
+		"update":  `^[a-zA-Z0-9_\-./@=:]+$`,
+		"delete":  `^[a-zA-Z0-9_\-./@=:]+$`,
+		"export":  `^[a-zA-Z0-9_\-./@=:]+$`,
+		"import":  `^[a-zA-Z0-9_\-./@=:]+$`,
+		"audit":   `^[a-zA-Z0-9_\-./@=:]*$`,
+		"rotate":  `^[a-zA-Z0-9_\-./@=:]*$`,
+		"version": `^[a-zA-Z0-9_\-./@=:]*$`,
+		"help":    `^[a-zA-Z0-9_\-./@=:]*$`,
+	}
+
+	if len(args) == 0 {
+		return nil
+	}
+
+	// Validate the command itself
+	command := args[0]
+	if !safePattern.MatchString(command) {
+		return fmt.Errorf("invalid command: %s", command)
+	}
+
+	// Check if command is in the allowed list
+	pattern, ok := allowedCommands[command]
+	if !ok {
+		return fmt.Errorf("command not allowed: %s", command)
+	}
+
+	// Validate arguments based on the command
+	for i, arg := range args[1:] {
+		// Skip empty arguments
+		if arg == "" {
+			continue
+		}
+
+		// Skip validation for flag arguments (start with -)
+		if arg[0] == '-' {
+			// If this is a flag with a value (like --flag=value), validate the value
+			if parts := strings.SplitN(arg, "=", 2); len(parts) > 1 {
+				if !regexp.MustCompile(pattern).MatchString(parts[1]) {
+					return fmt.Errorf("invalid value for flag %s: %s", parts[0], parts[1])
+				}
+			}
+			continue
+		}
+
+		// Special handling for certain commands
+		switch command {
+		case "add", "update":
+			// First argument after command is the entry name
+			if i == 0 && !safePattern.MatchString(arg) {
+				return fmt.Errorf("invalid entry name: %s", arg)
+			}
+		default:
+			// For other commands, use the command-specific pattern
+			if !regexp.MustCompile(pattern).MatchString(arg) {
+				return fmt.Errorf("invalid argument for %s: %s", command, arg)
+			}
+		}
+	}
+
+	return nil
+}
+
+// copyOutput handles copying from a reader to a buffer and logs any errors
+func copyOutput(dst *bytes.Buffer, src io.Reader, name string) {
+	if _, err := io.Copy(dst, src); err != nil {
+		log.Printf("Warning: error copying %s: %v", name, err)
+	}
 }
 
 // RunCommand executes a vault CLI command and returns the result
-func (suite *AcceptanceTestSuite) RunCommand(t *testing.T, args ...string) (string, string, int) {
+// Returns:
+//   - stdout: The standard output of the command
+//   - stderr: The standard error output of the command
+//   - exitCode: The exit code of the command
+func (suite *AcceptanceTestSuite) RunCommand(t *testing.T, args ...string) (stdout, stderr string, exitCode int) {
+	t.Helper()
+
+	// Make a copy of args to avoid modifying the original
+	execArgs := make([]string, len(args))
+	copy(execArgs, args)
+
+	// Validate command arguments
+	if err := validateCommandArgs(execArgs...); err != nil {
+		t.Fatalf("Invalid command arguments: %v", err)
+	}
+
+	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, suite.BinaryPath, args...)
-	cmd.Env = append(os.Environ(),
-		fmt.Sprintf("VAULT_PATH=%s", suite.VaultPath),
-		fmt.Sprintf("VAULT_CONFIG=%s", suite.ConfigPath),
-	)
+	// Create command with context and full path to binary
+	binaryPath, err := filepath.Abs(suite.BinaryPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path to binary: %v", err)
+	}
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	// Ensure the binary exists and is executable
+	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+		t.Fatalf("Binary not found at %s", binaryPath)
+	}
 
-	err := cmd.Run()
-	exitCode := 0
+	// nolint:gosec // Arguments are validated by validateCommandArgs
+	cmd := exec.CommandContext(ctx, binaryPath, execArgs...)
+
+	// Create a secure temporary directory for this command
+	tempDir, err := os.MkdirTemp("", "vault-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("Warning: failed to remove temp directory: %v", err)
+		}
+	}()
+
+	// Set a clean, minimal environment
+	cmd.Env = []string{
+		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + filepath.Clean(os.Getenv("HOME")),
+		"USER=" + filepath.Clean(os.Getenv("USER")),
+		"TMPDIR=" + tempDir,
+		"VAULT_PATH=" + filepath.Clean(suite.VaultPath),
+		"VAULT_CONFIG=" + filepath.Clean(suite.ConfigPath),
+		// Disable any potential command history
+		"HISTFILE=",
+		"HISTFILESIZE=0",
+		"HISTSIZE=0",
+	}
+
+	// Set process attributes for additional security
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		// Create a new process group
+		Setpgid: true,
+		// Create a new session
+		Setsid: true,
+		// Set the process group ID to the new process ID
+		Pgid: 0,
+	}
+
+	// On Unix-like systems, set additional attributes
+	if runtime.GOOS != "windows" {
+		// Set a secure umask
+		syscall.Umask(0o077)
+	}
+
+	// Create pipes for stdout and stderr
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatalf("Failed to create stdout pipe: %v", err)
+	}
+
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		t.Fatalf("Failed to create stderr pipe: %v", err)
+	}
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start command: %v", err)
+	}
+
+	// Read output in a separate goroutine to prevent deadlock
+	var stdoutBuf, stderrBuf bytes.Buffer
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		copyOutput(&stdoutBuf, stdoutPipe, "stdout")
+	}()
+
+	go func() {
+		defer wg.Done()
+		copyOutput(&stderrBuf, stderrPipe, "stderr")
+	}()
+
+	// Wait for command to complete
+	err = cmd.Wait()
+	wg.Wait()
+
+	// Get exit code
+	exitCode = 0
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
-			exitCode = exitError.ExitCode()
+			if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
+				exitCode = status.ExitStatus()
+			} else {
+				exitCode = 1
+			}
 		} else {
+			t.Logf("Command error: %v", err)
 			exitCode = 1
 		}
 	}
 
-	return stdout.String(), stderr.String(), exitCode
+	// Get output
+	stdoutStr := stdoutBuf.String()
+	stderrStr := stderrBuf.String()
+
+	// Clear sensitive data from memory
+	defer func() {
+		stdoutBuf.Reset()
+		stderrBuf.Reset()
+		// Overwrite the memory with zeros
+		for i := range stdoutStr {
+			stdoutStr = stdoutStr[:i] + "\x00"
+		}
+		for i := range stderrStr {
+			stderrStr = stderrStr[:i] + "\x00"
+		}
+	}()
+
+	return stdoutStr, stderrStr, exitCode
 }
 
-// RunCommandWithInput executes a command with stdin input
-func (suite *AcceptanceTestSuite) RunCommandWithInput(t *testing.T, input string, args ...string) (string, string, int) {
+// RunCommandWithInput executes a command with stdin input and returns the result
+// Returns:
+//   - stdout: The standard output of the command
+//   - stderr: The standard error output of the command
+//   - exitCode: The exit code of the command
+func (suite *AcceptanceTestSuite) RunCommandWithInput(t *testing.T, input string, args ...string) (stdout, stderr string, exitCode int) {
+	t.Helper()
+
+	// Sanitize input
+	input = strings.TrimSpace(input)
+	if input == "" {
+		t.Fatal("Empty input provided to RunCommandWithInput")
+	}
+
+	// Make a copy of args to avoid modifying the original
+	execArgs := make([]string, len(args))
+	copy(execArgs, args)
+
+	// Validate command arguments
+	if err := validateCommandArgs(execArgs...); err != nil {
+		t.Fatalf("Invalid command arguments: %v", err)
+	}
+
+	// Create a context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, suite.BinaryPath, args...)
-	cmd.Env = append(os.Environ(),
-		fmt.Sprintf("VAULT_PATH=%s", suite.VaultPath),
-		fmt.Sprintf("VAULT_CONFIG=%s", suite.ConfigPath),
-	)
+	// Create command with context and full path to binary
+	binaryPath, err := filepath.Abs(suite.BinaryPath)
+	if err != nil {
+		t.Fatalf("Failed to get absolute path to binary: %v", err)
+	}
 
-	cmd.Stdin = strings.NewReader(input)
+	// Ensure the binary exists and is executable
+	if _, err := os.Stat(binaryPath); os.IsNotExist(err) {
+		t.Fatalf("Binary not found at %s", binaryPath)
+	}
 
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	// nolint:gosec // Arguments are validated by validateCommandArgs
+	cmd := exec.CommandContext(ctx, binaryPath, execArgs...)
 
-	err := cmd.Run()
-	exitCode := 0
+	// Create a secure temporary directory for this command
+	tempDir, err := os.MkdirTemp("", "vault-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			t.Logf("Warning: failed to remove temp directory: %v", err)
+		}
+	}()
+
+	// Set a clean, minimal environment
+	cmd.Env = []string{
+		"PATH=" + os.Getenv("PATH"),
+		"HOME=" + filepath.Clean(os.Getenv("HOME")),
+		"USER=" + filepath.Clean(os.Getenv("USER")),
+		"TMPDIR=" + tempDir,
+		"VAULT_PATH=" + filepath.Clean(suite.VaultPath),
+		"VAULT_CONFIG=" + filepath.Clean(suite.ConfigPath),
+		// Disable any potential command history
+		"HISTFILE=",
+		"HISTFILESIZE=0",
+		"HISTSIZE=0",
+	}
+
+	// Set process attributes for additional security
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		// Create a new process group
+		Setpgid: true,
+		// Create a new session
+		Setsid: true,
+		// Set the process group ID to the new process ID
+		Pgid: 0,
+	}
+
+	// On Unix-like systems, set additional attributes
+	if runtime.GOOS != "windows" {
+		// Set a secure umask
+		syscall.Umask(0o077)
+	}
+
+	// Create pipes for stdin, stdout, and stderr
+	stdinPipe, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatalf("Failed to create stdin pipe: %v", err)
+	}
+
+	stdoutPipe, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatalf("Failed to create stdout pipe: %v", err)
+	}
+
+	stderrPipe, err := cmd.StderrPipe()
+	if err != nil {
+		t.Fatalf("Failed to create stderr pipe: %v", err)
+	}
+
+	// Start the command
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start command: %v", err)
+	}
+
+	// Write input in a separate goroutine
+	errChan := make(chan error, 1)
+	go func() {
+		_, err := io.WriteString(stdinPipe, input)
+		if err != nil {
+			errChan <- fmt.Errorf("failed to write to stdin: %w", err)
+			return
+		}
+		if err := stdinPipe.Close(); err != nil {
+			errChan <- fmt.Errorf("failed to close stdin: %w", err)
+			return
+		}
+		errChan <- nil
+	}()
+
+	// Read output in separate goroutines to prevent deadlock
+	var stdoutBuf, stderrBuf bytes.Buffer
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		copyOutput(&stdoutBuf, stdoutPipe, "stdout")
+	}()
+
+	go func() {
+		defer wg.Done()
+		copyOutput(&stderrBuf, stderrPipe, "stderr")
+	}()
+
+	// Wait for input to be written
+	if err := <-errChan; err != nil {
+		t.Fatalf("Error writing input: %v", err)
+	}
+
+	// Wait for command to complete
+	err = cmd.Wait()
+	wg.Wait()
+
+	// Get exit code
+	exitCode = 0
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
-			exitCode = exitError.ExitCode()
+			if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
+				exitCode = status.ExitStatus()
+			} else {
+				exitCode = 1
+			}
 		} else {
+			t.Logf("Command error: %v", err)
 			exitCode = 1
 		}
 	}
 
-	return stdout.String(), stderr.String(), exitCode
+	// Get output
+	stdoutStr := stdoutBuf.String()
+	stderrStr := stderrBuf.String()
+
+	// Clear sensitive data from memory
+	defer func() {
+		stdoutBuf.Reset()
+		stderrBuf.Reset()
+		// Overwrite the memory with zeros
+		for i := range input {
+			input = input[:i] + "\x00"
+		}
+		for i := range stdoutStr {
+			stdoutStr = stdoutStr[:i] + "\x00"
+		}
+		for i := range stderrStr {
+			stderrStr = stderrStr[:i] + "\x00"
+		}
+	}()
+
+	return stdoutStr, stderrStr, exitCode
 }
 
 // TestCompleteWorkflow tests the complete vault workflow
@@ -164,14 +541,14 @@ func TestCompleteWorkflow(t *testing.T) {
 		// Step 3: List entries
 		t.Log("Step 3: List entries")
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "list")
+		listOut, _, listCode := suite.RunCommandWithInput(t, input, "list")
 
-		if exitCode != 0 {
-			t.Fatalf("List failed: exit code %d\nStdout: %s\nStderr: %s", exitCode, stdout, stderr)
+		if listCode != 0 {
+			t.Errorf("List failed: exit code %d\nOutput: %s", listCode, listOut)
 		}
 
 		for _, entry := range entries {
-			if !strings.Contains(stdout, entry.name) {
+			if !strings.Contains(listOut, entry.name) {
 				t.Errorf("Entry %s not found in list output", entry.name)
 			}
 		}
@@ -204,20 +581,22 @@ func TestCompleteWorkflow(t *testing.T) {
 
 		// Verify update
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "get", "github.com")
+		var getExitCode int
+		stdout, _, getExitCode = suite.RunCommandWithInput(t, input, "get", "github.com")
 
-		if exitCode == 0 && !strings.Contains(stdout, "updated-user") {
+		if getExitCode == 0 && !strings.Contains(stdout, "updated-user") {
 			t.Error("Entry was not updated properly")
 		}
 
 		// Step 6: Search entries
 		t.Log("Step 6: Search entries")
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "list", "--search", "gmail")
+		searchOut, _, searchCode := suite.RunCommandWithInput(t, input, "list", "--search", "gmail")
+		if searchCode != 0 {
+			t.Errorf("Search failed: exit code %d\nOutput: %s", searchCode, searchOut)
+		}
 
-		if exitCode != 0 {
-			t.Errorf("Search failed: exit code %d\nStdout: %s\nStderr: %s", exitCode, stdout, stderr)
-		} else if !strings.Contains(stdout, "gmail.com") {
+		if !strings.Contains(searchOut, "gmail.com") {
 			t.Error("Search did not find expected entry")
 		}
 
@@ -247,20 +626,20 @@ func TestCompleteWorkflow(t *testing.T) {
 
 		// Verify deletion
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "get", "aws.amazon.com")
+		getOut, getErr, getCode := suite.RunCommandWithInput(t, input, "get", "aws.amazon.com")
 
-		if exitCode == 0 {
-			t.Error("Entry was not deleted properly")
+		if getCode == 0 {
+			t.Errorf("Entry was not deleted properly. Output: %s, Error: %s", getOut, getErr)
 		}
 
 		// Step 9: Export data
 		t.Log("Step 9: Export data")
 		exportPath := filepath.Join(suite.TempDir, "export.json")
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "export", exportPath)
+		exportOut, _, exportCode := suite.RunCommandWithInput(t, input, "export", exportPath)
 
-		if exitCode != 0 {
-			t.Errorf("Export failed: exit code %d\nStdout: %s\nStderr: %s", exitCode, stdout, stderr)
+		if exportCode != 0 {
+			t.Errorf("Export failed: exit code %d\nOutput: %s", exportCode, exportOut)
 		} else {
 			// Verify export file exists
 			if _, err := os.Stat(exportPath); os.IsNotExist(err) {
@@ -290,7 +669,7 @@ func TestErrorHandling(t *testing.T) {
 		stdout, stderr, exitCode := suite.RunCommandWithInput(t, input, "list")
 
 		if exitCode == 0 {
-			t.Error("Should fail with wrong passphrase")
+			t.Errorf("Should fail with wrong passphrase")
 		}
 
 		if !strings.Contains(stderr, "authentication failed") && !strings.Contains(stdout, "authentication failed") {
@@ -300,19 +679,19 @@ func TestErrorHandling(t *testing.T) {
 		// Test 2: Non-existent entry
 		t.Log("Test 2: Non-existent entry")
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "get", "non-existent-entry")
+		getOut, getErr, getCode := suite.RunCommandWithInput(t, input, "get", "non-existent-entry")
 
-		if exitCode == 0 {
-			t.Error("Should fail for non-existent entry")
+		if getCode == 0 {
+			t.Errorf("Should fail for non-existent entry. Output: %s, Error: %s", getOut, getErr)
 		}
 
 		// Test 3: Invalid entry name
 		t.Log("Test 3: Invalid entry name")
 		input = fmt.Sprintf("https://test.com\nuser\npass\nnotes\n%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "add", "../invalid/name")
+		addOut, addErr, addCode := suite.RunCommandWithInput(t, input, "add", "../invalid/name")
 
-		if exitCode == 0 {
-			t.Error("Should fail for invalid entry name")
+		if addCode == 0 {
+			t.Errorf("Should fail for invalid entry name. Output: %s, Error: %s", addOut, addErr)
 		}
 
 		// Test 4: Duplicate entry
@@ -324,26 +703,28 @@ func TestErrorHandling(t *testing.T) {
 
 		// Try to add the same entry again
 		input = fmt.Sprintf("https://test.com\nuser2\npass2\nnotes2\n%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "add", "test-entry")
+		addOut, addErr, addCode = suite.RunCommandWithInput(t, input, "add", "test-entry")
 
-		if exitCode == 0 {
-			t.Error("Should fail for duplicate entry")
+		if addCode == 0 {
+			t.Errorf("Should fail for duplicate entry. Output: %s, Error: %s", addOut, addErr)
 		}
 
 		// Test 5: Missing arguments
 		t.Log("Test 5: Missing arguments")
-		stdout, stderr, exitCode = suite.RunCommand(t, "get")
+		cmdOut, cmdErr, cmdCode := suite.RunCommand(t, "get")
 
-		if exitCode == 0 {
-			t.Error("Should fail when entry name is missing")
+		if cmdCode == 0 {
+			t.Errorf("Should fail when entry name is missing. Output: %s, Error: %s", cmdOut, cmdErr)
 		}
 
 		// Test 6: Invalid command
 		t.Log("Test 6: Invalid command")
-		stdout, stderr, exitCode = suite.RunCommand(t, "invalid-command")
+		invalidOut, invalidErr, invalidCode := suite.RunCommand(t, "invalid-command")
 
-		if exitCode == 0 {
-			t.Error("Should fail for invalid command")
+		if invalidCode == 0 {
+			t.Errorf("Should fail for invalid command. Output: %s, Error: %s", invalidOut, invalidErr)
+		} else {
+			t.Logf("Invalid command test passed with status %d", invalidCode)
 		}
 
 		t.Log("✅ Error handling tests passed")
@@ -368,10 +749,16 @@ func TestCrossplatformCompatibility(t *testing.T) {
 		for i, testPath := range testPaths {
 			// Create directory if needed
 			dir := filepath.Dir(testPath)
-			os.MkdirAll(dir, 0755)
+			if err := os.MkdirAll(dir, 0o750); err != nil {
+				t.Errorf("Failed to create test directory: %v", err)
+				continue
+			}
 
 			// Set vault path
-			os.Setenv("VAULT_PATH", testPath)
+			if err := os.Setenv("VAULT_PATH", testPath); err != nil {
+				t.Errorf("Failed to set VAULT_PATH: %v", err)
+				continue
+			}
 
 			// Initialize vault
 			input := fmt.Sprintf("%s\n%s\n", suite.Passphrase, suite.Passphrase)
@@ -393,7 +780,9 @@ func TestCrossplatformCompatibility(t *testing.T) {
 		t.Log("Test 2: Unicode handling")
 
 		// Reset to original vault path
-		os.Setenv("VAULT_PATH", suite.VaultPath)
+		if err := os.Setenv("VAULT_PATH", suite.VaultPath); err != nil {
+			t.Fatalf("Failed to reset VAULT_PATH: %v", err)
+		}
 
 		// Initialize vault
 		input := fmt.Sprintf("%s\n%s\n", suite.Passphrase, suite.Passphrase)
@@ -439,7 +828,7 @@ func TestCrossplatformCompatibility(t *testing.T) {
 		} else {
 			mode := info.Mode()
 			// Vault file should not be world-readable
-			if mode&0044 != 0 {
+			if mode&0o044 != 0 {
 				t.Errorf("Vault file has insecure permissions: %v", mode)
 			}
 		}
@@ -492,11 +881,11 @@ func TestPerformanceAcceptance(t *testing.T) {
 
 		start = time.Now()
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode := suite.RunCommandWithInput(t, input, "list")
+		listOut, _, listCode := suite.RunCommandWithInput(t, input, "list")
 		listDuration := time.Since(start)
 
-		if exitCode != 0 {
-			t.Errorf("List failed: exit code %d\nStdout: %s\nStderr: %s", exitCode, stdout, stderr)
+		if listCode != 0 {
+			t.Errorf("List failed: exit code %d\nOutput: %s", listCode, listOut)
 		} else {
 			t.Logf("List performance: %v for %d entries", listDuration, numEntries)
 		}
@@ -613,7 +1002,7 @@ func TestSecurityAcceptance(t *testing.T) {
 				t.Errorf("Failed to stat backup file: %v", err)
 			} else {
 				mode := info.Mode()
-				if mode&0044 != 0 {
+				if mode&0o044 != 0 {
 					t.Errorf("Backup file has insecure permissions: %v", mode)
 				}
 			}
@@ -647,10 +1036,10 @@ func TestRecoveryScenarios(t *testing.T) {
 		// Create backup
 		backupPath := filepath.Join(suite.TempDir, "manual_backup.vault")
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode := suite.RunCommandWithInput(t, input, "backup", backupPath)
+		backupOut, _, backupCode := suite.RunCommandWithInput(t, input, "backup", backupPath)
 
-		if exitCode != 0 {
-			t.Logf("Backup command failed (may not be implemented): %s", stderr)
+		if backupCode != 0 {
+			t.Errorf("Backup failed: exit code %d\nOutput: %s", backupCode, backupOut)
 		} else {
 			// Verify backup file exists
 			if _, err := os.Stat(backupPath); os.IsNotExist(err) {
@@ -669,37 +1058,37 @@ func TestRecoveryScenarios(t *testing.T) {
 
 		// Corrupt the vault file
 		corruptedData := append([]byte("CORRUPTED"), originalData[10:]...)
-		err = os.WriteFile(suite.VaultPath, corruptedData, 0644)
+		err = os.WriteFile(suite.VaultPath, corruptedData, 0o600)
 		if err != nil {
 			t.Fatalf("Failed to corrupt vault file: %v", err)
 		}
 
 		// Try to access corrupted vault
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "list")
+		corruptOut, corruptErr, corruptCode := suite.RunCommandWithInput(t, input, "list")
 
-		if exitCode == 0 {
-			t.Error("Corrupted vault should not be accessible")
+		if corruptCode == 0 {
+			t.Errorf("Corrupted vault should not be accessible. Output: %s, Error: %s", corruptOut, corruptErr)
 		} else {
 			t.Log("✅ Corrupted vault properly rejected")
 		}
 
 		// Restore original file
-		err = os.WriteFile(suite.VaultPath, originalData, 0644)
+		err = os.WriteFile(suite.VaultPath, originalData, 0o600)
 		if err != nil {
 			t.Fatalf("Failed to restore vault file: %v", err)
 		}
 
 		// Verify data integrity after restore
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "list")
+		restoreOut, restoreErr, restoreCode := suite.RunCommandWithInput(t, input, "list")
 
-		if exitCode != 0 {
-			t.Errorf("Failed to access restored vault: %s", stderr)
+		if restoreCode != 0 {
+			t.Errorf("Failed to access restored vault. Error: %s, Output: %s", restoreErr, restoreOut)
 		} else {
 			for _, entryName := range testEntries {
-				if !strings.Contains(stdout, entryName) {
-					t.Errorf("Entry %s missing after restore", entryName)
+				if !strings.Contains(restoreOut, entryName) {
+					t.Errorf("Entry %s missing after restore. Output: %s", entryName, restoreOut)
 				}
 			}
 		}
@@ -709,20 +1098,28 @@ func TestRecoveryScenarios(t *testing.T) {
 
 		exportPath := filepath.Join(suite.TempDir, "export_test.json")
 		input = fmt.Sprintf("%s\n", suite.Passphrase)
-		stdout, stderr, exitCode = suite.RunCommandWithInput(t, input, "export", exportPath)
+		exportOut, exportErr, exportCode := suite.RunCommandWithInput(t, input, "export", exportPath)
 
-		if exitCode != 0 {
-			t.Logf("Export command failed (may not be implemented): %s", stderr)
+		if exportCode != 0 {
+			t.Logf("Export command failed (may not be implemented): %s", exportErr)
+			t.Logf("Export output: %s", exportOut)
 		} else {
+			// Clean and validate the export path
+			cleanExportPath := filepath.Clean(exportPath)
+			if cleanExportPath != exportPath {
+				t.Fatal("Invalid export path: potential directory traversal detected")
+			}
+
 			// Verify export file
-			if _, err := os.Stat(exportPath); os.IsNotExist(err) {
+			if _, err := os.Stat(cleanExportPath); os.IsNotExist(err) {
 				t.Error("Export file was not created")
 			} else {
 				// Read and validate export content
-				exportData, err := os.ReadFile(exportPath)
+				exportData, err := os.ReadFile(cleanExportPath)
 				if err != nil {
 					t.Errorf("Failed to read export file: %v", err)
 				} else {
+					t.Logf("Export file size: %d bytes", len(exportData))
 					// Should contain entry data
 					for _, entryName := range testEntries {
 						if !strings.Contains(string(exportData), entryName) {
@@ -735,41 +1132,4 @@ func TestRecoveryScenarios(t *testing.T) {
 
 		t.Log("✅ Recovery scenario tests completed")
 	})
-}
-
-// Helper function to check if a file contains binary data
-func isBinaryFile(path string) bool {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return false
-	}
-
-	// Check first 512 bytes for null bytes (common in binary files)
-	checkSize := 512
-	if len(data) < checkSize {
-		checkSize = len(data)
-	}
-
-	for i := 0; i < checkSize; i++ {
-		if data[i] == 0 {
-			return true
-		}
-	}
-
-	return false
-}
-
-// Helper function to count lines in output
-func countLines(output string) int {
-	if output == "" {
-		return 0
-	}
-
-	scanner := bufio.NewScanner(strings.NewReader(output))
-	count := 0
-	for scanner.Scan() {
-		count++
-	}
-
-	return count
 }

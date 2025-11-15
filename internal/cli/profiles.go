@@ -3,8 +3,11 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"sort"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -83,6 +86,15 @@ func init() {
 }
 
 func runProfilesList() error {
+	// Helper function to write output with error checking
+	writeOutput := func(w io.Writer, format string, args ...interface{}) error {
+		_, err := fmt.Fprintf(w, format, args...)
+		if err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		return nil
+	}
+
 	// Check if vault is unlocked
 	if !IsUnlocked() {
 		return fmt.Errorf("vault is locked, run 'vault unlock' first")
@@ -100,7 +112,9 @@ func runProfilesList() error {
 	RefreshSession()
 
 	if len(profiles) == 0 {
-		fmt.Println("No profiles found")
+		if err := writeOutput(os.Stdout, "No profiles found\n"); err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -112,31 +126,57 @@ func runProfilesList() error {
 	if outputJSON {
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
-		return encoder.Encode(profiles)
+		if err := encoder.Encode(profiles); err != nil {
+			return fmt.Errorf("failed to encode profiles to JSON: %w", err)
+		}
+		return nil
 	}
 
 	// Table output
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	defer w.Flush()
+	defer func() {
+		if err := w.Flush(); err != nil {
+			log.Printf("warning: failed to flush tabwriter: %v\n", err)
+		}
+	}()
 
-	fmt.Fprintf(w, "NAME\tDESCRIPTION\tCREATED\tDEFAULT\n")
-	fmt.Fprintf(w, "----\t-----------\t-------\t-------\n")
+	// Write table header
+	headers := []string{"NAME", "DESCRIPTION", "CREATED", "DEFAULT"}
+	headerLine := strings.Join(headers, "\t") + "\n"
+	separator := strings.Repeat("-", 4) + "\t" +
+		strings.Repeat("-", 11) + "\t" +
+		strings.Repeat("-", 7) + "\t" +
+		strings.Repeat("-", 6) + "\n"
 
+	if err := writeOutput(w, "%s", headerLine); err != nil {
+		return fmt.Errorf("failed to write table header: %w", err)
+	}
+	if err := writeOutput(w, "%s", separator); err != nil {
+		return fmt.Errorf("failed to write header separator: %w", err)
+	}
+
+	// Write table rows
 	for _, profile := range profiles {
 		isDefault := ""
 		if profile.Name == cfg.DefaultProfile {
 			isDefault = "✓"
 		}
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
+		if err := writeOutput(w, "%s\t%s\t%s\t%s\n",
 			profile.Name,
 			profile.Description,
 			profile.CreatedAt.Format("2006-01-02"),
 			isDefault,
-		)
+		); err != nil {
+			return fmt.Errorf("failed to write profile '%s' (name: %s, description: %s, created_at: %s, is_default: %s): %w", profile.Name, profile.Name, profile.Description, profile.CreatedAt.Format("2006-01-02"), isDefault, err)
+		}
 	}
 
-	fmt.Printf("\nFound %d profiles\n", len(profiles))
+	// Write summary
+	if err := writeOutput(os.Stdout, "\nFound %d profiles\n", len(profiles)); err != nil {
+		return fmt.Errorf("failed to write summary for %d profiles: %w", len(profiles), err)
+	}
+
 	return nil
 }
 
@@ -208,7 +248,7 @@ func runProfilesDelete(name string) error {
 	}
 
 	if !confirmed {
-		fmt.Println("Profile deletion cancelled")
+		fmt.Println("Profile deletion canceled")
 		return nil
 	}
 

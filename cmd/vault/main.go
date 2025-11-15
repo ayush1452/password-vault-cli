@@ -9,12 +9,6 @@ import (
 )
 
 func main() {
-	if err := cli.Execute(); err != nil {
-		util.HandleError(err, "")
-	}
-}
-
-func init() {
 	// Handle panics gracefully
 	defer func() {
 		if r := recover(); r != nil {
@@ -22,4 +16,8 @@ func init() {
 			os.Exit(util.ExitError)
 		}
 	}()
+
+	if err := cli.Execute(); err != nil {
+		util.HandleError(err, "")
+	}
 }

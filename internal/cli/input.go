@@ -12,17 +12,23 @@ import (
 
 // PromptPassword prompts for a password without echoing to terminal
 func PromptPassword(prompt string) (string, error) {
-	fmt.Print(prompt)
+	if err := writeString(os.Stdout, prompt); err != nil {
+		return "", fmt.Errorf("failed to display prompt: %w", err)
+	}
 
 	// Get file descriptor for stdin
 	fd := int(syscall.Stdin)
 
 	// Read password without echo
 	password, err := term.ReadPassword(fd)
-	fmt.Println() // Print newline after password input
-
 	if err != nil {
 		return "", fmt.Errorf("failed to read password: %w", err)
+	}
+
+	// Always print a newline after password input
+	// Use fmt.Fprintln directly for the newline
+	if _, err := fmt.Fprintln(os.Stdout); err != nil {
+		return "", fmt.Errorf("failed to write newline: %w", err)
 	}
 
 	return string(password), nil
@@ -49,7 +55,9 @@ func PromptPasswordConfirm(prompt string) (string, error) {
 
 // PromptInput prompts for regular input
 func PromptInput(prompt string) (string, error) {
-	fmt.Print(prompt)
+	if err := writeString(os.Stdout, prompt); err != nil {
+		return "", fmt.Errorf("failed to display prompt: %w", err)
+	}
 
 	reader := bufio.NewReader(os.Stdin)
 	input, err := reader.ReadString('\n')
@@ -85,14 +93,20 @@ func PromptConfirm(prompt string, defaultYes bool) (bool, error) {
 
 // PromptChoice prompts for a choice from a list of options
 func PromptChoice(prompt string, choices []string) (string, error) {
-	fmt.Println(prompt)
-	for i, choice := range choices {
-		fmt.Printf("  %d) %s\n", i+1, choice)
+	if err := writeOutput(os.Stdout, "%s\n", prompt); err != nil {
+		return "", fmt.Errorf("failed to display prompt: %w", err)
 	}
 
-	input, err := PromptInput("Enter choice (1-" + fmt.Sprintf("%d", len(choices)) + "): ")
+	for i, choice := range choices {
+		if err := writeOutput(os.Stdout, "  %d) %s\n", i+1, choice); err != nil {
+			return "", fmt.Errorf("failed to display choice %d: %w", i+1, err)
+		}
+	}
+
+	promptText := fmt.Sprintf("Enter choice (1-%d): ", len(choices))
+	input, err := PromptInput(promptText)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get choice input: %w", err)
 	}
 
 	// Try to parse as number
@@ -106,7 +120,7 @@ func PromptChoice(prompt string, choices []string) (string, error) {
 	// Try to match as string
 	input = strings.ToLower(input)
 	for _, choice := range choices {
-		if strings.ToLower(choice) == input {
+		if strings.EqualFold(choice, input) {
 			return choice, nil
 		}
 	}

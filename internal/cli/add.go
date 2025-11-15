@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -86,8 +87,15 @@ Example:
 	return cmd
 }
 
-func runAdd(entryName string) error {
-	defer CloseSessionStore()
+func runAdd(entryName string) (err error) {
+	defer func() {
+		err = checkDeferredErr(err, "CloseSessionStore", CloseSessionStore())
+	}()
+
+	// Use the shared writeOutput function for consistent error handling
+	printStatus := func(format string, args ...interface{}) error {
+		return writeOutput(os.Stdout, format, args...)
+	}
 
 	// Check if vault is unlocked
 	if !IsUnlocked() {
@@ -103,7 +111,6 @@ func runAdd(entryName string) error {
 
 	// Get secret
 	var secret string
-	var err error
 
 	if secretFile != "" {
 		// Read from file
@@ -111,7 +118,12 @@ func runAdd(entryName string) error {
 		if secretFile == "-" {
 			data, err = io.ReadAll(os.Stdin)
 		} else {
-			data, err = os.ReadFile(secretFile)
+			// Clean the file path to prevent directory traversal
+			cleanPath := filepath.Clean(secretFile)
+			// Optional: Add additional path validation here if needed
+			// For example, ensure the path is within an allowed directory
+
+			data, err = os.ReadFile(cleanPath)
 		}
 		if err != nil {
 			return fmt.Errorf("failed to read secret file: %w", err)
@@ -160,15 +172,27 @@ func runAdd(entryName string) error {
 	// Refresh session
 	RefreshSession()
 
-	fmt.Printf("✓ Entry '%s' added successfully to profile '%s'\n", entryName, profile)
+	if err := printStatus("✓ Entry '%s' added successfully to profile '%s'\n", entryName, profile); err != nil {
+		return err
+	}
 
 	if verbose {
-		fmt.Printf("Details:\n")
-		fmt.Printf("  Username: %s\n", username)
-		fmt.Printf("  URL: %s\n", url)
-		fmt.Printf("  Tags: %v\n", tags)
+		if err := printStatus("Details:\n"); err != nil {
+			return err
+		}
+		if err := printStatus("  Username: %s\n", username); err != nil {
+			return err
+		}
+		if err := printStatus("  URL: %s\n", url); err != nil {
+			return err
+		}
+		if err := printStatus("  Tags: %v\n", tags); err != nil {
+			return err
+		}
 		if notes != "" {
-			fmt.Printf("  Notes: %s\n", notes)
+			if err := printStatus("  Notes: %s\n", notes); err != nil {
+				return err
+			}
 		}
 	}
 

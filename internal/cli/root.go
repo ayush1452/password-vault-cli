@@ -1,3 +1,5 @@
+// Package cli implements the command-line interface for the password vault.
+// It provides commands for managing passwords, encryption keys, and vault operations.
 package cli
 
 import (

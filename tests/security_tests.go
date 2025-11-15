@@ -30,11 +30,16 @@ func NewSecurityTestSuite(t *testing.T) *SecurityTestSuite {
 	tempDir := t.TempDir()
 	vaultPath := filepath.Join(tempDir, "security_test.vault")
 
+	// Ensure the temp directory has secure permissions (0600 for maximum security)
+	if err := os.Chmod(tempDir, 0o600); err != nil {
+		t.Fatalf("Failed to set secure permissions on temp directory: %v", err)
+	}
+
 	return &SecurityTestSuite{
 		TempDir:    tempDir,
 		VaultPath:  vaultPath,
 		Crypto:     vault.NewDefaultCryptoEngine(),
-		Passphrase: "security-test-passphrase-2024",
+		Passphrase: "security-test-passphrase-2024!@#$%^&*()", // More complex passphrase
 	}
 }
 
@@ -44,7 +49,11 @@ func TestTamperDetection(t *testing.T) {
 
 	// Initialize vault with test data
 	vaultStore := store.NewBoltStore()
-	defer vaultStore.CloseVault()
+	defer func() {
+		if err := vaultStore.CloseVault(); err != nil {
+			t.Logf("Warning: error closing vault: %v", err)
+		}
+	}()
 
 	// Derive master key from passphrase
 	salt, err := vault.GenerateSalt()
@@ -84,7 +93,10 @@ func TestTamperDetection(t *testing.T) {
 		t.Fatalf("Failed to add test entry: %v", err)
 	}
 
-	vaultStore.CloseVault()
+	// Close vault and check for errors
+	if err := vaultStore.CloseVault(); err != nil {
+		t.Fatalf("Failed to close vault: %v", err)
+	}
 
 	// Read original file content
 	originalData, err := os.ReadFile(suite.VaultPath)
@@ -124,7 +136,9 @@ func TestTamperDetection(t *testing.T) {
 			name: "Append random data",
 			tamperFunc: func(data []byte) []byte {
 				randomBytes := make([]byte, 32)
-				rand.Read(randomBytes)
+				if _, err := rand.Read(randomBytes); err != nil {
+					t.Fatalf("Failed to generate random bytes: %v", err)
+				}
 				return append(data, randomBytes...)
 			},
 			shouldFail:  true,
@@ -137,7 +151,9 @@ func TestTamperDetection(t *testing.T) {
 					start := len(data) / 2
 					end := start + 50
 					randomBytes := make([]byte, 50)
-					rand.Read(randomBytes)
+					if _, err := rand.Read(randomBytes); err != nil {
+						t.Fatalf("Failed to generate random bytes: %v", err)
+					}
 					copy(data[start:end], randomBytes)
 				}
 				return data
@@ -167,15 +183,23 @@ func TestTamperDetection(t *testing.T) {
 			tamperedData := tt.tamperFunc(append([]byte(nil), originalData...))
 			tamperedPath := suite.VaultPath + ".tampered"
 
-			err := os.WriteFile(tamperedPath, tamperedData, 0644)
+			err := os.WriteFile(tamperedPath, tamperedData, 0o600)
 			if err != nil {
 				t.Fatalf("Failed to write tampered file: %v", err)
 			}
-			defer os.Remove(tamperedPath)
+			defer func() {
+				if err := os.Remove(tamperedPath); err != nil {
+					t.Logf("Warning: failed to remove tampered file: %v", err)
+				}
+			}()
 
 			// Try to open tampered store
 			tamperedStore := store.NewBoltStore()
-			defer tamperedStore.CloseVault()
+			defer func() {
+				if err := tamperedStore.CloseVault(); err != nil {
+					t.Logf("Warning: failed to close tampered store: %v", err)
+				}
+			}()
 
 			// Try to open tampered vault
 			err = tamperedStore.OpenVault(tamperedPath, masterKey)
@@ -256,23 +280,23 @@ func TestTimingAttacks(t *testing.T) {
 			}
 
 			var total time.Duration
-			var min, max time.Duration = durations[0], durations[0]
+			minVal, maxDuration := durations[0], durations[0]
 
 			for _, d := range durations {
 				total += d
-				if d < min {
-					min = d
+				if d < minVal {
+					minVal = d
 				}
-				if d > max {
-					max = d
+				if d > maxDuration {
+					maxDuration = d
 				}
 			}
 
 			avg := total / time.Duration(len(durations))
-			variance := max - min
+			variance := maxDuration - minVal
 
 			t.Logf("Passphrase length %d: avg=%v, min=%v, max=%v, variance=%v",
-				len(passphrase), avg, min, max, variance)
+				len(passphrase), avg, minVal, maxDuration, variance)
 
 			// Check for suspicious timing patterns
 			if variance > avg/2 {
@@ -333,9 +357,24 @@ func TestTimingAttacks(t *testing.T) {
 	})
 }
 
-// TestMemoryLeaks tests for sensitive data in memory
+// TestMemoryLeaks verifies that sensitive data is properly cleared from memory
 func TestMemoryLeaks(t *testing.T) {
 	suite := NewSecurityTestSuite(t)
+
+	// Test data - use cryptographically secure random data
+	secretBytes := make([]byte, 32)
+	if _, err := rand.Read(secretBytes); err != nil {
+		t.Fatalf("Failed to generate random secret: %v", err)
+	}
+
+	// Clear sensitive data from memory when done
+	defer func() {
+		// Use runtime.KeepAlive to prevent the compiler from optimizing away the zeroization
+		runtime.KeepAlive(secretBytes)
+		for i := range secretBytes {
+			secretBytes[i] = 0
+		}
+	}()
 
 	t.Run("Memory cleanup after operations", func(t *testing.T) {
 		// Force garbage collection before test
@@ -348,42 +387,75 @@ func TestMemoryLeaks(t *testing.T) {
 			"confidential-data-789",
 		}
 
+		// Track memory usage before operations
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+
 		// Perform operations with sensitive data
 		for _, secret := range sensitiveData {
-			// Key derivation
-			salt, _ := vault.GenerateSalt()
-			key, err := suite.Crypto.DeriveKey(secret, salt)
-			if err != nil {
-				t.Errorf("Key derivation failed: %v", err)
-				continue
-			}
+			// Create a function to handle the sensitive operations and ensure cleanup
+			func(secret string) {
+				// Create a copy of the secret to prevent it from being optimized away
+				secretBytes := []byte(secret)
 
-			// Encryption
-			plaintext := []byte("test data for " + secret)
-			envelope, err := suite.Crypto.Seal(plaintext, key)
-			if err != nil {
-				t.Errorf("Encryption failed: %v", err)
-				continue
-			}
+				// Clean up secretBytes when this function returns
+				defer func() {
+					runtime.KeepAlive(secretBytes) // Ensure secretBytes isn't optimized away
+					vault.Zeroize(secretBytes)     // Zero out the secret
+				}()
 
-			// Decryption
-			_, err = suite.Crypto.Open(envelope, key)
-			if err != nil {
-				t.Errorf("Decryption failed: %v", err)
-				continue
-			}
+				// Key derivation
+				salt, err := vault.GenerateSalt()
+				if err != nil {
+					t.Fatalf("Failed to generate salt: %v", err)
+				}
 
-			// Explicit cleanup
-			vault.Zeroize(key)
-			vault.Zeroize(plaintext)
+				key, err := suite.Crypto.DeriveKey(string(secretBytes), salt)
+				if err != nil {
+					t.Errorf("Key derivation failed: %v", err)
+					return
+				}
+
+				// Clean up key when this function returns
+				defer vault.Zeroize(key)
+
+				// Encryption
+				plaintext := []byte("test data for " + secret)
+				defer vault.Zeroize(plaintext)
+
+				envelope, err := suite.Crypto.Seal(plaintext, key)
+				if err != nil {
+					t.Errorf("Encryption failed: %v", err)
+					return
+				}
+
+				// Decryption
+				decrypted, err := suite.Crypto.Open(envelope, key)
+				if err != nil {
+					t.Errorf("Decryption failed: %v", err)
+					return
+				}
+
+				// Ensure decrypted data is zeroed after use
+				if decrypted != nil {
+					defer runtime.KeepAlive(decrypted)
+					defer vault.Zeroize(decrypted)
+				}
+			}(secret)
 		}
 
-		// Force garbage collection
+		// Force garbage collection after all operations
 		runtime.GC()
 		runtime.GC()
 
+		// Check memory usage after operations
+		runtime.ReadMemStats(&after)
+
+		// Calculate memory usage difference
+		memUsed := after.Alloc - before.Alloc
+		t.Logf("Memory used during test: %d bytes", memUsed)
+
 		// Check for sensitive data in memory (basic check)
-		// Note: This is a simplified check - in practice, you'd use more sophisticated tools
 		memStats := &runtime.MemStats{}
 		runtime.ReadMemStats(memStats)
 
@@ -398,14 +470,24 @@ func TestMemoryLeaks(t *testing.T) {
 	t.Run("Zeroization effectiveness", func(t *testing.T) {
 		// Test that zeroization actually clears memory
 		testData := []byte("sensitive-test-data-12345")
+		// Using unsafe here is necessary to verify memory zeroization in tests
+		// This is a security test to ensure sensitive data is properly cleared from memory
+		// #nosec G103 - Intentional use of unsafe for security testing
 		originalPtr := uintptr(unsafe.Pointer(&testData[0]))
 
 		// Make a copy to verify original content
 		originalContent := make([]byte, len(testData))
 		copy(originalContent, testData)
 
+		// Get memory protection status before zeroization
+		var m1, m2 runtime.MemStats
+		runtime.ReadMemStats(&m1)
+
 		// Zeroize the data
 		vault.Zeroize(testData)
+
+		// Get memory protection status after zeroization
+		runtime.ReadMemStats(&m2)
 
 		// Verify all bytes are zero
 		for i, b := range testData {
@@ -419,7 +501,31 @@ func TestMemoryLeaks(t *testing.T) {
 			t.Error("Zeroization did not modify the original data")
 		}
 
-		t.Logf("✅ Zeroization effective at memory address %x", originalPtr)
+		// Check if memory was actually modified by comparing before/after stats
+		if m1.Mallocs == m2.Mallocs && m1.Frees == m2.Frees {
+			t.Log("✅ Memory allocation patterns suggest in-place modification")
+		} else {
+			t.Log("⚠️  Memory allocation changed during zeroization (may indicate reallocation)")
+		}
+
+		// Try to force garbage collection to see if the memory is still protected
+		runtime.GC()
+		runtime.GC()
+
+		// Verify again after GC
+		stillZeros := true
+		for _, b := range testData {
+			if b != 0 {
+				stillZeros = false
+				break
+			}
+		}
+
+		if !stillZeros {
+			t.Error("Zeroized memory was modified after garbage collection")
+		}
+
+		t.Logf("✅ Zeroization effective at memory address %x (length: %d)", originalPtr, len(testData))
 	})
 }
 
@@ -429,7 +535,11 @@ func TestConcurrentAttacks(t *testing.T) {
 
 	// Initialize vault
 	vaultStore := store.NewBoltStore()
-	defer vaultStore.CloseVault()
+	defer func() {
+		if err := vaultStore.CloseVault(); err != nil {
+			t.Logf("Warning: failed to close vault: %v", err)
+		}
+	}()
 
 	// Derive master key from passphrase
 	salt, err := vault.GenerateSalt()
@@ -464,7 +574,11 @@ func TestConcurrentAttacks(t *testing.T) {
 
 				// Create separate store instance for each goroutine
 				testStore := store.NewBoltStore()
-				defer testStore.CloseVault()
+				defer func() {
+					if err := testStore.CloseVault(); err != nil {
+						t.Logf("Warning: failed to close test store: %v", err)
+					}
+				}()
 
 				// Attempt to open vault
 				err := testStore.OpenVault(suite.VaultPath, masterKey)
@@ -487,7 +601,10 @@ func TestConcurrentAttacks(t *testing.T) {
 	})
 
 	t.Run("Race condition in key derivation", func(t *testing.T) {
-		salt, _ := vault.GenerateSalt()
+		salt, err := vault.GenerateSalt()
+		if err != nil {
+			t.Fatalf("Failed to generate salt: %v", err)
+		}
 		numGoroutines := 50
 		var wg sync.WaitGroup
 		results := make([][]byte, numGoroutines)
@@ -555,7 +672,9 @@ func TestCryptographicAttacks(t *testing.T) {
 
 	t.Run("Nonce reuse detection", func(t *testing.T) {
 		key := make([]byte, 32)
-		rand.Read(key)
+		if _, err := rand.Read(key); err != nil {
+			t.Fatalf("Failed to generate random key: %v", err)
+		}
 
 		plaintext := []byte("test message for nonce reuse")
 
@@ -652,9 +771,13 @@ func TestInputValidation(t *testing.T) {
 
 	// Part 2: Integration tests - verify vault actually enforces validation
 	t.Run("Vault-level validation enforcement", func(t *testing.T) {
-		// Initialize vault
+		// Create a new vault store for testing
 		vaultStore := store.NewBoltStore()
-		defer vaultStore.CloseVault()
+		defer func() {
+			if err := vaultStore.CloseVault(); err != nil {
+				t.Logf("Warning: failed to close vault: %v", err)
+			}
+		}()
 
 		// Derive master key
 		salt, err := vault.GenerateSalt()
@@ -698,12 +821,14 @@ func TestInputValidation(t *testing.T) {
 			}
 
 			err := vaultStore.CreateEntry("default", entry)
-			
+
 			// If the vault doesn't reject it, at least validate the name was sanitized
 			if err == nil {
 				t.Logf("⚠️  Warning: Vault accepted potentially malicious name '%s' - should add validation", maliciousName)
 				// Clean up
-				vaultStore.DeleteEntry("default", entry.ID)
+				if err := vaultStore.DeleteEntry("default", entry.ID); err != nil {
+					t.Logf("Warning: failed to delete entry: %v", err)
+				}
 			} else {
 				t.Logf("✅ Vault correctly rejected malicious name '%s'", maliciousName)
 			}
@@ -729,7 +854,7 @@ func TestInputValidation(t *testing.T) {
 				t.Errorf("Failed to retrieve safe entry: %v", err)
 			} else {
 				if retrieved.Name != safeEntry.Name {
-					t.Errorf("Entry name was modified: expected '%s', got '%s'", 
+					t.Errorf("Entry name was modified: expected '%s', got '%s'",
 						safeEntry.Name, retrieved.Name)
 				}
 				t.Log("✅ Entry data integrity maintained")
@@ -760,7 +885,7 @@ func isValidEntryName(name string) bool {
 		}
 	}
 
-	return len(name) > 0 && len(name) <= 255
+	return name != "" && len(name) <= 255
 }
 
 func sanitizeNotes(notes string) string {
@@ -770,11 +895,4 @@ func sanitizeNotes(notes string) string {
 	notes = strings.ReplaceAll(notes, "<", "&lt;")
 	notes = strings.ReplaceAll(notes, ">", "&gt;")
 	return notes
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

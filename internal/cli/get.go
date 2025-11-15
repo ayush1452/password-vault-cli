@@ -7,12 +7,14 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/vault-cli/vault/internal/clipboard"
 	"github.com/vault-cli/vault/internal/config"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 var (
-	field string
-	copy  bool
-	show  bool
+	field      string
+	shouldCopy bool
+	show       bool
 )
 
 var getCmd = &cobra.Command{
@@ -37,13 +39,13 @@ Example:
 
 func init() {
 	getCmd.Flags().StringVar(&field, "field", "secret", "Field to retrieve (secret|username|url|notes)")
-	getCmd.Flags().BoolVar(&copy, "copy", false, "Copy to clipboard instead of displaying")
+	getCmd.Flags().BoolVar(&shouldCopy, "copy", false, "Copy to clipboard instead of displaying")
 	getCmd.Flags().BoolVar(&show, "show", false, "Show secret in terminal (security warning)")
 }
 
 // NewGetCommand creates a new get command for testing
 func NewGetCommand(cfg *config.Config) *cobra.Command {
-	var cmd = &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "get <entry-name>",
 		Short: "Get an entry from the vault",
 		Long: `Get an entry from the vault and display or copy the specified field.
@@ -70,14 +72,18 @@ Example:
 	}
 
 	cmd.Flags().StringVar(&field, "field", "secret", "Field to retrieve (secret|username|url|notes)")
-	cmd.Flags().BoolVar(&copy, "copy", false, "Copy to clipboard instead of displaying")
+	cmd.Flags().BoolVar(&shouldCopy, "copy", false, "Copy to clipboard instead of displaying")
 	cmd.Flags().BoolVar(&show, "show", false, "Show secret in terminal (security warning)")
 
 	return cmd
 }
 
-func runGet(cmd *cobra.Command, entryName string) error {
-	defer CloseSessionStore()
+func runGet(cmd *cobra.Command, entryName string) (err error) {
+	defer func() {
+		err = checkDeferredErr(err, "CloseSessionStore", CloseSessionStore())
+	}()
+
+	// Use the shared writeOutput function for consistent error handling
 
 	// Check if vault is unlocked
 	if !IsUnlocked() {
@@ -114,17 +120,19 @@ func runGet(cmd *cobra.Command, entryName string) error {
 	}
 
 	if value == "" {
-		fmt.Fprintf(cmd.OutOrStdout(), "Field '%s' is empty for entry '%s'\n", field, entryName)
+		if err := writeOutput(cmd.OutOrStdout(), "Field '%s' is empty for entry '%s'\n", field, entryName); err != nil {
+			return err
+		}
 		return nil
 	}
 
 	// Handle output based on flags and field sensitivity
-	if sensitive && !show && !copy {
+	if sensitive && !show && !shouldCopy {
 		// Default behavior for secrets: copy to clipboard
-		copy = true
+		shouldCopy = true
 	}
 
-	if copy || (!show && sensitive) {
+	if shouldCopy || (!show && sensitive) {
 		// Copy to clipboard
 		if !clipboard.IsAvailable() {
 			return fmt.Errorf("clipboard not available, use --show to display in terminal")
@@ -135,37 +143,83 @@ func runGet(cmd *cobra.Command, entryName string) error {
 			return fmt.Errorf("failed to copy to clipboard: %w", err)
 		}
 
-		fmt.Fprintf(cmd.OutOrStdout(), "✓ %s for '%s' copied to clipboard", strings.Title(field), entryName)
-		if sensitive {
-			fmt.Fprintf(cmd.OutOrStdout(), " (clears in %v)", timeout)
+		// Write the success message
+		out := cmd.OutOrStdout()
+		if err := writeOutput(out, "✓ %s for '%s' copied to clipboard", cases.Title(language.English).String(field), entryName); err != nil {
+			return err
 		}
-		fmt.Fprintln(cmd.OutOrStdout())
+
+		// Add timeout info if sensitive
+		if sensitive {
+			if err := writeOutput(out, " (clears in %v)", timeout); err != nil {
+				return err
+			}
+		}
+
+		// Add newline
+		if _, err := fmt.Fprintln(out); err != nil {
+			return fmt.Errorf("failed to write newline: %w", err)
+		}
 	} else {
 		// Display in terminal
+		out := cmd.OutOrStdout()
+
 		if sensitive {
-			fmt.Fprintln(cmd.OutOrStdout(), "⚠️  WARNING: Displaying secret in terminal")
+			if err := writeOutput(out, "⚠️  WARNING: Displaying secret in terminal\n"); err != nil {
+				return err
+			}
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "%s: %s\n", strings.Title(field), value)
+
+		if err := writeOutput(out, "%s: %s\n", cases.Title(language.English).String(field), value); err != nil {
+			return fmt.Errorf("failed to write %s: %w", field, err)
+		}
 	}
 
 	// Show additional info if verbose
 	if verbose && field == "secret" {
-		fmt.Printf("\nEntry details:\n")
-		fmt.Printf("  Name: %s\n", entry.Name)
+		// Write entry details with error checking
+		out := cmd.OutOrStdout()
+		if err := writeOutput(out, "\nEntry details:\n"); err != nil {
+			return fmt.Errorf("failed to write entry details header: %w", err)
+		}
+
+		if err := writeOutput(out, "  Name: %s\n", entry.Name); err != nil {
+			return fmt.Errorf("failed to write entry name: %w", err)
+		}
+
 		if entry.Username != "" {
-			fmt.Printf("  Username: %s\n", entry.Username)
+			if err := writeOutput(out, "  Username: %s\n", entry.Username); err != nil {
+				return fmt.Errorf("failed to write username: %w", err)
+			}
 		}
+
 		if entry.URL != "" {
-			fmt.Printf("  URL: %s\n", entry.URL)
+			if err := writeOutput(out, "  URL: %s\n", entry.URL); err != nil {
+				return fmt.Errorf("failed to write URL: %w", err)
+			}
 		}
+
 		if len(entry.Tags) > 0 {
-			fmt.Printf("  Tags: %v\n", entry.Tags)
+			if err := writeOutput(out, "  Tags: %s\n", strings.Join(entry.Tags, ", ")); err != nil {
+				return fmt.Errorf("failed to write tags: %w", err)
+			}
 		}
+
 		if entry.Notes != "" {
-			fmt.Printf("  Notes: %s\n", entry.Notes)
+			if err := writeOutput(out, "  Notes: %s\n", entry.Notes); err != nil {
+				return fmt.Errorf("failed to write notes: %w", err)
+			}
 		}
-		fmt.Printf("  Created: %s\n", entry.CreatedAt.Format("2006-01-02 15:04:05"))
-		fmt.Printf("  Updated: %s\n", entry.UpdatedAt.Format("2006-01-02 15:04:05"))
+
+		createdAt := entry.CreatedAt.Format("2006-01-02 15:04:05")
+		if err := writeOutput(out, "  Created: %s\n", createdAt); err != nil {
+			return fmt.Errorf("failed to write creation time: %w", err)
+		}
+
+		updatedAt := entry.UpdatedAt.Format("2006-01-02 15:04:05")
+		if err := writeOutput(out, "  Updated: %s\n", updatedAt); err != nil {
+			return fmt.Errorf("failed to write update time: %w", err)
+		}
 	}
 
 	return nil

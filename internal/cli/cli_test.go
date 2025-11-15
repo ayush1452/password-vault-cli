@@ -208,10 +208,10 @@ func TestInitCommand(t *testing.T) {
 
 			// Create init command
 			cmd := NewInitCommand(helper.Config)
-			
+
 			// Set the command arguments
 			cmd.SetArgs(tt.args)
-			
+
 			// Use a buffer to capture output
 			var stdoutBuf, stderrBuf bytes.Buffer
 			cmd.SetOut(&stdoutBuf)
@@ -436,10 +436,7 @@ func TestGetCommand(t *testing.T) {
 					t.Errorf("Expected error but got none")
 					return
 				}
-				errMsg := ""
-				if err != nil {
-					errMsg = err.Error()
-				}
+				errMsg := err.Error()
 				if !strings.Contains(errMsg, tt.errContains) && !strings.Contains(stderr, tt.errContains) {
 					t.Errorf("Error '%v' and stderr '%s' do not contain '%s'", err, stderr, tt.errContains)
 				}
@@ -485,44 +482,44 @@ func TestListCommandDetailed(t *testing.T) {
 	now := time.Now()
 	entries := []*domain.Entry{
 		{
-			Name:       "github.com",
-			Username:   "dev1",
-			Password:   []byte("pass1"),
-			URL:        "https://github.com",
-			Notes:      "Work GitHub account",
-			Tags:       []string{"work", "git"},
-			CreatedAt:  now.Add(-24 * time.Hour),
-			UpdatedAt:  now.Add(-12 * time.Hour),
+			Name:      "github.com",
+			Username:  "dev1",
+			Password:  []byte("pass1"),
+			URL:       "https://github.com",
+			Notes:     "Work GitHub account",
+			Tags:      []string{"work", "git"},
+			CreatedAt: now.Add(-24 * time.Hour),
+			UpdatedAt: now.Add(-12 * time.Hour),
 		},
 		{
-			Name:       "gitlab.com",
-			Username:   "personal",
-			Password:   []byte("pass2"),
-			URL:        "https://gitlab.com",
-			Notes:      "Personal GitLab",
-			Tags:       []string{"personal", "git"},
-			CreatedAt:  now.Add(-48 * time.Hour),
-			UpdatedAt:  now.Add(-1 * time.Hour),
+			Name:      "gitlab.com",
+			Username:  "personal",
+			Password:  []byte("pass2"),
+			URL:       "https://gitlab.com",
+			Notes:     "Personal GitLab",
+			Tags:      []string{"personal", "git"},
+			CreatedAt: now.Add(-48 * time.Hour),
+			UpdatedAt: now.Add(-1 * time.Hour),
 		},
 		{
-			Name:       "aws-prod",
-			Username:   "admin",
-			Password:   []byte("pass3"),
-			URL:        "https://aws.amazon.com",
-			Notes:      "Production AWS account",
-			Tags:       []string{"work", "aws", "prod"},
-			CreatedAt:  now.Add(-72 * time.Hour),
-			UpdatedAt:  now.Add(-2 * time.Hour),
+			Name:      "aws-prod",
+			Username:  "admin",
+			Password:  []byte("pass3"),
+			URL:       "https://aws.amazon.com",
+			Notes:     "Production AWS account",
+			Tags:      []string{"work", "aws", "prod"},
+			CreatedAt: now.Add(-72 * time.Hour),
+			UpdatedAt: now.Add(-2 * time.Hour),
 		},
 		{
-			Name:       "aws-dev",
-			Username:   "developer",
-			Password:   []byte("pass4"),
-			URL:        "https://aws.amazon.com",
-			Notes:      "Development AWS account",
-			Tags:       []string{"work", "aws", "dev"},
-			CreatedAt:  now.Add(-96 * time.Hour),
-			UpdatedAt:  now,
+			Name:      "aws-dev",
+			Username:  "developer",
+			Password:  []byte("pass4"),
+			URL:       "https://aws.amazon.com",
+			Notes:     "Development AWS account",
+			Tags:      []string{"work", "aws", "dev"},
+			CreatedAt: now.Add(-96 * time.Hour),
+			UpdatedAt: now,
 		},
 	}
 
@@ -554,7 +551,7 @@ func TestListCommandDetailed(t *testing.T) {
 				t.Errorf("Missing required field: %s", field)
 				continue
 			}
-			
+
 			// Check type
 			gotType := fmt.Sprintf("%T", val)
 			if gotType != typ {
@@ -603,10 +600,10 @@ func TestListCommandDetailed(t *testing.T) {
 		setup       func()
 		expected    []string
 		notExpected []string
-		errContains  string
+		errContains string
 		skip        bool
-		testJSON    bool  // Special flag for JSON tests
-		checkStderr bool  // If true, check stderr instead of stdout for expected output
+		testJSON    bool // Special flag for JSON tests
+		checkStderr bool // If true, check stderr instead of stdout for expected output
 	}{
 		{
 			name: "List all entries",
@@ -662,8 +659,8 @@ func TestListCommandDetailed(t *testing.T) {
 			},
 		},
 		{
-			name: "List with JSON output",
-			args: []string{"--json"},
+			name:     "List with JSON output",
+			args:     []string{"--json"},
 			testJSON: true,
 		},
 		{
@@ -809,7 +806,7 @@ func TestListCommandDetailed(t *testing.T) {
 				t.Logf("DEBUG - Combined output: %q", combined)
 				t.Logf("DEBUG - Stdout: %q", stdout)
 				t.Logf("DEBUG - Stderr: %q", stderr)
-				
+
 				// The message is printed to stdout, so check there directly
 				for _, exp := range tt.expected {
 					if !strings.Contains(stdout, exp) {
@@ -1083,7 +1080,7 @@ func TestUnlockLockCommands(t *testing.T) {
 
 				// Create lock command
 				cmd := NewLockCommand(h.Config)
-				
+
 				// Use a buffer to capture output
 				var stdoutBuf, stderrBuf bytes.Buffer
 				cmd.SetOut(&stdoutBuf)
@@ -1124,26 +1121,26 @@ func TestCommandValidation(t *testing.T) {
 		errContains string
 	}{
 		{
-			name:        "Add command with invalid characters",
-			command:     "add",
-			args:        []string{"invalid/name"},
-			wantErr:     true,
+			name:    "Add command with invalid characters",
+			command: "add",
+			args:    []string{"invalid/name"},
+			wantErr: true,
 			// The actual command doesn't validate the name format, so we expect a password input error
 			errContains: "failed to read secret",
 		},
 		{
-			name:        "Get command with empty name",
-			command:     "get",
-			args:        []string{""},
-			wantErr:     true,
+			name:    "Get command with empty name",
+			command: "get",
+			args:    []string{""},
+			wantErr: true,
 			// The actual command doesn't validate empty names, so we expect a not found error
 			errContains: "entry not found",
 		},
 		{
-			name:        "Delete command with special characters",
-			command:     "delete",
-			args:        []string{"../../../etc/passwd"},
-			wantErr:     true,
+			name:    "Delete command with special characters",
+			command: "delete",
+			args:    []string{"../../../etc/passwd"},
+			wantErr: true,
 			// The actual command allows any characters in the name
 			errContains: "does not exist",
 		},
@@ -1174,10 +1171,10 @@ func TestCommandValidation(t *testing.T) {
 					t.Errorf("Expected error but got none. Stdout: %s, Stderr: %s", stdout, stderr)
 					return
 				}
-				if !strings.Contains(err.Error(), tt.errContains) && 
-				   !strings.Contains(stderr, tt.errContains) && 
-				   !strings.Contains(stdout, tt.errContains) {
-					t.Errorf("Expected error to contain '%s', got: %v (stdout: %s, stderr: %s)", 
+				if !strings.Contains(err.Error(), tt.errContains) &&
+					!strings.Contains(stderr, tt.errContains) &&
+					!strings.Contains(stdout, tt.errContains) {
+					t.Errorf("Expected error to contain '%s', got: %v (stdout: %s, stderr: %s)",
 						tt.errContains, err, stdout, stderr)
 				}
 				return
@@ -1198,20 +1195,20 @@ func TestConfigCommand(t *testing.T) {
 	// Create a temporary config file for testing
 	tempDir := t.TempDir()
 	testCfgFile := filepath.Join(tempDir, "config.yaml")
-	
+
 	// Initialize config with test values
 	cfg = &config.Config{
-		VaultPath:         filepath.Join(tempDir, "test.vault"),
-		DefaultProfile:    "default",
-		AutoLockTTL:       0,
-		ClipboardTTL:      0,
-		Security:         config.SecurityConfig{SessionTimeout: 1800},
-		OutputFormat:     "",
-		ShowPasswords:    false,
+		VaultPath:          filepath.Join(tempDir, "test.vault"),
+		DefaultProfile:     "default",
+		AutoLockTTL:        0,
+		ClipboardTTL:       0,
+		Security:           config.SecurityConfig{SessionTimeout: 1800},
+		OutputFormat:       "",
+		ShowPasswords:      false,
 		ConfirmDestructive: false,
-		KDF:              config.KDFConfig{},
+		KDF:                config.KDFConfig{},
 	}
-	
+
 	// Save the initial config
 	if err := config.SaveConfig(cfg, testCfgFile); err != nil {
 		t.Fatalf("Failed to save test config: %v", err)
@@ -1237,9 +1234,9 @@ func TestConfigCommand(t *testing.T) {
 			setup: func(t *testing.T) *config.Config {
 				// Return a fresh config to avoid test pollution
 				return &config.Config{
-					VaultPath:         filepath.Join(tempDir, "test.vault"),
-					DefaultProfile:    "default",
-					Security:          config.SecurityConfig{SessionTimeout: 1800},
+					VaultPath:      filepath.Join(tempDir, "test.vault"),
+					DefaultProfile: "default",
+					Security:       config.SecurityConfig{SessionTimeout: 1800},
 				}
 			},
 			checkOutput: func(t *testing.T, cfg *config.Config, stdout, stderr string, err error) {
@@ -1306,7 +1303,7 @@ func TestConfigCommand(t *testing.T) {
 				if !strings.Contains(stdout, expectedMsg) {
 					t.Errorf("Expected output to contain '%s', got: %s", expectedMsg, stdout)
 				}
-				
+
 				// Verify the value was actually set by reloading the config
 				loadedCfg, err := config.LoadConfig(testCfgFile)
 				if err != nil {
@@ -1329,7 +1326,7 @@ func TestConfigCommand(t *testing.T) {
 				}
 				expectedErr := "invalid timeout value"
 				if !strings.Contains(err.Error(), expectedErr) && !strings.Contains(stderr, expectedErr) {
-					t.Errorf("Expected error to contain '%s', got: %v\nStdout: %s\nStderr: %s", 
+					t.Errorf("Expected error to contain '%s', got: %v\nStdout: %s\nStderr: %s",
 						expectedErr, err, stdout, stderr)
 				}
 			},
@@ -1358,7 +1355,7 @@ func TestConfigCommand(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Reset output buffers for each test
 			var stdoutBuf, stderrBuf bytes.Buffer
-			
+
 			// Run setup to get the expected config state
 			var expectedCfg *config.Config
 			if tt.setup != nil {
@@ -1369,19 +1366,19 @@ func TestConfigCommand(t *testing.T) {
 
 			// Create a new command for each test to avoid state pollution
 			cmd := NewConfigCommand(expectedCfg)
-			
+
 			// Set up command with our buffers
 			cmd.SetOut(&stdoutBuf)
 			cmd.SetErr(&stderrBuf)
 			cmd.SetArgs(tt.args)
-			
+
 			// Execute the command
 			err := cmd.Execute()
-			
+
 			// Get the output
 			stdout := stdoutBuf.String()
 			stderr := stderrBuf.String()
-			
+
 			// Run the test-specific checks
 			tt.checkOutput(t, expectedCfg, stdout, stderr, err)
 		})

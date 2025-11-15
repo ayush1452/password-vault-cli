@@ -1,3 +1,5 @@
+// Package vault implements the core vault functionality for the password manager.
+// It handles encryption, decryption, and management of password entries.
 package vault
 
 import (
@@ -8,33 +10,50 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"golang.org/x/crypto/argon2"
 )
 
+// KeySize is the size of the AES-256 key in bytes
+const KeySize = 32
+
+// SaltSize is the size of the salt for Argon2id in bytes
+const SaltSize = 32
+
+// NonceSize is the size of the GCM nonce in bytes
+const NonceSize = 12
+
+// TagSize is the size of the GCM authentication tag in bytes
+const TagSize = 16
+
+// EnvelopeVersion is the current version of the envelope format
+const EnvelopeVersion = 1
+
+// Default Argon2id parameters (tuned for ~300ms on modern hardware)
 const (
-	// Crypto constants
-	KeySize   = 32 // AES-256 key size
-	SaltSize  = 32 // Salt size for Argon2id
-	NonceSize = 12 // GCM nonce size
-	TagSize   = 16 // GCM tag size
-
-	// Envelope version
-	EnvelopeVersion = 1
-
-	// Default Argon2id parameters (tuned for ~300ms on modern hardware)
-	DefaultArgon2Memory      = 64 * 1024 // 64 MB
-	DefaultArgon2Iterations  = 3
+	// DefaultArgon2Memory is the default memory parameter for Argon2id (64 MB)
+	DefaultArgon2Memory = 64 * 1024
+	// DefaultArgon2Iterations is the default number of iterations for Argon2id
+	DefaultArgon2Iterations = 3
+	// DefaultArgon2Parallelism is the default parallelism factor for Argon2id
 	DefaultArgon2Parallelism = 4
 )
 
+// Error variables for cryptographic operations
 var (
-	ErrInvalidEnvelope   = errors.New("invalid envelope format")
-	ErrInvalidVersion    = errors.New("unsupported envelope version")
-	ErrDecryptionFailed  = errors.New("decryption failed")
-	ErrInvalidKeySize    = errors.New("invalid key size")
-	ErrInvalidNonceSize  = errors.New("invalid nonce size")
+	// ErrInvalidEnvelope is returned when the envelope format is invalid
+	ErrInvalidEnvelope = errors.New("invalid envelope format")
+	// ErrInvalidVersion is returned when the envelope version is not supported
+	ErrInvalidVersion = errors.New("unsupported envelope version")
+	// ErrDecryptionFailed is returned when decryption fails
+	ErrDecryptionFailed = errors.New("decryption failed")
+	// ErrInvalidKeySize is returned when the key size is invalid
+	ErrInvalidKeySize = errors.New("invalid key size")
+	// ErrInvalidNonceSize is returned when the nonce size is invalid
+	ErrInvalidNonceSize = errors.New("invalid nonce size")
+	// ErrInvalidCiphertext is returned when the ciphertext is invalid
 	ErrInvalidCiphertext = errors.New("invalid ciphertext")
 )
 
@@ -127,7 +146,7 @@ func (ce *CryptoEngine) DeriveKey(passphrase string, salt []byte) ([]byte, error
 }
 
 // Seal encrypts plaintext using AES-256-GCM
-func (ce *CryptoEngine) Seal(plaintext []byte, key []byte) (*Envelope, error) {
+func (ce *CryptoEngine) Seal(plaintext, key []byte) (*Envelope, error) {
 	if len(key) != KeySize {
 		return nil, ErrInvalidKeySize
 	}
@@ -296,8 +315,9 @@ func ValidateArgon2Params(params Argon2Params) error {
 	if params.Parallelism < 1 {
 		return errors.New("parallelism parameter too low (minimum 1)")
 	}
-	if params.Parallelism >= 255 {
-		return errors.New("parallelism parameter too high (maximum 254)")
+	// Limit parallelism to a reasonable number of CPU cores
+	if params.Parallelism > 16 {
+		return errors.New("parallelism parameter too high (maximum 16)")
 	}
 	return nil
 }
@@ -357,55 +377,200 @@ func TuneArgon2Params(targetDuration time.Duration, testPassphrase string) (Argo
 }
 
 // EnvelopeToBytes serializes an envelope to bytes for storage
-func EnvelopeToBytes(envelope *Envelope) []byte {
-	// Simple binary format: version(1) + kdf_params(9) + salt_len(4) + salt + nonce_len(4) + nonce + ciphertext_len(4) + ciphertext + tag_len(4) + tag
-	buf := make([]byte, 0, 1+9+4+len(envelope.Salt)+4+len(envelope.Nonce)+4+len(envelope.Ciphertext)+4+len(envelope.Tag))
+// It ensures all integer conversions are safe and prevents overflows
+// Returns the serialized bytes or an error if the envelope cannot be serialized
+func EnvelopeToBytes(envelope *Envelope) ([]byte, error) {
+	if envelope == nil {
+		return nil, nil
+	}
 
-	// Version
+	// Calculate total size with overflow checking
+	totalSize := 2 // version (1) + reserved (1)
+
+	// Add KDF parameters size (4 + 4 + 1 = 9 bytes)
+	totalSize += 9
+
+	// Add salt length with overflow check
+	saltLen := len(envelope.Salt)
+	if saltLen < 0 || uint64(saltLen) > math.MaxUint32 {
+		saltLen = math.MaxUint32
+	}
+	// Check for potential integer overflow when adding to totalSize
+	if totalSize > math.MaxInt32-4-int(saltLen) {
+		return nil, fmt.Errorf("integer overflow in size calculation")
+	}
+	totalSize += 4 + saltLen // 4 bytes for length + salt data
+
+	// Add nonce length with overflow check
+	nonceLen := len(envelope.Nonce)
+	if nonceLen < 0 || uint64(nonceLen) > math.MaxUint32 {
+		nonceLen = math.MaxUint32
+	}
+	// Check for potential integer overflow when adding to totalSize
+	if totalSize > math.MaxInt32-4-int(nonceLen) {
+		return nil, fmt.Errorf("integer overflow in size calculation")
+	}
+	totalSize += 4 + nonceLen // 4 bytes for length + nonce data
+
+	// Add ciphertext length with overflow check
+	ciphertextLen := len(envelope.Ciphertext)
+	if ciphertextLen < 0 || uint64(ciphertextLen) > math.MaxUint32 {
+		ciphertextLen = math.MaxUint32
+	}
+	// Check for potential integer overflow when adding to totalSize
+	if totalSize > math.MaxInt32-4-int(ciphertextLen) {
+		return nil, fmt.Errorf("integer overflow in size calculation")
+	}
+	totalSize += 4 + ciphertextLen // 4 bytes for length + ciphertext data
+
+	// Add tag length with overflow check
+	tagLen := len(envelope.Tag)
+	if tagLen < 0 || uint64(tagLen) > math.MaxUint32 {
+		tagLen = math.MaxUint32
+	}
+
+	// Check for potential integer overflow when adding to totalSize
+	if totalSize < 0 || totalSize > math.MaxInt32-4-int(tagLen) {
+		return nil, fmt.Errorf("integer overflow in size calculation")
+	}
+	totalSize += 4 + tagLen // 4 bytes for length + tag data
+
+	// Ensure we don't exceed MaxInt32 for slice creation
+	if totalSize < 0 || totalSize > math.MaxInt32 {
+		return nil, fmt.Errorf("serialized envelope size %d exceeds maximum allowed size %d", totalSize, math.MaxInt32)
+	}
+
+	buf := make([]byte, 0, totalSize)
+
+	// Version (1 byte)
 	buf = append(buf, envelope.Version)
 
-	// KDF params (9 bytes: memory(4) + iterations(4) + parallelism(1))
-	memBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(memBytes, envelope.KDFParams.Memory)
-	buf = append(buf, memBytes...)
+	// KDF Parameters
+	// Memory (4 bytes)
+	memoryBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(memoryBytes, envelope.KDFParams.Memory)
+	buf = append(buf, memoryBytes...)
 
+	// Iterations (4 bytes)
 	iterBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(iterBytes, envelope.KDFParams.Iterations)
 	buf = append(buf, iterBytes...)
 
+	// Parallelism (1 byte)
 	buf = append(buf, envelope.KDFParams.Parallelism)
 
-	// Salt
+	// Salt (4-byte length + data)
 	saltLenBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(saltLenBytes, uint32(len(envelope.Salt)))
+	// Ensure saltLen is within uint32 range before conversion
+	if saltLen < 0 || saltLen > math.MaxUint32 {
+		return nil, fmt.Errorf("salt length %d is out of range (0-%d)", saltLen, math.MaxUint32)
+	}
+	saltLen32 := uint32(saltLen)
+	binary.LittleEndian.PutUint32(saltLenBytes, saltLen32)
 	buf = append(buf, saltLenBytes...)
-	buf = append(buf, envelope.Salt...)
+	if saltLen > 0 && saltLen <= len(envelope.Salt) {
+		buf = append(buf, envelope.Salt[:saltLen]...)
+	} else if saltLen > 0 {
+		// If we get here, there's a logic error in our size calculations
+		return nil, fmt.Errorf("salt length %d exceeds available data %d", saltLen, len(envelope.Salt))
+	}
 
-	// Nonce
+	// Nonce (4-byte length + data)
 	nonceLenBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(nonceLenBytes, uint32(len(envelope.Nonce)))
+	if nonceLen < 0 || nonceLen > math.MaxUint32 {
+		return nil, fmt.Errorf("nonce length %d is out of range (0-%d)", nonceLen, math.MaxUint32)
+	}
+	binary.LittleEndian.PutUint32(nonceLenBytes, uint32(nonceLen))
 	buf = append(buf, nonceLenBytes...)
-	buf = append(buf, envelope.Nonce...)
+	if nonceLen > 0 && nonceLen <= len(envelope.Nonce) {
+		buf = append(buf, envelope.Nonce[:nonceLen]...)
+	} else if nonceLen > 0 {
+		buf = append(buf, make([]byte, nonceLen)...)
+	}
 
-	// Ciphertext
+	// Ciphertext (4-byte length + data)
 	ciphertextLenBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(ciphertextLenBytes, uint32(len(envelope.Ciphertext)))
+	if ciphertextLen < 0 || ciphertextLen > math.MaxUint32 {
+		return nil, fmt.Errorf("ciphertext length %d is out of range (0-%d)", ciphertextLen, math.MaxUint32)
+	}
+	binary.LittleEndian.PutUint32(ciphertextLenBytes, uint32(ciphertextLen))
 	buf = append(buf, ciphertextLenBytes...)
-	buf = append(buf, envelope.Ciphertext...)
+	if ciphertextLen > 0 && ciphertextLen <= len(envelope.Ciphertext) {
+		buf = append(buf, envelope.Ciphertext[:ciphertextLen]...)
+	} else if ciphertextLen > 0 {
+		buf = append(buf, make([]byte, ciphertextLen)...)
+	}
 
-	// Tag
+	// Tag (4-byte length + data)
 	tagLenBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(tagLenBytes, uint32(len(envelope.Tag)))
+	if tagLen < 0 || tagLen > math.MaxUint32 {
+		return nil, fmt.Errorf("tag length %d is out of range (0-%d)", tagLen, math.MaxUint32)
+	}
+	binary.LittleEndian.PutUint32(tagLenBytes, uint32(tagLen))
 	buf = append(buf, tagLenBytes...)
-	buf = append(buf, envelope.Tag...)
+	if tagLen > 0 && tagLen <= len(envelope.Tag) {
+		buf = append(buf, envelope.Tag[:tagLen]...)
+	} else if tagLen > 0 {
+		buf = append(buf, make([]byte, tagLen)...)
+	}
 
-	return buf
+	return buf, nil
+}
+
+// validateEnvelope checks if all required fields in the envelope are valid
+func validateEnvelope(env *Envelope) error {
+	if env == nil {
+		return fmt.Errorf("envelope is nil")
+	}
+
+	// Check version
+	if env.Version != EnvelopeVersion {
+		return fmt.Errorf("unsupported envelope version: %d", env.Version)
+	}
+
+	// Validate KDF parameters
+	if err := ValidateArgon2Params(env.KDFParams); err != nil {
+		return fmt.Errorf("invalid KDF parameters: %w", err)
+	}
+
+	// Check required fields
+	if len(env.Salt) == 0 {
+		return fmt.Errorf("salt cannot be empty")
+	}
+	if len(env.Nonce) == 0 {
+		return fmt.Errorf("nonce cannot be empty")
+	}
+	if len(env.Ciphertext) == 0 {
+		return fmt.Errorf("ciphertext cannot be empty")
+	}
+	if len(env.Tag) == 0 {
+		return fmt.Errorf("tag cannot be empty")
+	}
+
+	// Check reasonable size limits (prevent potential DoS with very large fields)
+	const maxFieldSize = 10 * 1024 * 1024 // 10MB
+	if len(env.Salt) > maxFieldSize {
+		return fmt.Errorf("salt size %d exceeds maximum allowed %d", len(env.Salt), maxFieldSize)
+	}
+	if len(env.Nonce) > maxFieldSize {
+		return fmt.Errorf("nonce size %d exceeds maximum allowed %d", len(env.Nonce), maxFieldSize)
+	}
+	if len(env.Ciphertext) > maxFieldSize {
+		return fmt.Errorf("ciphertext size %d exceeds maximum allowed %d", len(env.Ciphertext), maxFieldSize)
+	}
+	if len(env.Tag) > maxFieldSize {
+		return fmt.Errorf("tag size %d exceeds maximum allowed %d", len(env.Tag), maxFieldSize)
+	}
+
+	return nil
 }
 
 // EnvelopeFromBytes deserializes an envelope from bytes
 func EnvelopeFromBytes(data []byte) (*Envelope, error) {
-	if len(data) < 1+9+4+4+4+4 { // Minimum size
-		return nil, ErrInvalidEnvelope
+	// Minimum size check: version(1) + memory(4) + iterations(4) + parallelism(1) + saltLen(4) + nonceLen(4) + ciphertextLen(4) + tagLen(4)
+	const minEnvelopeSize = 1 + 4 + 4 + 1 + 4 + 4 + 4 + 4
+	if len(data) < minEnvelopeSize {
+		return nil, fmt.Errorf("envelope data too small: %d bytes, expected at least %d", len(data), minEnvelopeSize)
 	}
 
 	offset := 0
@@ -426,69 +591,101 @@ func EnvelopeFromBytes(data []byte) (*Envelope, error) {
 	parallelism := data[offset]
 	offset++
 
+	// Validate KDF parameters to prevent potential DoS
+	if memory > 1024*1024 || memory < 64*1024 { // 1MB max, 64KB min
+		return nil, ErrInvalidEnvelope
+	}
+	if iterations > 1000 || iterations < 1 { // 1000 max, 1 min
+		return nil, ErrInvalidEnvelope
+	}
+	if parallelism > 16 || parallelism < 1 { // 16 max, 1 min
+		return nil, ErrInvalidEnvelope
+	}
+
 	kdfParams := Argon2Params{
 		Memory:      memory,
 		Iterations:  iterations,
 		Parallelism: parallelism,
 	}
 
-	// Salt
-	if offset+4 > len(data) {
-		return nil, ErrInvalidEnvelope
-	}
-	saltLen := binary.LittleEndian.Uint32(data[offset : offset+4])
-	offset += 4
-	if offset+int(saltLen) > len(data) {
-		return nil, ErrInvalidEnvelope
-	}
-	salt := make([]byte, saltLen)
-	copy(salt, data[offset:offset+int(saltLen)])
-	offset += int(saltLen)
+	// Helper function to safely read a length-prefixed field
+	readField := func() ([]byte, error) {
+		// Check if we can read the length field (4 bytes)
+		if offset+4 > len(data) {
+			return nil, fmt.Errorf("incomplete length field at offset %d", offset)
+		}
 
-	// Nonce
-	if offset+4 > len(data) {
-		return nil, ErrInvalidEnvelope
+		// Read the length field
+		fieldLen := binary.LittleEndian.Uint32(data[offset : offset+4])
+		offset += 4
+
+		// Check for potential integer overflow/underflow in the field length
+		if fieldLen > math.MaxInt32 {
+			return nil, fmt.Errorf("field length %d exceeds maximum allowed size %d", fieldLen, math.MaxInt32)
+		}
+
+		// Check if we have enough data remaining for the field
+		if offset+int(fieldLen) > len(data) {
+			return nil, fmt.Errorf("incomplete field data at offset %d, need %d more bytes but only %d available",
+				offset, fieldLen, len(data)-offset)
+		}
+
+		// Limit field size to prevent excessive memory allocation (10MB max per field)
+		const maxFieldSize = 10 * 1024 * 1024 // 10MB
+		if fieldLen > maxFieldSize {
+			return nil, fmt.Errorf("field size %d exceeds maximum allowed size %d", fieldLen, maxFieldSize)
+		}
+
+		// Create a new slice and copy the data to prevent potential memory leaks
+		field := make([]byte, fieldLen)
+		copy(field, data[offset:offset+int(fieldLen)])
+		offset += int(fieldLen)
+		return field, nil
 	}
-	nonceLen := binary.LittleEndian.Uint32(data[offset : offset+4])
-	offset += 4
-	if offset+int(nonceLen) > len(data) {
-		return nil, ErrInvalidEnvelope
+
+	// Read salt
+	salt, err := readField()
+	if err != nil {
+		return nil, err
 	}
-	nonce := make([]byte, nonceLen)
-	copy(nonce, data[offset:offset+int(nonceLen)])
-	offset += int(nonceLen)
+
+	// Read nonce
+	nonce, err := readField()
+	if err != nil {
+		return nil, err
+	}
 
 	// Ciphertext
-	if offset+4 > len(data) {
-		return nil, ErrInvalidEnvelope
+	ciphertext, err := readField()
+	if err != nil {
+		return nil, err
 	}
-	ciphertextLen := binary.LittleEndian.Uint32(data[offset : offset+4])
-	offset += 4
-	if offset+int(ciphertextLen) > len(data) {
-		return nil, ErrInvalidEnvelope
-	}
-	ciphertext := make([]byte, ciphertextLen)
-	copy(ciphertext, data[offset:offset+int(ciphertextLen)])
-	offset += int(ciphertextLen)
 
-	// Tag
-	if offset+4 > len(data) {
-		return nil, ErrInvalidEnvelope
+	// Read tag
+	tag, err := readField()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read tag: %w", err)
 	}
-	tagLen := binary.LittleEndian.Uint32(data[offset : offset+4])
-	offset += 4
-	if offset+int(tagLen) > len(data) {
-		return nil, ErrInvalidEnvelope
-	}
-	tag := make([]byte, tagLen)
-	copy(tag, data[offset:offset+int(tagLen)])
 
-	return &Envelope{
+	// Verify we've consumed all the input data
+	if offset != len(data) {
+		return nil, fmt.Errorf("trailing data after envelope: %d bytes remaining", len(data)-offset)
+	}
+
+	// Create the envelope with all fields
+	env := &Envelope{
 		Version:    version,
 		KDFParams:  kdfParams,
 		Salt:       salt,
 		Nonce:      nonce,
 		Ciphertext: ciphertext,
 		Tag:        tag,
-	}, nil
+	}
+
+	// Validate the envelope structure
+	if err := validateEnvelope(env); err != nil {
+		return nil, fmt.Errorf("invalid envelope: %w", err)
+	}
+
+	return env, nil
 }

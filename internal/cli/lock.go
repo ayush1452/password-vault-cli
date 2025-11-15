@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/vault-cli/vault/internal/config"
@@ -44,7 +45,9 @@ Example:
 
 func runLock() error {
 	if !IsUnlocked() {
-		fmt.Println("Vault is already locked")
+		if err := writeOutput(os.Stdout, "Vault is already locked\n"); err != nil {
+			return fmt.Errorf("failed to write status: %w", err)
+		}
 		return nil
 	}
 
@@ -52,6 +55,8 @@ func runLock() error {
 		return fmt.Errorf("failed to lock vault: %w", err)
 	}
 
-	fmt.Println("✓ Vault locked successfully")
+	if err := writeOutput(os.Stdout, "✓ Vault locked successfully\n"); err != nil {
+		return fmt.Errorf("failed to write success message: %w", err)
+	}
 	return nil
 }

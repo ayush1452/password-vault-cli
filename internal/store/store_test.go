@@ -55,7 +55,7 @@ func TestBoltStore_CreateAndOpenVault(t *testing.T) {
 		t.Fatalf("Vault file not created: %v", err)
 	}
 
-	if info.Mode().Perm() != 0600 {
+	if info.Mode().Perm() != 0o600 {
 		t.Errorf("Incorrect file permissions: got %o, want 0600", info.Mode().Perm())
 	}
 

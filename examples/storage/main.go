@@ -20,12 +20,19 @@ func main() {
 	// Create temporary directory for demo
 	tempDir, err := os.MkdirTemp("", "vault_storage_demo_")
 	if err != nil {
-		log.Fatal("Failed to create temp directory:", err)
+		log.Printf("Failed to create temp directory: %v", err)
+		return
 	}
-	defer os.RemoveAll(tempDir)
 
 	vaultPath := filepath.Join(tempDir, "demo.vault")
 	fmt.Printf("Demo vault: %s\n", vaultPath)
+
+	// Only set up cleanup after we know the temp directory was created successfully
+	defer func() {
+		if err := os.RemoveAll(tempDir); err != nil {
+			log.Printf("Warning: failed to remove temp directory: %v", err)
+		}
+	}()
 
 	// Demo 1: Create and initialize vault
 	fmt.Println("\n1. Creating New Vault")
@@ -35,13 +42,15 @@ func main() {
 	passphrase := "my-secure-master-passphrase-123"
 	salt, err := vault.GenerateSalt()
 	if err != nil {
-		log.Fatal("Failed to generate salt:", err)
+		log.Printf("Failed to generate salt: %v", err)
+		return
 	}
 
 	crypto := vault.NewDefaultCryptoEngine()
 	masterKey, err := crypto.DeriveKey(passphrase, salt)
 	if err != nil {
-		log.Fatal("Failed to derive key:", err)
+		log.Printf("Failed to derive key: %v", err)
+		return
 	}
 	defer vault.Zeroize(masterKey)
 
@@ -57,7 +66,8 @@ func main() {
 
 	err = vaultStore.CreateVault(vaultPath, masterKey, kdfParams)
 	if err != nil {
-		log.Fatal("Failed to create vault:", err)
+		log.Printf("Failed to create vault: %v", err)
+		return
 	}
 	fmt.Println("   ✓ Vault created successfully")
 
@@ -67,10 +77,15 @@ func main() {
 
 	err = vaultStore.OpenVault(vaultPath, masterKey)
 	if err != nil {
-		log.Fatal("Failed to open vault:", err)
+		log.Printf("Failed to open vault: %v", err)
+		return
 	}
 	fmt.Println("   ✓ Vault opened successfully")
-	defer vaultStore.CloseVault()
+	defer func() {
+		if err := vaultStore.CloseVault(); err != nil {
+			log.Printf("Warning: failed to close vault: %v", err)
+		}
+	}()
 
 	// Demo 3: Get vault metadata
 	fmt.Println("\n3. Vault Metadata")
@@ -78,7 +93,8 @@ func main() {
 
 	metadata, err := vaultStore.GetVaultMetadata()
 	if err != nil {
-		log.Fatal("Failed to get metadata:", err)
+		log.Printf("Failed to get metadata: %v", err)
+		return
 	}
 	fmt.Printf("   Version: %s\n", metadata.Version)
 	fmt.Printf("   Created: %s\n", metadata.CreatedAt.Format("2006-01-02 15:04:05"))
@@ -92,7 +108,8 @@ func main() {
 	// List existing profiles
 	profiles, err := vaultStore.ListProfiles()
 	if err != nil {
-		log.Fatal("Failed to list profiles:", err)
+		log.Printf("Failed to list profiles: %v", err)
+		return
 	}
 	fmt.Printf("   Initial profiles: %d\n", len(profiles))
 	for _, p := range profiles {
@@ -102,20 +119,23 @@ func main() {
 	// Create new profiles
 	err = vaultStore.CreateProfile("work", "Work-related passwords")
 	if err != nil {
-		log.Fatal("Failed to create work profile:", err)
+		log.Printf("Failed to create work profile: %v", err)
+		return
 	}
 	fmt.Println("   ✓ Created 'work' profile")
 
 	err = vaultStore.CreateProfile("personal", "Personal accounts")
 	if err != nil {
-		log.Fatal("Failed to create personal profile:", err)
+		log.Printf("Failed to create personal profile: %v", err)
+		return
 	}
 	fmt.Println("   ✓ Created 'personal' profile")
 
 	// List all profiles
 	profiles, err = vaultStore.ListProfiles()
 	if err != nil {
-		log.Fatal("Failed to list profiles:", err)
+		log.Printf("Failed to list profiles: %v", err)
+		return
 	}
 	fmt.Printf("   Total profiles: %d\n", len(profiles))
 
@@ -180,7 +200,8 @@ func main() {
 	}
 	err = vaultStore.CreateEntry("default", githubEntry)
 	if err != nil {
-		log.Fatal("Failed to create personal entry:", err)
+		log.Printf("Failed to create personal entry: %v", err)
+		return
 	}
 	fmt.Println("   ✓ Created entry: personal-github (default profile)")
 
@@ -191,7 +212,8 @@ func main() {
 	// Get specific entry
 	retrievedEntry, err := vaultStore.GetEntry("work", "github")
 	if err != nil {
-		log.Fatal("Failed to retrieve entry:", err)
+		log.Printf("Failed to retrieve entry: %v", err)
+		return
 	}
 	fmt.Printf("   Entry: %s\n", retrievedEntry.Name)
 	fmt.Printf("   Username: %s\n", retrievedEntry.Username)
@@ -206,7 +228,8 @@ func main() {
 	// List entries in work profile
 	workEntries, err := vaultStore.ListEntries("work", nil)
 	if err != nil {
-		log.Fatal("Failed to list work entries:", err)
+		log.Printf("Failed to list work entries: %v", err)
+		return
 	}
 	fmt.Printf("   Work profile (%d entries):\n", len(workEntries))
 	for _, e := range workEntries {
@@ -216,7 +239,8 @@ func main() {
 	// List entries in default profile
 	defaultEntries, err := vaultStore.ListEntries("default", nil)
 	if err != nil {
-		log.Fatal("Failed to list default entries:", err)
+		log.Printf("Failed to list default entries: %v", err)
+		return
 	}
 	fmt.Printf("   Default profile (%d entries):\n", len(defaultEntries))
 	for _, e := range defaultEntries {
@@ -234,14 +258,16 @@ func main() {
 
 	err = vaultStore.UpdateEntry("work", "github", retrievedEntry)
 	if err != nil {
-		log.Fatal("Failed to update entry:", err)
+		log.Printf("Failed to update entry: %v", err)
+		return
 	}
 	fmt.Println("   ✓ Entry updated successfully")
 
 	// Verify update
 	updated, err := vaultStore.GetEntry("work", "github")
 	if err != nil {
-		log.Fatal("Failed to retrieve updated entry:", err)
+		log.Printf("Failed to retrieve updated entry: %v", err)
+		return
 	}
 	fmt.Printf("   New notes: %s\n", updated.Notes)
 	fmt.Printf("   New tags: %v\n", updated.Tags)
@@ -256,7 +282,8 @@ func main() {
 	}
 	filtered, err := vaultStore.ListEntries("work", filter)
 	if err != nil {
-		log.Fatal("Failed to filter entries:", err)
+		log.Printf("Failed to filter entries: %v", err)
+		return
 	}
 	fmt.Printf("   Entries with 'development' tag: %d\n", len(filtered))
 	for _, e := range filtered {
@@ -275,7 +302,8 @@ func main() {
 	// Delete entry
 	err = vaultStore.DeleteEntry("work", "database")
 	if err != nil {
-		log.Fatal("Failed to delete entry:", err)
+		log.Printf("Failed to delete entry: %v", err)
+		return
 	}
 	fmt.Println("   ✓ Entry 'database' deleted")
 
@@ -291,13 +319,15 @@ func main() {
 	// Delete personal profile (it's empty)
 	err = vaultStore.DeleteProfile("personal")
 	if err != nil {
-		log.Fatal("Failed to delete profile:", err)
+		log.Printf("Failed to delete profile: %v", err)
+		return
 	}
 	fmt.Println("   ✓ Profile 'personal' deleted")
 
 	profiles, err = vaultStore.ListProfiles()
 	if err != nil {
-		log.Fatal("Failed to list profiles:", err)
+		log.Printf("Failed to list profiles: %v", err)
+		return
 	}
 	fmt.Printf("   Remaining profiles: %d\n", len(profiles))
 	for _, p := range profiles {
@@ -321,7 +351,8 @@ func main() {
 
 	err = vaultStore.CloseVault()
 	if err != nil {
-		log.Fatal("Failed to close vault:", err)
+		log.Printf("Failed to close vault: %v", err)
+		return
 	}
 	fmt.Println("   ✓ Vault closed successfully")
 

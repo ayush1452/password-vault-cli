@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -11,9 +13,7 @@ import (
 	"github.com/vault-cli/vault/internal/vault"
 )
 
-var (
-	statusJSON bool
-)
+var statusJSON bool
 
 var statusCmd = &cobra.Command{
 	Use:   "status",
@@ -70,7 +70,11 @@ func runStatus() error {
 		if vaultStore == nil {
 			return fmt.Errorf("failed to access unlocked vault store")
 		}
-		defer CloseSessionStore()
+		defer func() {
+			if err := CloseSessionStore(); err != nil {
+				log.Printf("Warning: failed to close session store: %v", err)
+			}
+		}()
 
 		entries, err := vaultStore.ListEntries(profile, nil)
 		if err != nil {
@@ -116,31 +120,63 @@ func runStatus() error {
 		if err != nil {
 			return fmt.Errorf("failed to marshal status: %w", err)
 		}
-		fmt.Println(string(payload))
+		if _, err := fmt.Println(string(payload)); err != nil {
+			return fmt.Errorf("failed to write JSON output: %w", err)
+		}
 		return nil
 	}
 
-	fmt.Printf("Vault: %s\n", result.VaultPath)
-	fmt.Printf("Cipher: %s\n", result.Cipher)
-	fmt.Printf("KDF: Argon2id (memory %d KB, iterations %d, parallelism %d, salt %d bytes)\n",
-		result.KDF.Memory, result.KDF.Iterations, result.KDF.Parallelism, result.SaltLength)
-	fmt.Printf("Created: %s\n", result.MetadataCreated)
-
-	if unlocked {
-		fmt.Printf("Entries: %d\n", *entryCount)
-		if lastUpdated != nil {
-			fmt.Printf("Last Updated: %s\n", lastUpdated.Format(time.RFC3339))
-		} else {
-			fmt.Printf("Last Updated: n/a\n")
+	// Use a helper function to handle fmt.Fprintf errors
+	printStatus := func(format string, args ...interface{}) error {
+		_, err := fmt.Fprintf(os.Stdout, format, args...)
+		if err != nil {
+			return fmt.Errorf("failed to write status: %w", err)
 		}
-	} else {
-		fmt.Println("Entries: (locked)")
+		return nil
+	}
+
+	// Write each status line with error checking
+	if err := printStatus("Vault: %s\n", result.VaultPath); err != nil {
+		return err
+	}
+	if err := printStatus("Cipher: %s\n", result.Cipher); err != nil {
+		return err
+	}
+	if err := printStatus("KDF: Argon2id (memory %d KB, iterations %d, parallelism %d, salt %d bytes)\n",
+		result.KDF.Memory, result.KDF.Iterations, result.KDF.Parallelism, result.SaltLength); err != nil {
+		return err
+	}
+	if err := printStatus("Created: %s\n", result.MetadataCreated); err != nil {
+		return err
 	}
 
 	if unlocked {
-		fmt.Printf("Session: %s (expires in %s)\n", sessionState, ttl.Round(time.Second))
+		if err := printStatus("Entries: %d\n", *entryCount); err != nil {
+			return err
+		}
+		if lastUpdated != nil {
+			if err := printStatus("Last Updated: %s\n", lastUpdated.Format(time.RFC3339)); err != nil {
+				return err
+			}
+		} else {
+			if _, err := fmt.Fprintln(os.Stdout, "Last Updated: n/a"); err != nil {
+				return fmt.Errorf("failed to write status: %w", err)
+			}
+		}
 	} else {
-		fmt.Printf("Session: %s\n", sessionState)
+		if _, err := fmt.Fprintln(os.Stdout, "Entries: (locked)"); err != nil {
+			return fmt.Errorf("failed to write status: %w", err)
+		}
+	}
+
+	if unlocked {
+		if err := printStatus("Session: %s (expires in %s)\n", sessionState, ttl.Round(time.Second)); err != nil {
+			return err
+		}
+	} else {
+		if err := printStatus("Session: %s\n", sessionState); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -148,11 +184,11 @@ func runStatus() error {
 
 func loadMetadataInfo() (*vault.MetadataInfo, error) {
 	if IsUnlocked() {
-		store := GetVaultStore()
-		if store == nil {
+		vaultStore := GetVaultStore()
+		if vaultStore == nil {
 			return nil, fmt.Errorf("failed to access unlocked vault store")
 		}
-		metadata, err := store.GetVaultMetadata()
+		metadata, err := vaultStore.GetVaultMetadata()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get vault metadata: %w", err)
 		}
@@ -161,7 +197,11 @@ func loadMetadataInfo() (*vault.MetadataInfo, error) {
 	}
 
 	boltStore := store.NewBoltStore()
-	defer boltStore.CloseVault()
+	defer func() {
+		if err := boltStore.CloseVault(); err != nil {
+			log.Printf("Warning: failed to close bolt store: %v", err)
+		}
+	}()
 
 	dummyKey := make([]byte, vault.KeySize)
 	if err := boltStore.OpenVault(vaultPath, dummyKey); err != nil {

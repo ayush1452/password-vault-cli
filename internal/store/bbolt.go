@@ -5,8 +5,13 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log"
+	"math"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -54,18 +59,24 @@ func (bs *BoltStore) CreateVault(path string, masterKey []byte, kdfParams map[st
 
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("failed to create vault directory: %w", err)
 	}
 
 	// Create and open database
-	db, err := bbolt.Open(path, 0600, &bbolt.Options{
+	db, err := bbolt.Open(path, 0o600, &bbolt.Options{
 		Timeout: 10 * time.Second,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create vault database: %w", err)
 	}
-	defer db.Close()
+
+	// Use a closure to ensure db.Close() is called and its error is checked
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil {
+			log.Printf("Warning: failed to close database: %v", closeErr)
+		}
+	}()
 
 	// Initialize vault structure
 	err = db.Update(func(tx *bbolt.Tx) error {
@@ -135,10 +146,9 @@ func (bs *BoltStore) CreateVault(path string, masterKey []byte, kdfParams map[st
 
 		return nil
 	})
-
 	if err != nil {
-		os.Remove(path) // Clean up on failure
-		return err
+		_ = os.Remove(path) // Clean up on failure, ignore error from Remove
+		return fmt.Errorf("failed to create vault database: %w", err)
 	}
 
 	// Ensure proper file permissions
@@ -168,12 +178,15 @@ func (bs *BoltStore) OpenVault(path string, masterKey []byte) error {
 	}
 
 	// Open database
-	db, err := bbolt.Open(path, 0600, &bbolt.Options{
+	db, err := bbolt.Open(path, 0o600, &bbolt.Options{
 		Timeout:  10 * time.Second,
 		ReadOnly: false,
 	})
 	if err != nil {
-		lock.Unlock()
+		// Log the error from Unlock but don't override the original error
+		if unlockErr := lock.Unlock(); unlockErr != nil {
+			log.Printf("warning: failed to unlock file after database open error: %v", unlockErr)
+		}
 		return fmt.Errorf("failed to open vault database: %w", err)
 	}
 
@@ -197,11 +210,15 @@ func (bs *BoltStore) OpenVault(path string, masterKey []byte) error {
 
 		return nil
 	})
-
 	if err != nil {
-		db.Close()
-		lock.Unlock()
-		return err
+		// Log errors but don't override the original error
+		if closeErr := db.Close(); closeErr != nil {
+			log.Printf("warning: failed to close database after verification error: %v", closeErr)
+		}
+		if unlockErr := lock.Unlock(); unlockErr != nil {
+			log.Printf("warning: failed to unlock file after verification error: %v", unlockErr)
+		}
+		return fmt.Errorf("vault verification failed: %w", err)
 	}
 
 	bs.db = db
@@ -293,7 +310,10 @@ func (bs *BoltStore) CreateEntry(profile string, entry *domain.Entry) error {
 		}
 
 		// Serialize envelope
-		envelopeData := vault.EnvelopeToBytes(envelope)
+		envelopeData, err := vault.EnvelopeToBytes(envelope)
+		if err != nil {
+			return fmt.Errorf("failed to serialize envelope: %w", err)
+		}
 
 		// Store encrypted entry
 		if err := bucket.Put([]byte(entry.ID), envelopeData); err != nil {
@@ -308,7 +328,7 @@ func (bs *BoltStore) CreateEntry(profile string, entry *domain.Entry) error {
 }
 
 // GetEntry retrieves an entry from the specified profile
-func (bs *BoltStore) GetEntry(profile string, entryID string) (*domain.Entry, error) {
+func (bs *BoltStore) GetEntry(profile, entryID string) (*domain.Entry, error) {
 	if !bs.isOpen {
 		return nil, fmt.Errorf("vault is not open")
 	}
@@ -435,7 +455,7 @@ func (bs *BoltStore) ListEntries(profile string, filter *domain.Filter) ([]*doma
 }
 
 // UpdateEntry updates an existing entry
-func (bs *BoltStore) UpdateEntry(profile string, entryID string, entry *domain.Entry) error {
+func (bs *BoltStore) UpdateEntry(profile, entryID string, entry *domain.Entry) error {
 	if !bs.isOpen {
 		return fmt.Errorf("vault is not open")
 	}
@@ -468,7 +488,10 @@ func (bs *BoltStore) UpdateEntry(profile string, entryID string, entry *domain.E
 		}
 
 		// Serialize envelope
-		envelopeData := vault.EnvelopeToBytes(envelope)
+		envelopeData, err := vault.EnvelopeToBytes(envelope)
+		if err != nil {
+			return fmt.Errorf("failed to serialize envelope: %w", err)
+		}
 
 		// Store updated entry
 		if err := bucket.Put([]byte(entryID), envelopeData); err != nil {
@@ -483,7 +506,7 @@ func (bs *BoltStore) UpdateEntry(profile string, entryID string, entry *domain.E
 }
 
 // DeleteEntry deletes an entry from the specified profile
-func (bs *BoltStore) DeleteEntry(profile string, entryID string) error {
+func (bs *BoltStore) DeleteEntry(profile, entryID string) error {
 	if !bs.isOpen {
 		return fmt.Errorf("vault is not open")
 	}
@@ -506,13 +529,13 @@ func (bs *BoltStore) DeleteEntry(profile string, entryID string) error {
 }
 
 // EntryExists checks if an entry exists in the specified profile
-func (bs *BoltStore) EntryExists(profile string, entryID string) bool {
+func (bs *BoltStore) EntryExists(profile, entryID string) bool {
 	if !bs.isOpen {
 		return false
 	}
 
 	exists := false
-	bs.db.View(func(tx *bbolt.Tx) error {
+	err := bs.db.View(func(tx *bbolt.Tx) error {
 		bucketName := fmt.Sprintf("entries:%s", profile)
 		bucket := tx.Bucket([]byte(bucketName))
 		if bucket != nil {
@@ -520,12 +543,16 @@ func (bs *BoltStore) EntryExists(profile string, entryID string) bool {
 		}
 		return nil
 	})
+	if err != nil {
+		// Log the error but don't fail the existence check
+		log.Printf("Warning: error checking if entry exists (profile=%s, id=%s): %v", profile, entryID, err)
+	}
 
 	return exists
 }
 
 // CreateProfile creates a new profile
-func (bs *BoltStore) CreateProfile(name string, description string) error {
+func (bs *BoltStore) CreateProfile(name, description string) error {
 	if !bs.isOpen {
 		return fmt.Errorf("vault is not open")
 	}
@@ -661,13 +688,17 @@ func (bs *BoltStore) ProfileExists(name string) bool {
 	}
 
 	exists := false
-	bs.db.View(func(tx *bbolt.Tx) error {
+	err := bs.db.View(func(tx *bbolt.Tx) error {
 		profilesBucket := tx.Bucket(ProfilesBucket)
 		if profilesBucket != nil {
 			exists = profilesBucket.Get([]byte(name)) != nil
 		}
 		return nil
 	})
+	if err != nil {
+		// Log the error but don't fail the existence check
+		log.Printf("Warning: error checking if profile exists (name=%s): %v", name, err)
+	}
 
 	return exists
 }
@@ -724,7 +755,7 @@ func (bs *BoltStore) RotateMasterKey(newPassphrase string) error {
 	if !bs.isOpen {
 		return fmt.Errorf("vault is not open")
 	}
-	if len(newPassphrase) == 0 {
+	if newPassphrase == "" {
 		return fmt.Errorf("new passphrase cannot be empty")
 	}
 	if len(bs.masterKey) == 0 {
@@ -806,11 +837,13 @@ func (bs *BoltStore) RotateMasterKey(newPassphrase string) error {
 	bs.masterKey = make([]byte, len(newMasterKey))
 	copy(bs.masterKey, newMasterKey)
 
-	_ = bs.LogOperation(&domain.Operation{
+	if err := bs.LogOperation(&domain.Operation{
 		Type:      "rotate_master_key",
 		Timestamp: time.Now().UTC(),
 		Success:   true,
-	})
+	}); err != nil {
+		log.Printf("warning: failed to log rotate_master_key operation: %v", err)
+	}
 
 	return nil
 }
@@ -845,7 +878,12 @@ func reencryptEntries(tx *bbolt.Tx, oldPassphrase, newPassphrase string, cryptoE
 				return fmt.Errorf("failed to re-encrypt entry %s: %w", string(k), err)
 			}
 
-			if err := bucket.Put(k, vault.EnvelopeToBytes(newEnvelope)); err != nil {
+			envelopeBytes, err := vault.EnvelopeToBytes(newEnvelope)
+			if err != nil {
+				return fmt.Errorf("failed to serialize rotated entry %s: %w", string(k), err)
+			}
+
+			if err := bucket.Put(k, envelopeBytes); err != nil {
 				return fmt.Errorf("failed to store rotated entry %s: %w", string(k), err)
 			}
 
@@ -874,6 +912,11 @@ func parseArgon2Params(kdf map[string]interface{}) (vault.Argon2Params, error) {
 		return vault.Argon2Params{}, err
 	}
 
+	// Ensure parallelism is within valid range for uint8 (0-255)
+	if parallelVal > math.MaxUint8 {
+		return vault.Argon2Params{}, fmt.Errorf("parallelism value %d exceeds maximum allowed value of %d", parallelVal, math.MaxUint8)
+	}
+
 	return vault.Argon2Params{
 		Memory:      memoryVal,
 		Iterations:  iterationsVal,
@@ -882,51 +925,126 @@ func parseArgon2Params(kdf map[string]interface{}) (vault.Argon2Params, error) {
 }
 
 func getUint32Param(kdf map[string]interface{}, primary string, aliases ...string) (uint32, error) {
-	value, ok := kdf[primary]
-	if !ok {
+	// Try to find the parameter value using primary key first, then aliases
+	var value interface{}
+	var found bool
+
+	if value, found = kdf[primary]; !found {
 		for _, alias := range aliases {
-			if v, found := kdf[alias]; found {
+			if v, exists := kdf[alias]; exists {
 				value = v
-				ok = true
+				found = true
 				break
 			}
 		}
 	}
-	if !ok {
+
+	if !found || value == nil {
 		return 0, fmt.Errorf("missing or invalid %s parameter", primary)
 	}
 
 	switch v := value.(type) {
 	case float64:
+		if v < 0 || v > float64(math.MaxUint32) || math.IsNaN(v) || math.IsInf(v, 0) {
+			return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
+		}
 		return uint32(v), nil
+
 	case float32:
+		if v < 0 || v > float32(math.MaxUint32) || math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+			return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
+		}
 		return uint32(v), nil
+
 	case int:
+		if v < 0 || uint64(v) > math.MaxUint32 {
+			return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
+		}
+		// Safe to convert after bounds check
+		// nolint:gosec // Bounds checked above, safe to convert with mask
+		return uint32(uint64(v) & 0xFFFFFFFF), nil
+
+	case int8:
+		if v < 0 {
+			return 0, fmt.Errorf("value for %s cannot be negative", primary)
+		}
+		// int8 is always within uint32 range when non-negative
 		return uint32(v), nil
+
+	case int16:
+		if v < 0 {
+			return 0, fmt.Errorf("value for %s cannot be negative", primary)
+		}
+		return uint32(v), nil
+
 	case int32:
+		if v < 0 {
+			return 0, fmt.Errorf("value for %s cannot be negative", primary)
+		}
 		return uint32(v), nil
+
 	case int64:
-		return uint32(v), nil
+		if v < 0 || uint64(v) > math.MaxUint32 {
+			return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
+		}
+		// Safe to convert after bounds check
+		// nolint:gosec // Bounds checked above, safe to convert with mask
+		return uint32(uint64(v) & 0xFFFFFFFF), nil
+
 	case uint:
-		return uint32(v), nil
-	case uint32:
-		return v, nil
+		if uint64(v) > math.MaxUint32 {
+			return 0, fmt.Errorf("value for %s exceeds maximum allowed value of %d", primary, math.MaxUint32)
+		}
+		// Safe to convert after bounds check
+		// nolint:gosec // Bounds checked above, safe to convert with mask
+		return uint32(uint64(v) & 0xFFFFFFFF), nil
+
+	case uint8, uint16, uint32:
+		// These types are guaranteed to fit in uint32
+		// nolint:gosec // Type guarantees value fits in uint32
+		return uint32(reflect.ValueOf(v).Uint() & 0xFFFFFFFF), nil
+
 	case uint64:
-		return uint32(v), nil
+		if v > math.MaxUint32 {
+			return 0, fmt.Errorf("value for %s exceeds maximum allowed value of %d", primary, math.MaxUint32)
+		}
+		// Safe to convert after bounds check
+		// nolint:gosec // Bounds checked above, safe to convert with mask
+		return uint32(v & 0xFFFFFFFF), nil
+
 	case json.Number:
 		i64, err := v.Int64()
 		if err != nil {
-			return 0, fmt.Errorf("invalid numeric value for %s", primary)
+			return 0, fmt.Errorf("invalid numeric value for %s: %v", primary, err)
 		}
-		return uint32(i64), nil
+		if i64 < 0 || uint64(i64) > math.MaxUint32 {
+			return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
+		}
+		// nolint:gosec // Bounds checked above, safe to convert with mask
+		return uint32(uint64(i64) & 0xFFFFFFFF), nil
+
 	case string:
-		var i float64
-		if _, err := fmt.Sscanf(v, "%f", &i); err != nil {
-			return 0, fmt.Errorf("invalid string value for %s", primary)
+		// Try to parse as float first to handle decimal points and scientific notation
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			if f < 0 || f > float64(math.MaxUint32) || math.IsNaN(f) || math.IsInf(f, 0) {
+				return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
+			}
+			return uint32(f), nil
 		}
-		return uint32(i), nil
+
+		// If not a float, try parsing as an integer
+		i, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("invalid numeric string for %s: %v", primary, err)
+		}
+		if i < 0 || uint64(i) > math.MaxUint32 {
+			return 0, fmt.Errorf("value for %s out of range (0-%d)", primary, math.MaxUint32)
+		}
+		// nolint:gosec // Bounds checked above, safe to convert with mask
+		return uint32(uint64(i) & 0xFFFFFFFF), nil
+
 	default:
-		return 0, fmt.Errorf("unsupported type for %s parameter", primary)
+		return 0, fmt.Errorf("unsupported type %T for parameter %s", value, primary)
 	}
 }
 
@@ -1153,27 +1271,46 @@ func (bs *BoltStore) ExportVault(path string, includeSecrets bool) error {
 		return fmt.Errorf("failed to encode export data: %w", err)
 	}
 
+	// Ensure directory exists with secure permissions (0o700)
 	if dir := filepath.Dir(path); dir != "." && dir != "" {
-		if err := os.MkdirAll(dir, 0700); err != nil {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return fmt.Errorf("failed to create export directory: %w", err)
 		}
 	}
 
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	// Check if the data size is too large (max 100MB)
+	const maxExportSize = 100 * 1024 * 1024 // 100MB
+	if uint64(len(data)) > maxExportSize {
+		return fmt.Errorf("export data too large: %d bytes (max %d MB)", len(data), maxExportSize/(1024*1024))
+	}
+
+	// Write file with secure permissions (read/write for owner only)
+	tmpPath := path + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0o600); err != nil {
 		return fmt.Errorf("failed to write export file: %w", err)
 	}
 
-	_ = bs.LogOperation(&domain.Operation{
+	// Atomically rename the temporary file to the final destination
+	if err := os.Rename(tmpPath, path); err != nil {
+		if removeErr := os.Remove(tmpPath); removeErr != nil {
+			log.Printf("Warning: failed to clean up temp file %s: %v", tmpPath, removeErr)
+		}
+		return fmt.Errorf("failed to finalize export: %w", err)
+	}
+
+	if err := bs.LogOperation(&domain.Operation{
 		Type:      "export_vault",
 		Timestamp: time.Now().UTC(),
 		Success:   true,
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to log export operation: %w", err)
+	}
 
 	return nil
 }
 
 // ImportVault restores data from a previously exported JSON snapshot.
-func (bs *BoltStore) ImportVault(path string, conflictResolution string) error {
+func (bs *BoltStore) ImportVault(path, conflictResolution string) error {
 	if !bs.isOpen {
 		return fmt.Errorf("vault is not open")
 	}
@@ -1181,9 +1318,51 @@ func (bs *BoltStore) ImportVault(path string, conflictResolution string) error {
 		return fmt.Errorf("import path cannot be empty")
 	}
 
-	data, err := os.ReadFile(path)
+	// Verify file exists and is accessible
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("failed to access import file: %w", err)
+	}
+
+	// Check file permissions (should be readable only by owner)
+	if mode := fileInfo.Mode(); mode.Perm()&0o077 != 0 {
+		return fmt.Errorf("insecure file permissions on %s: %v (should be 600 or more restrictive)", path, mode.Perm())
+	}
+
+	// Clean and validate the file path
+	cleanPath := filepath.Clean(path)
+	if cleanPath != path {
+		return fmt.Errorf("invalid file path: potential directory traversal detected")
+	}
+
+	// Read file with size limit (100MB)
+	const maxFileSize = 100 << 20 // 100MB
+	if fileInfo.Size() > maxFileSize {
+		return fmt.Errorf("import file too large: %d bytes (max %d MB)", fileInfo.Size(), maxFileSize>>20)
+	}
+	if fileInfo.Size() < 1 {
+		return fmt.Errorf("import file is empty")
+	}
+
+	// Use a size-limited reader to prevent potential OOM with malformed files
+	file, err := os.Open(cleanPath)
+	if err != nil {
+		return fmt.Errorf("failed to open import file: %w", err)
+	}
+	defer func() {
+		if err := file.Close(); err != nil {
+			log.Printf("Warning: failed to close file %s: %v", cleanPath, err)
+		}
+	}()
+
+	// Read the file with a limit
+	limitedReader := io.LimitReader(file, maxFileSize+1)
+	data, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return fmt.Errorf("failed to read import file: %w", err)
+	}
+	if len(data) > maxFileSize {
+		return fmt.Errorf("import file exceeds size limit: %d bytes (max %d MB)", len(data), maxFileSize>>20)
 	}
 
 	var payload vaultExport
@@ -1220,7 +1399,8 @@ func (bs *BoltStore) ImportVault(path string, conflictResolution string) error {
 			}
 		}
 
-		for _, exported := range list {
+		for i := range list {
+			exported := &list[i]
 			if exported.ID == "" {
 				continue
 			}
@@ -1305,20 +1485,30 @@ func (bs *BoltStore) ImportVault(path string, conflictResolution string) error {
 		}
 	}
 
-	if meta, err := bs.GetVaultMetadata(); err == nil {
+	meta, err := bs.GetVaultMetadata()
+	if err != nil {
+		log.Printf("Warning: failed to get vault metadata during import: %v", err)
+	} else {
 		meta.UpdatedAt = time.Now().UTC()
-		_ = bs.UpdateVaultMetadata(meta)
+		if updateErr := bs.UpdateVaultMetadata(meta); updateErr != nil {
+			log.Printf("Warning: failed to update vault metadata during import: %v", updateErr)
+		}
 	}
 
-	_ = bs.LogOperation(&domain.Operation{
+	if err := bs.LogOperation(&domain.Operation{
 		Type:      "import_vault",
 		Timestamp: time.Now().UTC(),
 		Success:   true,
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to log import operation: %w", err)
+	}
 
 	return nil
 }
 
+// CompactVault performs maintenance on the vault storage to reclaim space.
+// This is a no-op for BoltDB as it handles compaction automatically.
+// Returns an error if the vault is not open.
 func (bs *BoltStore) CompactVault() error {
 	if !bs.isOpen {
 		return fmt.Errorf("vault is not open")
@@ -1327,6 +1517,8 @@ func (bs *BoltStore) CompactVault() error {
 	return nil
 }
 
+// VerifyIntegrity checks the integrity of the vault by verifying all buckets and their contents.
+// Returns an error if any integrity issues are found or if the vault is not open.
 func (bs *BoltStore) VerifyIntegrity() error {
 	if !bs.isOpen {
 		return fmt.Errorf("vault is not open")

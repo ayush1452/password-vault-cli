@@ -20,19 +20,23 @@ func main() {
 	passphrase := "my-super-secure-passphrase-123"
 	salt, err := vault.GenerateSalt()
 	if err != nil {
-		log.Fatal("Failed to generate salt:", err)
+		log.Printf("Failed to generate salt: %v", err)
+		return
 	}
 
 	start := time.Now()
 	key, err := engine.DeriveKey(passphrase, salt)
 	if err != nil {
-		log.Fatal("Failed to derive key:", err)
+		log.Printf("Failed to derive key: %v", err)
+		return
 	}
 	duration := time.Since(start)
 
 	fmt.Printf("Key derivation took: %v\n", duration)
 	fmt.Printf("Derived key length: %d bytes\n", len(key))
-	defer vault.Zeroize(key) // Always clean up keys
+
+	// Ensure we clean up the key when we're done
+	defer vault.Zeroize(key)
 
 	// Demo 2: Encryption/Decryption with passphrase
 	fmt.Println("\n2. Encryption/Decryption Demo")
@@ -43,7 +47,8 @@ func main() {
 	// Encrypt
 	envelope, err := engine.SealWithPassphrase(secretData, passphrase)
 	if err != nil {
-		log.Fatal("Failed to encrypt:", err)
+		log.Printf("Failed to encrypt: %v", err)
+		return
 	}
 
 	fmt.Printf("Encrypted envelope version: %d\n", envelope.Version)
@@ -55,7 +60,8 @@ func main() {
 	// Decrypt
 	decrypted, err := engine.OpenWithPassphrase(envelope, passphrase)
 	if err != nil {
-		log.Fatal("Failed to decrypt:", err)
+		log.Printf("Failed to decrypt: %v", err)
+		return
 	}
 
 	fmt.Printf("Decrypted data: %s\n", string(decrypted))
@@ -79,18 +85,24 @@ func main() {
 	// Demo 4: Serialization
 	fmt.Println("\n4. Serialization Demo")
 
-	serialized := vault.EnvelopeToBytes(envelope)
+	serialized, err := vault.EnvelopeToBytes(envelope)
+	if err != nil {
+		log.Printf("Failed to serialize envelope: %v", err)
+		return
+	}
 	fmt.Printf("Serialized envelope size: %d bytes\n", len(serialized))
 
 	deserialized, err := vault.EnvelopeFromBytes(serialized)
 	if err != nil {
-		log.Fatal("Failed to deserialize:", err)
+		log.Printf("Failed to deserialize: %v", err)
+		return
 	}
 
 	// Verify it still works
 	decrypted2, err := engine.OpenWithPassphrase(deserialized, passphrase)
 	if err != nil {
-		log.Fatal("Failed to decrypt deserialized:", err)
+		log.Printf("Failed to decrypt deserialized: %v", err)
+		return
 	}
 
 	fmt.Printf("✓ Serialization successful: %s\n", string(decrypted2))
@@ -101,7 +113,8 @@ func main() {
 	targetDuration := 250 * time.Millisecond
 	tunedParams, err := vault.TuneArgon2Params(targetDuration, "test-passphrase")
 	if err != nil {
-		log.Fatal("Failed to tune parameters:", err)
+		log.Printf("Failed to tune parameters: %v", err)
+		return
 	}
 
 	fmt.Printf("Tuned parameters:\n")
@@ -110,7 +123,11 @@ func main() {
 	fmt.Printf("  Parallelism: %d\n", tunedParams.Parallelism)
 
 	// Test the tuned parameters
-	testSalt, _ := vault.GenerateSalt()
+	testSalt, err := vault.GenerateSalt()
+	if err != nil {
+		log.Printf("Failed to generate salt: %v", err)
+		return
+	}
 	actualDuration := vault.BenchmarkKDF(tunedParams, "test-passphrase", testSalt)
 	fmt.Printf("Actual duration with tuned params: %v\n", actualDuration)
 

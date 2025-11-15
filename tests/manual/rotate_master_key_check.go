@@ -1,4 +1,6 @@
-package store_test
+// Package manualstore_test contains manual test cases for the password vault.
+// These tests are not run automatically and require manual verification.
+package manualstore_test
 
 import (
 	"encoding/base64"
@@ -12,6 +14,12 @@ import (
 	"github.com/vault-cli/vault/internal/vault"
 )
 
+// TestBoltStoreRotateMasterKey verifies the master key rotation functionality of the BoltStore.
+// It tests the following scenarios:
+// 1. Creating a new vault with an initial master key
+// 2. Adding test data to the vault
+// 3. Rotating the master key to a new passphrase
+// 4. Verifying the data can still be accessed with the new key
 func TestBoltStoreRotateMasterKey(t *testing.T) {
 	tempDir := t.TempDir()
 	vaultPath := filepath.Join(tempDir, "vault.db")
@@ -104,10 +112,28 @@ func TestBoltStoreRotateMasterKey(t *testing.T) {
 		t.Fatalf("failed to decode rotated salt: %v", err)
 	}
 
+	// Helper function to safely get uint32 from interface{}
+	getUint32 := func(m map[string]interface{}, key string) uint32 {
+		if val, ok := m[key].(float64); ok {
+			return uint32(val)
+		}
+		t.Fatalf("invalid type for %s: expected float64, got %T", key, m[key])
+		return 0
+	}
+
+	// Helper function to safely get uint8 from interface{}
+	getUint8 := func(m map[string]interface{}, key string) uint8 {
+		if val, ok := m[key].(float64); ok {
+			return uint8(val)
+		}
+		t.Fatalf("invalid type for %s: expected float64, got %T", key, m[key])
+		return 0
+	}
+
 	rotatedParams := vault.Argon2Params{
-		Memory:      uint32(rotatedMetadata.KDFParams["memory"].(float64)),
-		Iterations:  uint32(rotatedMetadata.KDFParams["iterations"].(float64)),
-		Parallelism: uint8(rotatedMetadata.KDFParams["parallelism"].(float64)),
+		Memory:      getUint32(rotatedMetadata.KDFParams, "memory"),
+		Iterations:  getUint32(rotatedMetadata.KDFParams, "iterations"),
+		Parallelism: getUint8(rotatedMetadata.KDFParams, "parallelism"),
 	}
 
 	rotatedCrypto := vault.NewCryptoEngine(rotatedParams)
@@ -125,7 +151,11 @@ func TestBoltStoreRotateMasterKey(t *testing.T) {
 	if err := bsNew.OpenVault(vaultPath, rotatedMasterKey); err != nil {
 		t.Fatalf("failed to open with rotated key: %v", err)
 	}
-	defer bsNew.CloseVault()
+	defer func() {
+		if err := bsNew.CloseVault(); err != nil {
+			t.Logf("Warning: failed to close new vault: %v", err)
+		}
+	}()
 
 	fetched, err := bsNew.GetEntry("default", entry.ID)
 	if err != nil {
@@ -139,7 +169,11 @@ func TestBoltStoreRotateMasterKey(t *testing.T) {
 	if err := bsOld.OpenVault(vaultPath, oldKeyCopy); err != nil {
 		t.Fatalf("old key open should succeed for comparison: %v", err)
 	}
-	defer bsOld.CloseVault()
+	defer func() {
+		if err := bsOld.CloseVault(); err != nil {
+			t.Logf("Warning: failed to close old vault: %v", err)
+		}
+	}()
 
 	if _, err := bsOld.GetEntry("default", entry.ID); err == nil {
 		t.Fatalf("expected decrypt failure when using old master key")

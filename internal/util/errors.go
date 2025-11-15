@@ -1,3 +1,5 @@
+// Package util provides utility functions and helpers used throughout the password vault.
+// It includes common operations, error handling utilities, and other shared functionality.
 package util
 
 import (

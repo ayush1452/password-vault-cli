@@ -1,0 +1,77 @@
+# yaml-language-server: $schema=https://json.schemastore.org/golangci-lint.json
+# Compatible with golangci-lint v1.64.8+
+
+version: "2"
+
+run:
+  timeout: 5m
+  relative-path-mode: gomod
+  tests: false
+  go: "1.24.10"
+  allow-parallel-runners: true
+  concurrency: 4
+  modules-download-mode: readonly
+
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+    - errcheck
+    - gosec
+    - revive
+    - misspell
+    - gocritic
+    - durationcheck
+    - nilerr
+    - noctx
+    - prealloc
+    - whitespace
+
+  settings:
+    revive:
+      rules:
+        - name: exported
+        - name: error-naming
+    misspell:
+      locale: US
+    gocritic:
+      enabled-tags: [diagnostic, performance, style]
+      disabled-checks: [hugeParam]
+    gosec:
+      severity: medium
+      confidence: medium
+
+# Formatters available in version 2
+formatters:
+  enable:
+    - goimports
+    - gofumpt
+  settings:
+    goimports:
+      # Change to your module path (from go.mod)
+      local-prefixes:
+        - github.com/ayush1452/password-vault-cli-project
+    gofumpt:
+      extra-rules: true
+  exclusions:
+    generated: strict
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  uniq-by-line: true
+  new: false
+  whole-files: true
+  fix: false
+
+output:
+  sort-order:
+    - linter
+    - file
+  show-stats: true
+
+severity:
+  default: error

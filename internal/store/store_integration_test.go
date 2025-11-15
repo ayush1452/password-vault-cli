@@ -343,7 +343,7 @@ func TestStoreRecovery(t *testing.T) {
 	store.CloseVault()
 
 	// Simulate file corruption by truncating
-	file, err := os.OpenFile(vaultPath, os.O_WRONLY, 0644)
+	file, err := os.OpenFile(vaultPath, os.O_WRONLY, 0o644)
 	if err != nil {
 		t.Fatalf("Failed to open vault file: %v", err)
 	}

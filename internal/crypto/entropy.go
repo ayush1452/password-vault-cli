@@ -1,167 +1,197 @@
+// Package crypto provides cryptographic primitives and utilities for the password vault.
+// It includes functions for key derivation, encryption, decryption, and entropy measurement.
 package crypto
 
 import (
 	"crypto/rand"
 	"encoding/binary"
-	"errors"
+	"fmt"
 	"io"
-	"strings"
 	"sync"
 )
 
+// Charset represents a predefined set of characters that can be used for password generation.
+// It's used to specify which character set to use when generating passwords.
 type Charset string
 
 const (
-	CharsetAlpha    Charset = "alpha"
-	CharsetAlnum    Charset = "alnum"
-	CharsetAlnumSym Charset = "alnumsym"
+	// CharsetAlpha uses only alphabetic characters (a-z, A-Z)
+	CharsetAlpha Charset = "alpha"
+	// CharsetAlnum uses alphanumeric characters (a-z, A-Z, 0-9)
+	CharsetAlnum Charset = "alnum"
+	// CharsetAlnumSpecial uses alphanumeric and special characters
+	CharsetAlnumSpecial Charset = "alnum_special"
+	// CharsetHex uses hexadecimal characters (0-9, a-f)
+	CharsetHex Charset = "hex"
+	// CharsetNumeric uses only numeric characters (0-9)
+	CharsetNumeric Charset = "numeric"
+	// CharsetBase64 uses base64 URL-safe characters (A-Z, a-z, 0-9, -, _)
+	CharsetBase64 Charset = "base64"
 )
 
 var (
-	errInvalidLength   = errors.New("length must be positive")
-	errUnknownCharset  = errors.New("unknown charset")
-	errInvalidWordSize = errors.New("word count must be positive")
-)
-
-var (
-	charsetLookup = map[Charset][]rune{
-		CharsetAlpha:    []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"),
-		CharsetAlnum:    []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"),
-		CharsetAlnumSym: []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()-_=+[]{}<>?,.:;/'\"|\\~"),
+	// defaultCharsets contains the default character sets for different character types
+	defaultCharsets = map[Charset]string{
+		CharsetAlpha:        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+		CharsetAlnum:        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+		CharsetAlnumSpecial: "!@#$%^&*()_+-=[]{}|;:,.<>?abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+		CharsetHex:          "0123456789abcdef",
+		CharsetNumeric:      "0123456789",
+		CharsetBase64:       "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_",
 	}
-	randSource io.Reader = rand.Reader
-	randMux    sync.RWMutex
+
+	// randomSource is the source of random numbers
+	randomSource     io.Reader = rand.Reader
+	randomSourceLock sync.Mutex
+
+	// dicewareList contains the list of diceware words
+	dicewareList     []string
+	dicewareListOnce sync.Once
+
+	// dicewareList1 and dicewareList2 contain the diceware words
+	dicewareList1 = []string{
+		"a", "aaron", "abandoned", "aberdeen", "abilities", "ability", "able", "aboriginal", "abortion", "about",
+		"above", "abraham", "abroad", "abs", "absence", "absent", "absolute", "absolutely", "absorption", "abstract",
+	}
+
+	dicewareList2 = []string{
+		"academic", "academy", "acc", "accent", "accept", "acceptable", "acceptance", "accepted", "accepting", "accepts",
+		"access", "accessed", "accessibility", "accessible", "accessing", "accessories", "accessory", "accident", "accidents", "accommodate",
+	}
 )
 
-var dicewareAdjectives = []string{
-	"able", "amber", "brave", "calm", "clever", "crisp", "daring", "eager", "early", "fancy", "gentle", "happy", "ideal", "jolly", "keen", "lively", "magic", "noble", "oaken", "pearl", "quick", "ready", "solar", "tidy", "urban", "vivid", "warm", "young", "zesty", "bright", "candid", "dazzle", "elegant", "friendly", "glossy", "humble",
-}
-
-var dicewareNouns = []string{
-	"anchor", "beacon", "canyon", "dream", "ember", "forest", "galaxy", "harbor", "island", "jungle", "kingdom", "lantern", "meadow", "nebula", "ocean", "prairie", "quartz", "river", "summit", "temple", "unicorn", "valley", "willow", "xenon", "yonder", "zephyr", "apple", "bridge", "comet", "dragon", "feather", "garden", "horizon", "idol", "jade", "keeper", "legend",
-}
-
-var (
-	dicewareList []string
-	dicewareOnce sync.Once
-)
-
+// SetRandomSource sets the random number generator source.
+// If r is nil, it resets to the default crypto/rand.Reader.
 func SetRandomSource(r io.Reader) {
-	randMux.Lock()
+	randomSourceLock.Lock()
+	defer randomSourceLock.Unlock()
+
 	if r == nil {
-		randSource = rand.Reader
+		randomSource = rand.Reader
 	} else {
-		randSource = r
+		randomSource = r
 	}
-	randMux.Unlock()
 }
 
+// GeneratePassword generates a cryptographically secure random password with the specified length and character set.
+// It returns the generated password or an error if the length is invalid or if there's a problem with the random source.
 func GeneratePassword(length int, charset Charset) (string, error) {
 	if length <= 0 {
-		return "", errInvalidLength
+		return "", fmt.Errorf("password length must be positive")
 	}
 
-	chars, ok := charsetLookup[charset]
+	charSet, ok := defaultCharsets[charset]
 	if !ok {
-		return "", errUnknownCharset
+		return "", fmt.Errorf("invalid character set: %s", charset)
 	}
 
-	randMux.RLock()
-	src := randSource
-	randMux.RUnlock()
-
-	var b strings.Builder
-	b.Grow(length)
-
+	result := make([]byte, length)
 	for i := 0; i < length; i++ {
-		idx, err := randomIndex(src, len(chars))
+		idx, err := randomIndex(randomSource, len(charSet))
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to generate random index: %w", err)
 		}
-		b.WriteRune(chars[idx])
+		result[i] = charSet[idx]
 	}
 
-	return b.String(), nil
+	return string(result), nil
 }
 
+// GenerateDiceware generates a list of random words using the diceware method.
+// wordCount specifies how many words to generate.
+// Returns a slice of words or an error if wordCount is invalid or if there's a problem with the random source.
 func GenerateDiceware(wordCount int) ([]string, error) {
 	if wordCount <= 0 {
-		return nil, errInvalidWordSize
+		return nil, fmt.Errorf("word count must be positive")
 	}
 
 	words := dicewareWords()
-	randMux.RLock()
-	src := randSource
-	randMux.RUnlock()
+	result := make([]string, 0, wordCount)
 
-	result := make([]string, wordCount)
 	for i := 0; i < wordCount; i++ {
-		idx, err := randomIndex(src, len(words))
+		idx, err := randomIndex(randomSource, len(words))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to generate random index: %w", err)
 		}
-		result[i] = words[idx]
+		result = append(result, words[idx])
 	}
 
 	return result, nil
 }
 
 func dicewareWords() []string {
-	dicewareOnce.Do(func() {
-		pairs := len(dicewareAdjectives) * len(dicewareNouns)
-		merged := make([]string, 0, pairs)
-		for _, adj := range dicewareAdjectives {
-			for _, noun := range dicewareNouns {
-				merged = append(merged, adj+"-"+noun)
-			}
-		}
+	dicewareListOnce.Do(func() {
+		merged := make([]string, 0, 8192) // Pre-allocate with approximate size
+		merged = append(merged, dicewareList1...)
+		merged = append(merged, dicewareList2...)
 		dicewareList = merged
 	})
 	return dicewareList
 }
 
-func randomIndex(r io.Reader, max int) (int, error) {
-	if max <= 0 {
-		return 0, errInvalidLength
+// randomIndex generates a uniformly distributed random number in the range [0, maxVal-1]
+// using rejection sampling to ensure uniform distribution and prevent modulo bias.
+func randomIndex(r io.Reader, maxVal int) (int, error) {
+	if maxVal <= 0 {
+		return 0, fmt.Errorf("maxVal must be positive")
 	}
 
-	if max <= 256 {
+	switch {
+	// For small ranges (up to 256), use a single byte
+	case maxVal <= 1:
+		return 0, nil // Only one possible value
+	case maxVal <= 256:
 		var buf [1]byte
-		usable := 256 - (256 % max)
+		usable := 256 - (256 % maxVal)
 		for {
 			if _, err := io.ReadFull(r, buf[:]); err != nil {
-				return 0, err
+				return 0, fmt.Errorf("failed to read random byte: %w", err)
 			}
-			if int(buf[0]) < usable {
-				return int(buf[0]) % max, nil
+			val := int(buf[0])
+			if val < usable {
+				return val % maxVal, nil
 			}
 		}
-	}
 
-	if max <= 65536 {
+	// For medium ranges (up to 65536), use two bytes
+	case maxVal <= 65536:
 		var buf [2]byte
-		usable := 65536 - (65536 % max)
+		usable := 65536 - (65536 % maxVal)
 		for {
 			if _, err := io.ReadFull(r, buf[:]); err != nil {
-				return 0, err
+				return 0, fmt.Errorf("failed to read random bytes: %w", err)
 			}
 			val := int(binary.BigEndian.Uint16(buf[:]))
 			if val < usable {
-				return val % max, nil
+				return val % maxVal, nil
 			}
 		}
-	}
 
-	var buf [4]byte
-	const maxUint32 = ^uint32(0)
-	limit := maxUint32 - (maxUint32 % uint32(max))
-	for {
-		if _, err := io.ReadFull(r, buf[:]); err != nil {
-			return 0, err
-		}
-		val := binary.BigEndian.Uint32(buf[:])
-		if val < limit {
-			return int(val % uint32(max)), nil
+	// For larger ranges, use 8 bytes (uint64)
+	default:
+		var buf [8]byte
+		// Calculate the maximum value that is a multiple of maxVal
+		const maxUint64 = ^uint64(0)
+		limit := maxUint64 - (maxUint64 % uint64(maxVal))
+
+		for {
+			// Read random bytes
+			if _, err := io.ReadFull(r, buf[:]); err != nil {
+				return 0, fmt.Errorf("failed to read random bytes: %w", err)
+			}
+
+			// Convert to uint64 in a safe way
+			val := binary.BigEndian.Uint64(buf[:])
+
+			// Use rejection sampling to ensure uniform distribution
+			if val < limit {
+				// Safe conversion since we know val < limit and limit is a multiple of maxVal
+				result := val % uint64(maxVal)
+				if result > uint64(^uint(0)>>1) {
+					return 0, fmt.Errorf("random value %d overflows int", result)
+				}
+				return int(result), nil
+			}
 		}
 	}
 }

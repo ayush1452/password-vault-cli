@@ -2,14 +2,20 @@ package store
 
 import (
 	"errors"
+	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
 )
 
+// Error variables for file locking operations
 var (
+	// ErrLockTimeout is returned when a lock cannot be acquired within the specified timeout
 	ErrLockTimeout = errors.New("lock acquisition timeout")
-	ErrLockExists  = errors.New("lock file exists")
+	// ErrLockExists is returned when a lock file already exists
+	ErrLockExists = errors.New("lock file exists")
+	// ErrLockNotHeld is returned when attempting to release a lock that isn't held
 	ErrLockNotHeld = errors.New("lock not held")
 )
 
@@ -37,7 +43,7 @@ func (fl *FileLock) Lock(timeout time.Duration) error {
 
 	// Create lock file directory if it doesn't exist
 	dir := filepath.Dir(fl.path)
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 
@@ -45,7 +51,7 @@ func (fl *FileLock) Lock(timeout time.Duration) error {
 	start := time.Now()
 	for {
 		// Try to create exclusive lock file
-		file, err := os.OpenFile(fl.path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		file, err := os.OpenFile(fl.path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if err == nil {
 			// Successfully created lock file
 			fl.lockFile = file
@@ -53,8 +59,11 @@ func (fl *FileLock) Lock(timeout time.Duration) error {
 
 			// Write process ID to lock file
 			if _, err := file.WriteString(string(rune(os.Getpid()))); err != nil {
-				fl.Unlock() // Clean up on error
-				return err
+				// Try to clean up, but ignore any error from Unlock
+				if unlockErr := fl.Unlock(); unlockErr != nil {
+					log.Printf("Warning: failed to unlock during cleanup: %v", unlockErr)
+				}
+				return fmt.Errorf("failed to write to lock file: %w", err)
 			}
 
 			return platformLock(file)
@@ -68,7 +77,7 @@ func (fl *FileLock) Lock(timeout time.Duration) error {
 		// Check if lock file is stale
 		if fl.isLockStale() {
 			// Remove stale lock file and try again
-			os.Remove(fl.path)
+			_ = os.Remove(fl.path) // Ignore error from Remove
 			continue
 		}
 

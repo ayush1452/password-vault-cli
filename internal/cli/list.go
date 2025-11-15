@@ -4,15 +4,29 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
+	"os"
 	"sort"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/vault-cli/vault/internal/config"
 	"github.com/vault-cli/vault/internal/domain"
 	"github.com/vault-cli/vault/internal/vault"
 )
+
+// truncateString shortens a string to the specified length and adds "..." if truncated
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen > 3 {
+		return s[:maxLen-3] + "..."
+	}
+	return s[:maxLen]
+}
 
 var (
 	listTags   []string
@@ -83,9 +97,13 @@ Example:
 	return cmd
 }
 
-func runList(cmd *cobra.Command) error {
-	defer CloseSessionStore()
+func runList(cmd *cobra.Command) (err error) {
+	// Handle cleanup and error reporting for deferred functions
 	defer func() {
+		// Check deferred CloseSessionStore error
+		err = checkDeferredErr(err, "CloseSessionStore", CloseSessionStore())
+
+		// Reset global flags
 		listTags = nil
 		search = ""
 		outputJSON = false
@@ -119,11 +137,18 @@ func runList(cmd *cobra.Command) error {
 
 	if len(entries) == 0 {
 		out := cmd.OutOrStdout()
+
 		if filter.Search != "" || len(filter.Tags) > 0 {
-			fmt.Fprintln(out, "No entries found matching the filter criteria")
+			if err := writeOutput(out, "No entries found matching the filter criteria\n"); err != nil {
+				return err
+			}
 		} else {
-			fmt.Fprintf(out, "No entries found in profile '%s'\n", profile)
-			fmt.Fprintln(out, "Use 'vault add <name>' to create your first entry")
+			if err := writeOutput(out, "No entries found in profile '%s'\n", profile); err != nil {
+				return err
+			}
+			if err := writeOutput(out, "Use 'vault add <name>' to create your first entry\n"); err != nil {
+				return err
+			}
 		}
 		return nil
 	}
@@ -147,46 +172,97 @@ func outputEntriesTable(out io.Writer, entries []*domain.Entry) error {
 	}
 
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	defer w.Flush()
+	defer func() {
+		// Handle tabwriter flush error
+		if err := w.Flush(); err != nil {
+			// Use log.Printf since we can't use writeOutput (might be in a defer during panic)
+			log.Printf("warning: failed to flush tabwriter: %v\n", err)
+		}
+	}()
 
-	fmt.Fprintf(w, "NAME\n")
-	fmt.Fprintf(w, "----\n")
-
-	for _, entry := range entries {
-		fmt.Fprintf(w, "%s\n", entry.Name)
+	// Write table header
+	if err := writeOutput(w, "NAME\n"); err != nil {
+		return fmt.Errorf("failed to write table header: %w", err)
+	}
+	if err := writeOutput(w, "----\n"); err != nil {
+		return fmt.Errorf("failed to write table header separator: %w", err)
 	}
 
-	fmt.Fprintf(out, "\nFound %d entries in profile '%s'\n", len(entries), profile)
+	// Sort entries by name
+	sort.Slice(entries, func(i, j int) bool {
+		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
+	})
+
+	// Write table rows
+	for _, entry := range entries {
+		if err := writeOutput(w, "%s\n", entry.Name); err != nil {
+			return fmt.Errorf("failed to write entry '%s': %w", entry.Name, err)
+		}
+	}
+
+	// Write summary
+	if err := writeOutput(w, "\nFound %d entries in profile '%s'\n", len(entries), profile); err != nil {
+		return fmt.Errorf("failed to write summary: %w", err)
+	}
+
 	return nil
 }
 
 func outputEntriesTableLong(out io.Writer, entries []*domain.Entry) error {
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	defer w.Flush()
-
-	fmt.Fprintf(w, "NAME\tUSERNAME\tTAGS\tUPDATED_AT\n")
-	fmt.Fprintf(w, "----\t--------\t----\t----------\n")
-
-	for _, entry := range entries {
-		tags := strings.Join(entry.Tags, ",")
-		if len(tags) > 40 {
-			tags = tags[:37] + "..."
+	defer func() {
+		// Handle flush error using shared writeOutput
+		if flushErr := w.Flush(); flushErr != nil {
+			if writeErr := writeOutput(os.Stderr, "warning: failed to flush tabwriter: %v\n", flushErr); writeErr != nil {
+				// If we can't write the error, there's not much we can do
+				log.Printf("Failed to write flush error: %v", writeErr)
+			}
 		}
+	}()
 
-		username := entry.Username
-		if len(username) > 24 {
-			username = username[:21] + "..."
-		}
+	// Sort entries by name
+	sort.Slice(entries, func(i, j int) bool {
+		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
+	})
 
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n",
-			entry.Name,
-			username,
-			tags,
-			entry.UpdatedAt.Format("2006-01-02 15:04"),
-		)
+	// Define table format constants
+	const (
+		headerFormat = "%s\t%s\t%s\t%s\n"
+		separator    = "----\t--------\t----\t----------\n"
+	)
+
+	// Write table header
+	headers := []string{"NAME", "USERNAME", "TAGS", "UPDATED_AT"}
+	headerLine := fmt.Sprintf(headerFormat, headers[0], headers[1], headers[2], headers[3])
+
+	if err := writeString(w, headerLine); err != nil {
+		return fmt.Errorf("failed to write table header: %w", err)
+	}
+	if err := writeString(w, separator); err != nil {
+		return fmt.Errorf("failed to write header separator: %w", err)
 	}
 
-	fmt.Fprintf(out, "\nFound %d entries in profile '%s'\n", len(entries), profile)
+	// Write table rows
+	for _, entry := range entries {
+		updatedAt := entry.UpdatedAt.Format("2006-01-02")
+		tags := strings.Join(entry.Tags, ", ")
+		// Format the row with proper alignment
+		row := fmt.Sprintf("%-20s\t%-20s\t%-20s\t%s\n",
+			entry.Name,
+			entry.Username,
+			truncateString(tags, 20),
+			updatedAt,
+		)
+		if err := writeString(w, row); err != nil {
+			return fmt.Errorf("failed to write entry '%s': %w", entry.Name, err)
+		}
+	}
+
+	// Write summary
+	if err := writeOutput(w, "\nFound %d entries in profile '%s'\n", len(entries), profile); err != nil {
+		return fmt.Errorf("failed to write summary: %w", err)
+	}
+
 	return nil
 }
 
@@ -194,28 +270,34 @@ func outputEntriesJSON(out io.Writer, entries []*domain.Entry) error {
 	// Create output structure without secrets
 	type EntryOutput struct {
 		Name      string   `json:"name"`
-		Username  string   `json:"username"`
-		URL       string   `json:"url"`
-		Notes     string   `json:"notes"`
-		Tags      []string `json:"tags"`
-		CreatedAt string   `json:"created_at"`
-		UpdatedAt string   `json:"updated_at"`
+		Username  string   `json:"username,omitempty"`
+		URL       string   `json:"url,omitempty"`
+		Tags      []string `json:"tags,omitempty"`
+		Notes     string   `json:"notes,omitempty"`
+		CreatedAt string   `json:"createdAt"`
+		UpdatedAt string   `json:"updatedAt"`
 	}
 
-	var output []EntryOutput
+	output := make([]EntryOutput, 0, len(entries))
+
 	for _, entry := range entries {
 		output = append(output, EntryOutput{
 			Name:      entry.Name,
 			Username:  entry.Username,
 			URL:       entry.URL,
-			Notes:     entry.Notes,
 			Tags:      entry.Tags,
-			CreatedAt: entry.CreatedAt.Format("2006-01-02T15:04:05Z"),
-			UpdatedAt: entry.UpdatedAt.Format("2006-01-02T15:04:05Z"),
+			Notes:     entry.Notes,
+			CreatedAt: entry.CreatedAt.Format(time.RFC3339),
+			UpdatedAt: entry.UpdatedAt.Format(time.RFC3339),
 		})
 	}
 
+	// Encode to JSON with indentation
 	encoder := json.NewEncoder(out)
 	encoder.SetIndent("", "  ")
-	return encoder.Encode(output)
+	if err := encoder.Encode(output); err != nil {
+		return fmt.Errorf("failed to encode entries to JSON: %w", err)
+	}
+
+	return nil
 }

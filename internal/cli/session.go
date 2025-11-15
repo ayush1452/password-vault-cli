@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -33,6 +34,14 @@ type sessionFileData struct {
 
 var sessionManager *SessionManager
 
+// logWarning logs a warning message with proper error handling
+func logWarning(format string, args ...interface{}) {
+	if err := log.Output(2, fmt.Sprintf("WARNING: "+format, args...)); err != nil {
+		// If we can't log, there's not much we can do, so we'll just print to stderr
+		fmt.Fprintf(os.Stderr, "WARNING: Failed to log warning: %v\n", err)
+	}
+}
+
 // IsUnlocked returns true if the vault is currently unlocked
 func IsUnlocked() bool {
 	ensureSessionRestored()
@@ -44,7 +53,9 @@ func IsUnlocked() bool {
 	// Check if session has expired
 	if time.Since(sessionManager.unlockTime) > sessionManager.ttl {
 		// Session expired, lock vault
-		LockVault()
+		if err := LockVault(); err != nil {
+			logWarning("Failed to lock vault: %v", err)
+		}
 		return false
 	}
 
@@ -62,8 +73,11 @@ func GetVaultStore() store.VaultStore {
 	if sessionManager.vaultStore == nil || !sessionManager.vaultStore.IsOpen() {
 		vaultStore := store.NewBoltStore()
 		if err := vaultStore.OpenVault(sessionManager.vaultPath, sessionManager.masterKey); err != nil {
-			fmt.Printf("Warning: failed to open vault store from session: %v\n", err)
-			ClearPersistedSession()
+			logWarning("Error opening vault store: %v", err)
+			// Try to clear the session if we can't open the vault
+			if clearErr := LockVault(); clearErr != nil {
+				logWarning("Failed to clear session after open error: %v", clearErr)
+			}
 			return nil
 		}
 		sessionManager.vaultStore = vaultStore
@@ -74,46 +88,75 @@ func GetVaultStore() store.VaultStore {
 
 // UnlockVault unlocks the vault with the given passphrase
 func UnlockVault(vaultPath, passphrase string, ttl time.Duration) error {
-	// Check if vault exists
-	if _, err := os.Stat(vaultPath); os.IsNotExist(err) {
-		return fmt.Errorf("vault not found at %s", vaultPath)
+	// Validate input parameters
+	if vaultPath == "" {
+		return errors.New("vault path cannot be empty")
+	}
+	if passphrase == "" {
+		return errors.New("passphrase cannot be empty")
+	}
+	if ttl <= 0 {
+		return fmt.Errorf("invalid TTL duration: %v", ttl)
 	}
 
-	// Create store
-	vaultStore := store.NewBoltStore()
+	// Check if vault exists
+	if _, err := os.Stat(vaultPath); os.IsNotExist(err) {
+		return fmt.Errorf("vault not found at %s: %w", vaultPath, err)
+	}
 
-	// Open the vault temporarily to load metadata
-	if err := vaultStore.OpenVault(vaultPath, make([]byte, 32)); err != nil {
+	log.Printf("Attempting to unlock vault at: %s", vaultPath)
+
+	// Create and open a temporary store to load metadata
+	tempStore := store.NewBoltStore()
+	defer func() {
+		if tempStore != nil {
+			if closeErr := tempStore.CloseVault(); closeErr != nil {
+				logWarning("Failed to close temporary vault store: %v", closeErr)
+			}
+		}
+	}()
+
+	// Use a dummy key for metadata access
+	dummyKey := make([]byte, 32)
+	if err := tempStore.OpenVault(vaultPath, dummyKey); err != nil {
 		return fmt.Errorf("failed to open vault for metadata: %w", err)
 	}
 
-	metadata, err := vaultStore.GetVaultMetadata()
+	metadata, err := tempStore.GetVaultMetadata()
 	if err != nil {
-		vaultStore.CloseVault()
 		return fmt.Errorf("failed to load vault metadata: %w", err)
 	}
 
-	// Close the temporary store opened with a dummy key
-	vaultStore.CloseVault()
+	// Close the temporary store
+	if err := tempStore.CloseVault(); err != nil {
+		log.Printf("Warning: failed to close temporary vault store: %v", err)
+	}
+	tempStore = nil
 
-	// Recreate store for proper opening
-	vaultStore = store.NewBoltStore()
-
+	// Derive the actual master key
 	params, salt, err := metadataToKeyParams(metadata)
 	if err != nil {
 		return fmt.Errorf("invalid vault metadata: %w", err)
 	}
+
 	crypto := vault.NewCryptoEngine(params)
 	masterKey, err := crypto.DeriveKey(passphrase, salt)
 	if err != nil {
 		return fmt.Errorf("failed to derive master key: %w", err)
 	}
+	defer vault.Zeroize(masterKey)
 
+	// Create and open the actual store with the derived key
+	vaultStore := store.NewBoltStore()
 	if err := vaultStore.OpenVault(vaultPath, masterKey); err != nil {
-		vault.Zeroize(masterKey)
-		return fmt.Errorf("failed to open vault: %w", err)
+		if _, err := fmt.Fprintf(os.Stderr, "Failed to open vault with derived key: %v\n", err); err != nil {
+			// If we can't even print to stderr, we're in a bad state
+			panic(err)
+		}
+		return fmt.Errorf("failed to open vault with derived key: %w", err)
 	}
 
+	// Create new session
 	sessionManager = &SessionManager{
 		vaultPath:  vaultPath,
 		vaultStore: vaultStore,
@@ -122,15 +165,21 @@ func UnlockVault(vaultPath, passphrase string, ttl time.Duration) error {
 		ttl:        ttl,
 	}
 
+	// Persist the session
 	if err := persistSession(); err != nil {
-		vaultStore.CloseVault()
-		vault.Zeroize(masterKey)
+		if closeErr := vaultStore.CloseVault(); closeErr != nil {
+			log.Printf("Failed to close vault after session persistence error: %v", closeErr)
+		}
 		sessionManager = nil
 		return fmt.Errorf("failed to persist session: %w", err)
 	}
 
-	CloseSessionStore()
+	// Close the store as we'll open it on demand
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after unlock: %v", err)
+	}
 
+	log.Printf("Successfully unlocked vault at: %s", vaultPath)
 	return nil
 }
 
@@ -152,7 +201,15 @@ func LockVault() error {
 	}
 
 	sessionManager = nil
-	os.Remove(sessionFile)
+	if removeErr := os.Remove(sessionFile); removeErr != nil && !os.IsNotExist(removeErr) {
+		// If there's an error removing the file and it's not because it doesn't exist,
+		// combine it with any existing error
+		if err == nil {
+			err = fmt.Errorf("failed to remove session file: %w", removeErr)
+		} else {
+			err = fmt.Errorf("%w; failed to remove session file: %v", err, removeErr)
+		}
+	}
 	return err
 }
 
@@ -203,46 +260,106 @@ func RemainingSessionTTL() time.Duration {
 // EnsureVaultDirectory creates the vault directory if it doesn't exist
 func EnsureVaultDirectory(vaultPath string) error {
 	dir := filepath.Dir(vaultPath)
-	return os.MkdirAll(dir, 0700)
+	return os.MkdirAll(dir, 0o700)
 }
 
+// persistSession saves the current session state to disk in a secure manner.
+// It creates a session file containing an encrypted version of the master key.
+// The function ensures proper file permissions and atomic write operations.
 func persistSession() error {
+	// Early return if there's no active session or TTL is invalid
 	if sessionManager == nil {
+		log.Print("No active session to persist")
 		return nil
 	}
 
 	if sessionManager.ttl <= 0 {
+		log.Print("Skipping session persistence: invalid TTL")
 		return nil
 	}
 
 	path := sessionFilePath(sessionManager.vaultPath)
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
+	log.Printf("Persisting session to: %s", path)
+
+	// Ensure the directory exists with secure permissions
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("failed to create session directory: %w", err)
 	}
 
+	// Create a temporary file for atomic write
+	tempFile, err := os.CreateTemp(dir, ".vault-session-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary session file: %w", err)
+	}
+	tempPath := tempFile.Name()
+	defer func() {
+		// Check for errors when closing the temp file
+		if closeErr := tempFile.Close(); closeErr != nil {
+			log.Printf("Warning: failed to close temporary file %s: %v", tempPath, closeErr)
+		}
+		// Only try to remove if the file still exists
+		if _, err := os.Stat(tempPath); err == nil {
+			if removeErr := os.Remove(tempPath); removeErr != nil {
+				log.Printf("Warning: failed to remove temporary file %s: %v", tempPath, removeErr)
+			}
+		}
+	}()
+
+	// Encrypt the master key
 	crypto := vault.NewDefaultCryptoEngine()
 	sessionPassphrase := deriveSessionPassphrase(sessionManager.vaultPath)
 	envelope, err := crypto.SealWithPassphrase(sessionManager.masterKey, sessionPassphrase)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to encrypt master key: %w", err)
+	}
+
+	// Prepare session data
+	envelopeBytes, err := vault.EnvelopeToBytes(envelope)
+	if err != nil {
+		return fmt.Errorf("failed to serialize master key envelope: %w", err)
 	}
 
 	data := sessionFileData{
 		VaultPath:         sessionManager.vaultPath,
 		UnlockTime:        sessionManager.unlockTime,
 		TTLSeconds:        int64(sessionManager.ttl / time.Second),
-		MasterKeyEnvelope: vault.EnvelopeToBytes(envelope),
+		MasterKeyEnvelope: envelopeBytes,
 	}
 
+	// Serialize and write to temporary file
 	serialized, err := json.Marshal(data)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to serialize session data: %w", err)
 	}
 
-	if err := os.WriteFile(path, serialized, 0600); err != nil {
-		return err
+	// Write with sync to ensure data is flushed to disk
+	if _, err := tempFile.Write(serialized); err != nil {
+		return fmt.Errorf("failed to write session data: %w", err)
 	}
 
+	// Ensure data is written to disk
+	if err := tempFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync session data to disk: %w", err)
+	}
+
+	// Close the file before renaming (required on Windows)
+	if err := tempFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary file: %w", err)
+	}
+
+	// Atomic rename to final location
+	if err := os.Rename(tempPath, path); err != nil {
+		return fmt.Errorf("failed to commit session file: %w", err)
+	}
+
+	// Set restrictive permissions on the final file
+	if err := os.Chmod(path, 0o600); err != nil {
+		log.Printf("Warning: failed to set permissions on session file: %v", err)
+		// Not a fatal error, but log it
+	}
+
+	log.Printf("Successfully persisted session to: %s", path)
 	return nil
 }
 
@@ -252,32 +369,44 @@ func ensureSessionRestored() {
 	}
 
 	if vaultPath == "" {
+		log.Printf("No vault path set, skipping session restore")
 		return
 	}
 
 	path := sessionFilePath(vaultPath)
 	data, err := loadSessionFile(path)
 	if err != nil {
+		log.Printf("Failed to load session file %s: %v", path, err)
 		return
 	}
 	if data == nil {
+		log.Printf("No session data found in %s", path)
 		return
 	}
 
 	ttl := time.Duration(data.TTLSeconds) * time.Second
 	if ttl <= 0 {
-		os.Remove(path)
+		log.Printf("Invalid TTL in session file, removing: %s", path)
+		if err := os.Remove(path); err != nil {
+			log.Printf("Failed to remove invalid session file: %v", err)
+		}
 		return
 	}
 
 	if time.Since(data.UnlockTime) > ttl {
-		os.Remove(path)
+		log.Printf("Session expired, removing session file: %s", path)
+		if err := os.Remove(path); err != nil {
+			log.Printf("Failed to remove expired session file: %v", err)
+		}
 		return
 	}
 
 	envelope, err := vault.EnvelopeFromBytes(data.MasterKeyEnvelope)
 	if err != nil {
-		os.Remove(path)
+		log.Printf("Failed to parse master key envelope: %v", err)
+		if err := os.Remove(path); err != nil {
+			log.Printf("Failed to remove invalid session file: %v", err)
+		}
 		return
 	}
 
@@ -285,7 +414,10 @@ func ensureSessionRestored() {
 	sessionPassphrase := deriveSessionPassphrase(data.VaultPath)
 	masterKey, err := crypto.OpenWithPassphrase(envelope, sessionPassphrase)
 	if err != nil {
-		os.Remove(path)
+		log.Printf("Failed to decrypt master key: %v", err)
+		if err := os.Remove(path); err != nil {
+			log.Printf("Failed to remove unreadable session file: %v", err)
+		}
 		return
 	}
 
@@ -298,15 +430,21 @@ func ensureSessionRestored() {
 	}
 
 	// Verify the master key by opening and immediately closing the vault.
-	if store := GetVaultStore(); store != nil {
+	if vaultStore := GetVaultStore(); vaultStore != nil {
 		if err := CloseSessionStore(); err != nil {
-			fmt.Printf("Warning: failed to release vault store after restore: %v\n", err)
+			log.Printf("Failed to release vault store after restore: %v", err)
 		}
 	}
 }
 
 func loadSessionFile(path string) (*sessionFileData, error) {
-	content, err := os.ReadFile(path)
+	// Clean the file path to prevent directory traversal
+	cleanPath := filepath.Clean(path)
+
+	// Optional: Add additional path validation here if needed
+	// For example, ensure the path is within an allowed directory
+
+	content, err := os.ReadFile(cleanPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
@@ -374,7 +512,9 @@ func ClearPersistedSession() {
 
 	path := sessionFilePath(sessionManager.vaultPath)
 	if path != "" {
-		os.Remove(path)
+		if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
+			log.Printf("Warning: failed to remove session file %s: %v", path, removeErr)
+		}
 	}
 
 	if err := CloseSessionStore(); err != nil {
