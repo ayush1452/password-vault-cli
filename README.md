@@ -279,3 +279,446 @@ vault rotate-master-key
 ---
 
 **⚠️ Security Notice**: Always keep your master passphrase secure and create regular encrypted backups. This tool stores passwords locally and cannot recover lost master passphrases.
+## 🔄 CI/CD Pipeline
+
+This project uses GitHub Actions for continuous integration and continuous deployment. The pipeline is designed to ensure code quality, security, performance, and reliability across all changes.
+
+### 📊 Pipeline Overview
+
+The CI/CD pipeline consists of 9 interconnected stages that run automatically on pushes and pull requests:
+
+```
+                                   ┌────────────────────┐
+                                   │    code-quality    │
+                                   │ (lint, vet, gosec) │
+                                   └─────────┬──────────┘
+                                             │
+               ┌─────────────────────────────┴────────────────────────────┐
+               ▼                                                          ▼
+      ┌────────────────────┐                                     ┌────────────────────┐
+      │       build        │                                     │   security-scan    │
+      │ (Linux / macOS /   │                                     │       (Trivy)      │
+      │   Windows matrix)  │                                     └─────────┬──────────┘
+      └─────────┬──────────┘                                               │
+                │                                                          │
+                ▼                                                          ▼
+      ┌────────────────────┐                                        (artifact / SARIF)
+      │        test        │                                               │
+      │ (unit / race / cov)│                                               │
+      └─────────┬──────────┘                                               │
+                │                                                          │
+      ┌─────────┴─────--───┐                                               │
+      ▼                    ▼                                               │
+┌────────────────────┐  ┌────────────────────┐                             │
+│      coverage      │  │     benchmarks     │                             │
+│      (Codecov)     │  │  (go test -bench)  │                             │
+└────────────────────┘  └─────────┬──────────┘                             │
+                                  │                                        │
+                                  │                                        │
+                     ┌────────────┴──────────────┐                         │
+                     ▼                           ▼                         │
+          ┌──────────────────────┐     ┌────────────────────┐              │ 
+          │   performance-check  │     │       notify       │              |
+          │      (benchstat)     │     │  (GitHub Issue)    │◄─────────────┘      
+          └──────────────────────┘     └────────────────────┘
+
+
+Parallel / Independent:
+  ┌───────────────────────────┐
+  │     CodeQL Analysis       │
+  └───────────────────────────┘
+
+```
+
+### 🚀 Triggers
+
+The pipeline automatically triggers on:
+
+| Event | Conditions | Actions |
+|-------|------------|---------|
+| **Push** | To `main` or `develop` branches | Runs all stages |
+| **Pull Request** | To `main` or `develop` branches | Runs all stages except notify |
+| **Tag** | Pattern `v*` (e.g., `v1.0.0`) | Runs all stages |
+| **Manual** | Via GitHub Actions UI | Runs all stages |
+
+**Parallel Execution:**
+- `codeql-analysis` runs independently (parallel to all)
+- `security-scan` runs after `code-quality` (parallel to build/test)
+
+**Critical Path:**
+`code-quality` → `build` → `test` → `benchmarks` → `performance-check`
+Total critical path time: ~14-23 minutes
+
+**All Stages Complete When:**
+- Critical path finishes
+- `coverage` completes (parallel to benchmarks)
+- `security-scan` completes
+- `notify` runs only on failures
+
+### 🎯 Visual Dependency Graph (Mermaid)
+
+```mermaid
+graph TD
+    %% Independent starting nodes
+    A[code-quality<br/>3-5 min] --> B[build<br/>2-3 min]
+    C[codeql-analysis<br/>3-5 min]
+    A --> D[security-scan<br/>2-4 min]
+    
+    %% Main pipeline
+    B --> E[test<br/>5-8 min]
+    E --> F[coverage<br/>1-2 min]
+    E --> G[benchmarks<br/>3-5 min]
+    G --> H[performance-check<br/>1-2 min]
+    
+    %% Notification (only on failure)
+    E -.-> I[notify<br/>1 min]
+    G -.-> I
+    D -.-> I
+    
+    %% Styling
+    classDef critical fill:#ff9999,stroke:#ff0000,stroke-width:2px
+    classDef parallel fill:#99ccff,stroke:#0066cc,stroke-width:2px
+    classDef optional fill:#ffff99,stroke:#cccc00,stroke-width:2px
+    
+    class A,B,E,G,H critical
+    class C parallel
+    class D,F,I optional
+```
+
+**Legend:**
+- 🔴 **Critical Path**: Must complete sequentially
+- 🔵 **Parallel**: Runs independently 
+- 🟡 **Optional**: Conditional or non-blocking
+
+**Execution Groups:**
+1. **Group 1** (Start): `code-quality`, `codeql-analysis`
+2. **Group 2**: `build`, `security-scan` (after `code-quality`)
+3. **Group 3**: `test` (after `build`)
+4. **Group 4**: `coverage`, `benchmarks` (after `test`)
+5. **Group 5**: `performance-check` (after `benchmarks`)
+6. **Group 6**: `notify` (on failure only)
+
+### 📋 Detailed Stage Breakdown
+
+#### 1. Code Quality (`code-quality`)
+**Purpose**: Ensures code follows Go best practices and style guidelines
+
+**Tools & Versions**:
+- `golangci-lint`: v1.54.2
+- `gofmt`: Built-in Go formatter
+- `goimports`: v0.13.0
+- `gofumpt`: v0.5.0
+- `staticcheck`: 2023.1.6
+- `gosec`: v2.19.0
+
+**Matrix**:
+- Go versions: 1.24.10
+- OS: ubuntu-latest
+
+**Checks Performed**:
+- Code formatting (gofmt, goimports, gofumpt)
+- Linting with 50+ linters
+- Static analysis for bugs and inefficiencies
+- Security vulnerability scanning
+
+**Dependencies**: None (first stage)
+**Runtime**: ~3-5 minutes
+
+#### 2. Build (`build`)
+**Purpose**: Compiles the binary for multiple platforms
+
+**Matrix**:
+| OS | Architecture | Binary Name |
+|----|---------------|--------------|
+| Linux | amd64 | vault-linux-amd64 |
+| Linux | arm64 | vault-linux-arm64 |
+| macOS | amd64 | vault-darwin-amd64 |
+| macOS | arm64 | vault-darwin-arm64 |
+| Windows | amd64 | vault-windows-amd64.exe |
+
+**Dependencies**: `code-quality`
+**Runtime**: ~2-3 minutes
+
+#### 3. Test (`test`)
+**Purpose**: Runs unit and integration tests with race detection
+
+**Tools & Versions**:
+- Go test runner: 1.24.10
+- Coverage mode: atomic
+
+**Matrix**:
+- Go versions: 1.24.10
+- OS: ubuntu-latest
+
+**Tests Performed**:
+- Unit tests with `-race` flag
+- Integration tests
+- Coverage report generation
+- Binary verification
+
+**Dependencies**: `build`
+**Runtime**: ~5-8 minutes
+
+#### 4. CodeQL Analysis (`codeql-analysis`)
+**Purpose**: Advanced security vulnerability scanning
+
+**Tools & Versions**:
+- CodeQL: v2.15.3
+- Languages: Go
+- Queries: security-extended, security-and-quality
+
+**Dependencies**: None (runs in parallel)
+**Runtime**: ~3-5 minutes
+
+#### 5. Coverage (`coverage`)
+**Purpose**: Uploads test coverage to Codecov for tracking
+
+**Tools & Versions**:
+- codecov-action: v3.1.4
+- Coverage file: coverage.out
+
+**Dependencies**: `test`
+**Runtime**: ~1-2 minutes
+
+#### 6. Benchmarks (`benchmarks`)
+**Purpose**: Runs performance benchmarks and tracks regressions
+
+**Tools & Versions**:
+- Go benchmark runner: 1.24.10
+- benchmark-action: v1.1.0
+
+**Configuration**:
+- Count: 3 iterations per benchmark
+- Alert threshold: 200% degradation
+- Auto-push: enabled
+
+**Dependencies**: `test`
+**Runtime**: ~3-5 minutes
+
+#### 7. Performance Check (`performance-check`)
+**Purpose**: Compares benchmarks with previous runs to detect regressions
+
+**Tools & Versions**:
+- benchstat: golang.org/x/perf/cmd/benchstat
+
+**Regression Detection**:
+- Threshold: 10% degradation
+- Comparison: Previous successful run
+- Action: Fails pipeline if regression detected
+
+**Dependencies**: `benchmarks`
+**Runtime**: ~1-2 minutes
+
+#### 8. Security Scan (`security-scan`)
+**Purpose**: Additional vulnerability scanning with Trivy
+
+**Tools & Versions**:
+- Trivy: v0.45.1
+- Scan type: Filesystem
+- Output format: SARIF
+
+**Scopes**:
+- Source code vulnerabilities
+- Dependency vulnerabilities
+- Configuration issues
+
+**Dependencies**: `code-quality`
+**Runtime**: ~2-4 minutes
+
+#### 9. Notify (`notify`)
+**Purpose**: Creates GitHub issues for pipeline failures
+
+**Triggers**: Only on push failures (not PRs)
+
+**Issue Details**:
+- Title: "CI/CD Pipeline Failed: [workflow-name]"
+- Labels: ci-failure, bug
+- Body includes:
+  - Failed jobs list
+  - Commit details
+  - Links to workflow run
+  - Troubleshooting steps
+
+**Dependencies**: `test`, `benchmarks`, `security-scan`
+**Runtime**: ~1 minute
+
+### 🔗 Dependencies Flow
+
+```
+Stage Dependencies:
+├── code-quality (independent)
+├── codeql-analysis (independent)
+├── build → code-quality
+├── test → build
+├── coverage → test
+├── benchmarks → test
+├── performance-check → benchmarks
+├── security-scan → code-quality
+└── notify → test, benchmarks, security-scan
+```
+
+### ⚡ Performance Optimizations
+
+1. **Caching**: Go modules and build caches are reused between runs
+2. **Parallel Execution**: Independent stages run simultaneously
+3. **Matrix Builds**: Efficient multi-platform builds
+4. **Fail-Fast Disabled**: Continue testing other versions on failure
+
+### 🔧 Version Management
+
+| Component | Version | Update Strategy |
+|-----------|---------|-----------------|
+| Go | 1.24.10 | Manual (security updates) |
+| golangci-lint | v1.54.2 | Monthly |
+| CodeQL | v2.15.3 | Auto (GitHub managed) |
+| Trivy | v0.45.1 | Monthly |
+| codecov-action | v3.1.4 | Quarterly |
+
+### 🚨 Common Issues & Solutions
+
+#### Issue 1: Go Module Cache Miss
+**Symptoms**: Slow builds, repeated downloads
+**Causes**: Cache key mismatch, cache corruption
+**Solutions**:
+```bash
+# Clear local cache
+go clean -modcache
+
+# In CI: Check cache key format
+key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+```
+
+#### Issue 2: Benchmark Regression False Positives
+**Symptoms**: Performance check fails on unrelated changes
+**Causes**: Noisy CI environment, insufficient benchmark iterations
+**Solutions**:
+- Increase benchmark count to 5
+- Use statistical significance testing
+- Add performance tolerance margin
+
+#### Issue 3: Security Scan Timeouts
+**Symptoms**: Trivy scan exceeds timeout
+**Causes**: Large dependency tree, network issues
+**Solutions**:
+```yaml
+# Add timeout to security-scan
+timeout-minutes: 10
+# Use cache for Trivy DB
+- name: Cache Trivy DB
+  uses: actions/cache@v3
+  with:
+    path: ~/.cache/trivy
+    key: trivy-${{ runner.os }}-db
+```
+
+#### Issue 4: Coverage Upload Failures
+**Symptoms**: Codecov upload fails
+**Causes**: Invalid token, network issues, malformed coverage
+**Solutions**:
+- Verify CODECOV_TOKEN in repository secrets
+- Check coverage file format: `go tool cover -func=coverage.out`
+- Use fail_ci_if_error: false for debugging
+
+#### Issue 5: Race Condition Failures
+**Symptoms**: Tests fail with race detector
+**Causes**: Concurrent access to shared resources
+**Solutions**:
+- Use `sync.Mutex` for shared state
+- Review test isolation
+- Add `-race` flag locally for debugging
+
+### 🔍 Debugging Pipeline Issues
+
+#### Local Testing Commands
+
+```bash
+# Run full CI locally
+./scripts/ci-local.sh
+
+# Run individual stages
+make lint
+make test
+make benchmark
+make security-scan
+
+# Debug specific issues
+go test -race -v ./...
+golangci-lint run --verbose
+trivy fs --format sarif .
+```
+
+#### CI Debugging Tips
+
+1. **Enable Debug Logging**:
+   ```yaml
+   env:
+     ACTIONS_STEP_DEBUG: true
+     ACTIONS_RUNNER_DEBUG: true
+   ```
+
+2. **Download Artifacts**:
+   - Coverage reports
+   - Benchmark results
+   - Build artifacts
+   - Security scan results
+
+3. **Check Job Logs**:
+   - Focus on the "Set up" steps
+   - Verify environment variables
+   - Check network connectivity
+
+### 📊 Metrics and Monitoring
+
+#### Tracked Metrics
+- Test coverage percentage
+- Benchmark performance trends
+- Security vulnerability count
+- Build success rate
+- Pipeline duration
+
+#### Alerts Configuration
+- Performance regression >10%
+- Coverage drop >5%
+- New security vulnerabilities
+- Build failure rate >20%
+
+### 🔄 Maintenance Tasks
+
+#### Monthly
+- Update golangci-lint version
+- Review and update linter rules
+- Check Trivy database freshness
+
+#### Quarterly
+- Update Go version (if new stable)
+- Review CodeQL queries
+- Update action versions
+- Audit pipeline dependencies
+
+#### Annually
+- Review entire pipeline architecture
+- Optimize for performance
+- Update documentation
+- Security audit of CI configuration
+
+### 🚀 Future Enhancements
+
+1. **Integration Tests**: Add end-to-end testing
+2. **Dependency Updates**: Automated dependabot PRs
+3. **Release Automation**: Tag-based releases
+4. **Multi-Region Testing**: Geo-distributed testing
+5. **Performance Baselines**: Historical performance tracking
+
+### 📞 Support
+
+For CI/CD issues:
+1. Check this documentation first
+2. Review workflow logs in GitHub Actions
+3. Search existing issues
+4. Create new issue with:
+   - Workflow run ID
+   - Failed stage name
+   - Error logs
+   - Steps to reproduce
+
+
