@@ -57,6 +57,9 @@ func NewAtomicWriter(targetPath string) (*AtomicWriter, error) {
 		}
 	}()
 
+	// Mark as successful before returning
+	success = true
+
 	return &AtomicWriter{
 		targetPath: targetPath,
 		tempPath:   tempPath,
