@@ -225,12 +225,12 @@ func outputEntriesTableLong(out io.Writer, entries []*domain.Entry) error {
 	for _, entry := range entries {
 		updatedAt := entry.UpdatedAt.Format("2006-01-02")
 		tags := strings.Join(entry.Tags, ",")
-		
+
 		// Truncate fields to maintain table formatting
 		name := truncateString(entry.Name, 20)
 		username := truncateString(entry.Username, 15)
 		tagsStr := truncateString(tags, 25)
-		
+
 		// Format the row with proper spacing
 		row := fmt.Sprintf("%-20s  %-15s  %-25s  %s\n",
 			name,
