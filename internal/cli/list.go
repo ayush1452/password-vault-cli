@@ -214,10 +214,10 @@ func outputEntriesTableLong(out io.Writer, entries []*domain.Entry) error {
 	})
 
 	// Write table header
-	if err := writeString(out, "NAME  USERNAME  TAGS  UPDATED_AT\n"); err != nil {
+	if err := writeString(out, "NAME                USERNAME        TAGS                       UPDATED_AT\n"); err != nil {
 		return fmt.Errorf("failed to write table header: %w", err)
 	}
-	if err := writeString(out, "----  --------  ----  ----------\n"); err != nil {
+	if err := writeString(out, "----                --------        ----                       ----------\n"); err != nil {
 		return fmt.Errorf("failed to write header separator: %w", err)
 	}
 
@@ -225,11 +225,17 @@ func outputEntriesTableLong(out io.Writer, entries []*domain.Entry) error {
 	for _, entry := range entries {
 		updatedAt := entry.UpdatedAt.Format("2006-01-02")
 		tags := strings.Join(entry.Tags, ",")
+		
+		// Truncate fields to maintain table formatting
+		name := truncateString(entry.Name, 20)
+		username := truncateString(entry.Username, 15)
+		tagsStr := truncateString(tags, 25)
+		
 		// Format the row with proper spacing
-		row := fmt.Sprintf("%s  %s  %s  %s\n",
-			entry.Name,
-			entry.Username,
-			tags,
+		row := fmt.Sprintf("%-20s  %-15s  %-25s  %s\n",
+			name,
+			username,
+			tagsStr,
 			updatedAt,
 		)
 		if err := writeString(out, row); err != nil {
