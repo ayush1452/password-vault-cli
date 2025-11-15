@@ -665,7 +665,10 @@ func TestAtomicWriter(t *testing.T) {
 		t.Fatalf("Failed to create second atomic writer: %v", err)
 	}
 
-	writer2.Write([]byte("This should be aborted"))
+	_, err = writer2.Write([]byte("This should be aborted"))
+	if err != nil {
+		t.Fatalf("Failed to write data for abort test: %v", err)
+	}
 	err = writer2.Abort()
 	if err != nil {
 		t.Fatalf("Failed to abort: %v", err)

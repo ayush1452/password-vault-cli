@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"os"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -209,57 +208,37 @@ func outputEntriesTable(out io.Writer, entries []*domain.Entry) error {
 }
 
 func outputEntriesTableLong(out io.Writer, entries []*domain.Entry) error {
-	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	defer func() {
-		// Handle flush error using shared writeOutput
-		if flushErr := w.Flush(); flushErr != nil {
-			if writeErr := writeOutput(os.Stderr, "warning: failed to flush tabwriter: %v\n", flushErr); writeErr != nil {
-				// If we can't write the error, there's not much we can do
-				log.Printf("Failed to write flush error: %v", writeErr)
-			}
-		}
-	}()
-
 	// Sort entries by name
 	sort.Slice(entries, func(i, j int) bool {
 		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
 	})
 
-	// Define table format constants
-	const (
-		headerFormat = "%s\t%s\t%s\t%s\n"
-		separator    = "----\t--------\t----\t----------\n"
-	)
-
 	// Write table header
-	headers := []string{"NAME", "USERNAME", "TAGS", "UPDATED_AT"}
-	headerLine := fmt.Sprintf(headerFormat, headers[0], headers[1], headers[2], headers[3])
-
-	if err := writeString(w, headerLine); err != nil {
+	if err := writeString(out, "NAME  USERNAME  TAGS  UPDATED_AT\n"); err != nil {
 		return fmt.Errorf("failed to write table header: %w", err)
 	}
-	if err := writeString(w, separator); err != nil {
+	if err := writeString(out, "----  --------  ----  ----------\n"); err != nil {
 		return fmt.Errorf("failed to write header separator: %w", err)
 	}
 
 	// Write table rows
 	for _, entry := range entries {
 		updatedAt := entry.UpdatedAt.Format("2006-01-02")
-		tags := strings.Join(entry.Tags, ", ")
-		// Format the row with proper alignment
-		row := fmt.Sprintf("%-20s\t%-20s\t%-20s\t%s\n",
+		tags := strings.Join(entry.Tags, ",")
+		// Format the row with proper spacing
+		row := fmt.Sprintf("%s  %s  %s  %s\n",
 			entry.Name,
 			entry.Username,
-			truncateString(tags, 20),
+			tags,
 			updatedAt,
 		)
-		if err := writeString(w, row); err != nil {
+		if err := writeString(out, row); err != nil {
 			return fmt.Errorf("failed to write entry '%s': %w", entry.Name, err)
 		}
 	}
 
 	// Write summary
-	if err := writeOutput(w, "\nFound %d entries in profile '%s'\n", len(entries), profile); err != nil {
+	if err := writeOutput(out, "\nFound %d entries in profile '%s'\n", len(entries), profile); err != nil {
 		return fmt.Errorf("failed to write summary: %w", err)
 	}
 
