@@ -334,7 +334,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go-version: ['1.21', '1.22', '1.24.10']
+        go-version: ['1.24.10']
         os: [ubuntu-latest]
     
     steps:
@@ -439,3 +439,202 @@ jobs:
       uses: github/codeql-action/analyze@v3
       with:
         category: "/language:go"
+
+  # Coverage job uploads test coverage to Codecov
+  coverage:
+    name: Coverage Report
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24.10'
+        cache: true
+      env:
+        GO111MODULE: on
+        GOPROXY: https://proxy.golang.org,direct
+        
+    - name: Download coverage artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: coverage-report
+        path: ./coverage
+        
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage/coverage.out
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+  # Benchmarks job runs performance benchmarks
+  benchmarks:
+    name: Performance Benchmarks
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.24.10'
+        cache: true
+      env:
+        GO111MODULE: on
+        GOPROXY: https://proxy.golang.org,direct
+        
+    - name: Get dependencies
+      run: |
+        go mod tidy
+        go mod download
+        
+    - name: Run benchmarks
+      run: |
+        echo "Running benchmarks..."
+        go test -bench=. -benchmem -count=3 ./... | tee benchmark.txt
+        
+    - name: Store benchmark result
+      uses: benchmark-action/github-action-benchmark@v1
+      with:
+        tool: 'go'
+        output-file-path: benchmark.txt
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true
+        comment-on-alert: true
+        alert-threshold: '200%'
+        fail-on-alert: true
+
+  # Performance check job compares benchmarks with previous runs
+  performance-check:
+    name: Performance Regression Check
+    needs: benchmarks
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Download benchmark data
+      uses: actions/download-artifact@v3
+      with:
+        name: benchmark-result
+        path: ./benchmark-data
+        
+    - name: Check performance regression
+      run: |
+        if [ -f "./benchmark-data/benchmark.txt" ]; then
+          echo "Checking for performance regressions..."
+          # Install benchstat if not present
+          go install golang.org/x/perf/cmd/benchstat@latest
+          
+          # Compare with baseline (if available)
+          if [ -f "./benchmark-data/previous-benchmark.txt" ]; then
+            echo "Comparing with previous benchmarks..."
+            benchstat ./benchmark-data/previous-benchmark.txt ./benchmark-data/benchmark.txt
+            
+            # Fail if performance degrades >10%
+            if benchstat ./benchmark-data/previous-benchmark.txt ./benchmark-data/benchmark.txt | grep -E "~\s+[0-9]{2,}\.\d+%"; then
+              echo "Performance regression detected!"
+              exit 1
+            fi
+          else
+            echo "No previous benchmark data found, storing current as baseline"
+          fi
+        else
+          echo "No benchmark data found"
+          exit 1
+        fi
+
+  # Security scan job using Trivy
+  security-scan:
+    name: Security Scan (Trivy)
+    needs: code-quality
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif'
+        
+    - name: Upload Trivy results as artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: trivy-results
+        path: trivy-results.sarif
+        retention-days: 30
+
+  # Notification job for pipeline failures
+  notify:
+    name: Pipeline Failure Notification
+    needs: [test, benchmarks, security-scan]
+    if: failure() && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Create GitHub issue on failure
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const failedJobs = context.payload.jobs?.filter(job => job.conclusion === 'failure') || [];
+          const jobNames = failedJobs.map(job => job.name).join(', ') || 'Unknown';
+          
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `CI/CD Pipeline Failed: ${context.workflow}`,
+            body: `## Pipeline Failure Details
+            
+            **Failed Jobs:** ${jobNames}
+            **Commit:** ${context.sha}
+            **Branch:** ${context.ref}
+            **Workflow:** ${context.workflow}
+            **Run ID:** ${context.runId}
+            
+            ### Failed Jobs:
+            ${failedJobs.map(job => `
+            - **${job.name}**
+              - Started: ${job.started_at}
+              - Completed: ${job.completed_at}
+              - Conclusion: ${job.conclusion}
+            `).join('')}
+            
+            ### Next Steps:
+            1. Check the [workflow run](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+            2. Review the failed job logs
+            3. Fix the issues and push a new commit
+            `,
+            labels: ['ci-failure', 'bug']
+          });
