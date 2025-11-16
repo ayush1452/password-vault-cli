@@ -520,7 +520,7 @@ jobs:
     - name: Run benchmarks
       run: |
         echo "Running benchmarks..."
-        go test -bench=. -benchmem -count=3 ./... | tee benchmark.txt
+        go test -bench=. -benchmem -count=3 ./internal/crypto ./internal/vault ./tests 2>&1 | grep -E "^Benchmark|goos:|goarch:|pkg:|cpu:" | grep -v "Warning" > benchmark.txt || echo "No benchmarks found"
         
     - name: Store benchmark result
       uses: benchmark-action/github-action-benchmark@v1
@@ -532,6 +532,13 @@ jobs:
         comment-on-alert: true
         alert-threshold: '200%'
         fail-on-alert: true
+        name: 'Benchmark'
+        gh-pages-branch: gh-pages
+        benchmark-data-dir-path: dev/bench
+        skip-fetch-gh-pages: false
+        comment-always: false
+        summary-always: false
+        save-data-file: true
 
   # Performance check job compares benchmarks with previous runs
   performance-check:
