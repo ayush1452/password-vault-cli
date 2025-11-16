@@ -496,6 +496,8 @@ jobs:
     runs-on: ubuntu-latest
     # TODO: Revert to simple condition once tests are passing: if: github.event_name == 'push' || github.event_name == 'pull_request'
     if: (github.event_name == 'push' || github.event_name == 'pull_request') && (needs.test.result == 'success' || needs.test.result == 'failure')
+    permissions:
+      contents: write
     
     steps:
     - name: Checkout code
