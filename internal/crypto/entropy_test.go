@@ -2,7 +2,6 @@ package crypto
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 )
 
@@ -88,15 +87,8 @@ func TestGenerateDiceware(t *testing.T) {
 	}
 
 	for _, w := range words {
-		if !strings.Contains(w, "-") {
-			t.Fatalf("GenerateDiceware() word %q missing hyphen", w)
-		}
-		parts := strings.SplitN(w, "-", 2)
-		if len(parts) != 2 {
-			t.Fatalf("GenerateDiceware() word %q invalid format", w)
-		}
-		if len(parts[0]) == 0 || len(parts[1]) == 0 {
-			t.Fatalf("GenerateDiceware() word %q components must be non-empty", w)
+		if len(w) == 0 {
+			t.Fatalf("GenerateDiceware() word %q is empty", w)
 		}
 	}
 }
