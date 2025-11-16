@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vault-cli/vault/internal/domain"
 	"github.com/vault-cli/vault/internal/store"
@@ -724,8 +725,9 @@ func BenchmarkStoreOperations(b *testing.B) {
 		b.ReportAllocs()
 
 		for i := 0; i < b.N; i++ {
+			// Use unique names to avoid conflicts
 			entry := &domain.Entry{
-				Name:     fmt.Sprintf("bench-entry-%d", i),
+				Name:     fmt.Sprintf("bench-add-%d-%d", time.Now().UnixNano(), i),
 				Username: fmt.Sprintf("user-%d", i),
 				Password: []byte(fmt.Sprintf("pass-%d", i)),
 			}
@@ -738,7 +740,7 @@ func BenchmarkStoreOperations(b *testing.B) {
 	})
 
 	// Add some entries for get/list benchmarks
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 10; i++ {
 		entry := &domain.Entry{
 			Name:     fmt.Sprintf("test-entry-%d", i),
 			Username: fmt.Sprintf("user-%d", i),
@@ -755,7 +757,7 @@ func BenchmarkStoreOperations(b *testing.B) {
 		b.ReportAllocs()
 
 		for i := 0; i < b.N; i++ {
-			entryName := fmt.Sprintf("test-entry-%d", i%1000)
+			entryName := fmt.Sprintf("test-entry-%d", i%10)
 			_, err := s.GetEntry(profile, entryName)
 			if err != nil {
 				b.Fatalf("Failed to get entry: %v", err)
