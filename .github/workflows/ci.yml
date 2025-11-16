@@ -542,6 +542,13 @@ jobs:
         summary-always: false
         save-data-file: true
 
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-result
+        path: benchmark.txt
+        retention-days: 7
+
   # Performance check job compares benchmarks with previous runs
   performance-check:
     name: Performance Regression Check
@@ -555,35 +562,50 @@ jobs:
       with:
         fetch-depth: 0
         
-    - name: Download benchmark data
+    - name: Fetch gh-pages branch
+      run: |
+        git fetch origin gh-pages:gh-pages
+        
+    - name: Download benchmark results
       uses: actions/download-artifact@v4
       with:
         name: benchmark-result
-        path: ./benchmark-data
+        path: .
         
     - name: Check performance regression
       run: |
-        if [ -f "./benchmark-data/benchmark.txt" ]; then
+        # Check if benchmark data exists on gh-pages
+        if [ -f "dev/bench/data.js" ]; then
           echo "Checking for performance regressions..."
           # Install benchstat if not present
           go install golang.org/x/perf/cmd/benchstat@latest
           
-          # Compare with baseline (if available)
-          if [ -f "./benchmark-data/previous-benchmark.txt" ]; then
-            echo "Comparing with previous benchmarks..."
-            benchstat ./benchmark-data/previous-benchmark.txt ./benchmark-data/benchmark.txt
+          # Extract current benchmark results from the benchmark.txt file
+          if [ -f "benchmark.txt" ]; then
+            echo "Current benchmark results found"
             
-            # Fail if performance degrades >10%
-            if benchstat ./benchmark-data/previous-benchmark.txt ./benchmark-data/benchmark.txt | grep -E "~\s+[0-9]{2,}\.\d+%"; then
-              echo "Performance regression detected!"
-              exit 1
+            # Get previous benchmark data from gh-pages
+            git checkout gh-pages -- dev/bench/benchmark.txt 2>/dev/null || echo "No previous benchmark.txt found on gh-pages"
+            
+            if [ -f "dev/bench/benchmark.txt" ]; then
+              echo "Comparing with previous benchmarks from gh-pages..."
+              benchstat dev/bench/benchmark.txt benchmark.txt
+              
+              # Fail if performance degrades >10%
+              if benchstat dev/bench/benchmark.txt benchmark.txt | grep -E "~\s+[0-9]{2,}\.\d+%"; then
+                echo "Performance regression detected!"
+                exit 1
+              fi
+            else
+              echo "No previous benchmark data found on gh-pages, storing current as baseline"
             fi
           else
-            echo "No previous benchmark data found, storing current as baseline"
+            echo "No current benchmark data found"
+            exit 1
           fi
         else
-          echo "No benchmark data found"
-          exit 1
+          echo "No benchmark history found on gh-pages branch"
+          exit 0
         fi
 
   # Security scan job using Trivy
