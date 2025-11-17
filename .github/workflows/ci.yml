@@ -3,13 +3,17 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ main, develop ]
-    paths:
-      - '**.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.golangci.yml'
+    # paths:
+    #   - '**.go'
+    #   - 'go.mod'
+    #   - 'go.sum'
+    #   - '.golangci.yml'
   pull_request:
     branches: [ main, develop ]
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.plantuml'
+      - '**/*.puml'
   workflow_dispatch:
     inputs:
       reason:
