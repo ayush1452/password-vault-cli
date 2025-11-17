@@ -221,21 +221,152 @@ env:
 
 ## Job: `coverage`
 
-**Purpose:** upload `coverage.out` to Codecov for reporting.
+**Purpose:** upload `coverage.out` to Codecov for reporting and tracking code coverage trends.
 
 **Key steps**
 
-* download coverage artifact from `test`
-* use `codecov/codecov-action@v3` to upload
+1. Download coverage artifact from `test` job (`coverage-report` artifact containing `coverage/coverage.out`)
+2. Use `codecov/codecov-action@v3` to upload coverage data to Codecov
+3. Coverage is tagged with `unittests` flag for filtering in Codecov UI
 
-**Secrets**
+**Configuration**
 
-* `CODECOV_TOKEN` (if uploading for private repos or if configured to require a token). If not required, `fail_ci_if_error: false` is set.
+```yaml
+- name: Upload coverage to Codecov
+  uses: codecov/codecov-action@v3
+  with:
+    file: ./coverage/coverage.out      # Path to coverage file
+    flags: unittests                   # Flag for grouping coverage reports
+    name: codecov-umbrella             # Display name in Codecov
+    fail_ci_if_error: false            # Don't fail CI on upload errors
+    token: ${{ secrets.CODECOV_TOKEN }} # Repository upload token
+```
+
+**Secrets Required**
+
+- `CODECOV_TOKEN`: Repository upload token from Codecov
+  - **How to get it:**
+    1. Go to https://codecov.io/gh/ayush1452/password-vault-cli
+    2. Click on repository settings (gear icon)
+    3. Go to "Repository Upload Token" section
+    4. Copy the token
+  - **How to add to GitHub:**
+    1. Go to repository Settings → Secrets and variables → Actions
+    2. Click "New repository secret"
+    3. Name: `CODECOV_TOKEN`
+    4. Paste the token value
+
+**Why the token is needed**
+
+- **Rate limiting**: Public repositories face rate limits without a token
+- **Reliability**: Token ensures consistent uploads and bypasses rate limits
+- **Authentication**: Verifies uploads are from authorized repository maintainers
+
+**Codecov Features Enabled**
+
+- **Coverage tracking**: Visualize coverage trends over time
+- **Pull request comments**: Automatic coverage diff on PRs
+- **Coverage badges**: Embeddable badges for README
+- **Commit coverage**: Per-commit coverage breakdown
+- **File-level coverage**: Detailed coverage reports by file
+- **Coverage trends**: Historical analysis and reporting
+
+**Coverage Reports Location**
+
+- **Main dashboard**: https://codecov.io/gh/ayush1452/password-vault-cli
+- **PR comments**: Automatic coverage diff comments on pull requests
+- **Commit details**: Coverage per commit in the commit list
+- **File coverage**: Click on any file in the Codecov UI for detailed line-by-line coverage
+
+**Coverage Thresholds and Goals**
+
+- **Target**: Maintain >80% test coverage
+- **Critical files**: Aim for >90% coverage in core security/crypto modules
+- **PR checks**: Coverage should not decrease by more than 5% in PRs
 
 **Common failures & fixes**
 
-* **Upload fails**: check `CODECOV_TOKEN`, file path (coverage file present), and network issues.
-* Use `go tool cover -func=coverage.out` locally to validate the file format.
+1. **Rate limit error (429)**:
+   ```
+   Error: Rate limit reached. Please upload with the Codecov repository upload token
+   ```
+   - **Fix**: Add `CODECOV_TOKEN` secret (see setup above)
+   - **Cause**: Public repositories without tokens face strict rate limits
+
+2. **Upload fails with "No coverage data found"**:
+   - **Fix**: Ensure `coverage.out` file exists and is properly formatted
+   - **Debug**: Run `go tool cover -func=coverage.out` locally to validate
+   - **Check**: Verify test job actually generated coverage file
+
+3. **"Token not found" error**:
+   - **Fix**: Verify `CODECOV_TOKEN` secret exists in repository settings
+   - **Check**: Ensure secret name matches exactly (case-sensitive)
+
+4. **Coverage file path issues**:
+   - **Fix**: Verify `file: ./coverage/coverage.out` matches actual artifact location
+   - **Debug**: Download coverage artifact and check file structure
+
+5. **Network/timeout issues**:
+   - **Fix**: `fail_ci_if_error: false` prevents CI failure
+   - **Retry**: Codecov action automatically retries on transient failures
+
+**Coverage Best Practices**
+
+1. **Generate coverage locally**:
+   ```bash
+   go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+   go tool cover -func=coverage.out  # View coverage summary
+   go tool cover -html=coverage.out -o coverage.html  # View detailed HTML report
+   ```
+
+2. **Coverage targets by module**:
+   - `internal/crypto/`: >95% (security critical)
+   - `internal/vault/`: >90% (core functionality)
+   - `internal/cli/`: >85% (user interface)
+   - `tests/`: >70% (test utilities)
+
+3. **PR coverage guidelines**:
+   - New features should include tests with >80% coverage
+   - Bug fixes should include regression tests
+   - Coverage should not decrease significantly in PRs
+
+**Coverage Badge**
+
+Add to README.md:
+```markdown
+[![codecov](https://codecov.io/gh/ayush1452/password-vault-cli/branch/main/graph/badge.svg)](https://codecov.io/gh/ayush1452/password-vault-cli)
+```
+
+**Advanced Codecov Features**
+
+1. **Coverage comments**: Automatic PR comments showing coverage diff
+2. **Coverage notifications**: Slack/email alerts for coverage changes
+3. **Coverage rules**: Custom rules for coverage enforcement
+4. **Coverage analytics**: Advanced reporting and insights
+5. **Team coverage**: Team-based coverage tracking (for orgs)
+
+**Troubleshooting Commands**
+
+```bash
+# Validate coverage file format
+go tool cover -func=coverage.out
+
+# Check coverage percentage
+go tool cover -func=coverage.out | grep "total:" | awk '{print $3}'
+
+# Generate HTML report locally
+go tool cover -html=coverage.out -o coverage.html
+
+# Test codecov upload locally (requires codecov CLI)
+codecov -f coverage.out -t $CODECOV_TOKEN
+```
+
+**Integration with Other Tools**
+
+- **GitHub Security tab**: Codecov integrates with GitHub's native security features
+- **PR checks**: Coverage status appears as a check on PRs
+- **Branch protection**: Can require coverage checks before merge
+- **Status badges**: Multiple badge formats available (SVG, PNG, etc.)
 
 ---
 
@@ -389,9 +520,23 @@ env:
 
 * **Required repository secrets**:
 
-  * `CODECOV_TOKEN` (if used)
-  * any cloud credentials for integration tests (prefer ephemeral and use `environment` protection rules)
+  * `CODECOV_TOKEN`: Repository upload token for Codecov coverage reporting
+    - **Purpose**: Bypass rate limits and authenticate coverage uploads
+    - **Source**: https://codecov.io/gh/ayush1452/password-vault-cli → Settings → Repository Upload Token
+    - **Permissions**: Read/write access to repository coverage data
+    - **Security**: Treat as sensitive - allows modifying coverage reports
+  
+  * Any cloud credentials for integration tests (prefer ephemeral and use `environment` protection rules)
+
 * **GITHUB_TOKEN**: used for issue creation and artifact interactions (default token scope is generally fine).
+
+* **Token security best practices**:
+  - Never commit tokens to repository
+  - Use repository secrets, not organization secrets for repo-specific tokens
+  - Rotate tokens periodically (recommended every 6-12 months)
+  - Limit token permissions to minimum required scope
+  - Monitor token usage in GitHub audit logs
+
 * **Don’t** store long-lived or production secrets in plain text in the workflow.
 
 ---
