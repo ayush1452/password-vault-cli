@@ -643,9 +643,43 @@ jobs:
         retention-days: 30
 
   # Notification job for pipeline failures
+  sonarqube:
+    name: SonarQube Analysis
+    needs: [test, coverage]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clone is not recommended for SonarQube
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan@v1.10.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        with:
+          args: >
+            -Dsonar.projectKey=password-vault-cli
+            -Dsonar.projectName=Password Vault CLI
+            -Dsonar.go.coverage.reportPaths=coverage.out
+            -Dsonar.sources=.
+            -Dsonar.tests=.
+            -Dsonar.test.inclusions=**/*_test.go
+            -Dsonar.go.tests.reportPaths=test-report.xml
+            -Dsonar.go.coverage.reportPaths=coverage.out
+            -Dsonar.sourceEncoding=UTF-8
+
   notify:
     name: Pipeline Failure Notification
-    needs: [test, benchmarks, security-scan]
+    needs: [test, benchmarks, security-scan, sonarqube]
     if: failure() && github.event_name == 'push'
     runs-on: ubuntu-latest
     
