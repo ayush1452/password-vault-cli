@@ -665,7 +665,7 @@ jobs:
           cache: true
 
       - name: Set up SonarQube Scanner
-        uses: sonarsource/sonarqube-scan-action@v1.9.0
+        uses: sonarsource/sonarqube-scan-action@v6.0.0
         with:
           projectBaseDir: .
           # Additional arguments that will be passed to the sonar-scanner command
