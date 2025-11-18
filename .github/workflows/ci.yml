@@ -650,7 +650,7 @@ jobs:
   sonarqube:
     name: SonarQube Analysis
     needs: [test, coverage]
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -664,22 +664,24 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan@v1.10.0
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      - name: Set up SonarQube Scanner
+        uses: sonarsource/sonarqube-scan-action@v1.9.0
         with:
+          projectBaseDir: .
+          # Additional arguments that will be passed to the sonar-scanner command
           args: >
             -Dsonar.projectKey=password-vault-cli
             -Dsonar.projectName=Password Vault CLI
-            -Dsonar.go.coverage.reportPaths=coverage.out
             -Dsonar.sources=.
             -Dsonar.tests=.
             -Dsonar.test.inclusions=**/*_test.go
-            -Dsonar.go.tests.reportPaths=test-report.xml
             -Dsonar.go.coverage.reportPaths=coverage.out
+            -Dsonar.go.tests.reportPaths=test-report.xml
             -Dsonar.sourceEncoding=UTF-8
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }}
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed if you want to use the GitHub integration
 
   notify:
     name: Pipeline Failure Notification
