@@ -686,7 +686,7 @@ jobs:
           args: >
             -Dsonar.projectKey=ayush1452_password-vault-cli
             -Dsonar.projectName="Password Vault CLI"
-            -Dsonar.organization="Ayush Sharma"
+            -Dsonar.organization="ayush1452"
             -Dsonar.sources=.
             -Dsonar.tests=.
             -Dsonar.test.inclusions=**/*_test.go
