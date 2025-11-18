@@ -650,8 +650,7 @@ jobs:
   sonarqube:
     name: SonarQube Analysis
     needs: [test, coverage]
-    #{github.event_name == 'push' || github.event_name == 'refs/heads/main'}
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event.pull_request
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
