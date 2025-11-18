@@ -553,6 +553,20 @@ jobs:
         name: benchmark-result
         path: benchmark.txt
         retention-days: 7
+        
+    - name: Deploy to GitHub Pages
+      if: github.event_name == 'push' && github.event.pull_request
+      uses: JamesIves/github-pages-deploy-action@v4
+      with:
+        branch: gh-pages
+        folder: dev/bench
+        clean: false
+        clean-exclude: |
+          *
+          !benchmarks/
+          !index.html
+        commit-message: 'Deploy benchmark results'
+        target-folder: 'benchmarks'
 
   # Performance check job compares benchmarks with previous runs
   performance-check:
@@ -672,6 +686,7 @@ jobs:
           args: >
             -Dsonar.projectKey=password-vault-cli
             -Dsonar.projectName="Password Vault CLI"
+            -Dsonar.organization="Ayush Sharma"
             -Dsonar.sources=.
             -Dsonar.tests=.
             -Dsonar.test.inclusions=**/*_test.go
