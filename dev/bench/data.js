@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1763482111875,
+  "lastUpdate": 1763484744303,
   "repoUrl": "https://github.com/ayush1452/password-vault-cli",
   "entries": {
     "Benchmark": [
@@ -16082,6 +16082,1346 @@ window.BENCHMARK_DATA = {
           {
             "name": "BenchmarkStoreOperations/List - allocs/op",
             "value": 10002,
+            "unit": "allocs/op",
+            "extra": "1 times\n4 procs"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "ayush1452",
+            "username": "ayush1452"
+          },
+          "committer": {
+            "name": "ayush1452",
+            "username": "ayush1452"
+          },
+          "id": "62267ceca711ba174ec73d91e51da8ae66485b7e",
+          "message": "Added the sonarqube support",
+          "timestamp": "2025-11-17T15:54:20Z",
+          "url": "https://github.com/ayush1452/password-vault-cli/pull/8/commits/62267ceca711ba174ec73d91e51da8ae66485b7e"
+        },
+        "date": 1763484743873,
+        "tool": "go",
+        "benches": [
+          {
+            "name": "BenchmarkGeneratePassword/len=16",
+            "value": 1080,
+            "unit": "ns/op\t      48 B/op\t      18 allocs/op",
+            "extra": "1069946 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=16 - ns/op",
+            "value": 1080,
+            "unit": "ns/op",
+            "extra": "1069946 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=16 - B/op",
+            "value": 48,
+            "unit": "B/op",
+            "extra": "1069946 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=16 - allocs/op",
+            "value": 18,
+            "unit": "allocs/op",
+            "extra": "1069946 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=16",
+            "value": 1091,
+            "unit": "ns/op\t      48 B/op\t      18 allocs/op",
+            "extra": "1000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=16 - ns/op",
+            "value": 1091,
+            "unit": "ns/op",
+            "extra": "1000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=16 - B/op",
+            "value": 48,
+            "unit": "B/op",
+            "extra": "1000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=16 - allocs/op",
+            "value": 18,
+            "unit": "allocs/op",
+            "extra": "1000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=16",
+            "value": 1069,
+            "unit": "ns/op\t      48 B/op\t      18 allocs/op",
+            "extra": "1000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=16 - ns/op",
+            "value": 1069,
+            "unit": "ns/op",
+            "extra": "1000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=16 - B/op",
+            "value": 48,
+            "unit": "B/op",
+            "extra": "1000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=16 - allocs/op",
+            "value": 18,
+            "unit": "allocs/op",
+            "extra": "1000000 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=32",
+            "value": 2122,
+            "unit": "ns/op\t      96 B/op\t      34 allocs/op",
+            "extra": "562790 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=32 - ns/op",
+            "value": 2122,
+            "unit": "ns/op",
+            "extra": "562790 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=32 - B/op",
+            "value": 96,
+            "unit": "B/op",
+            "extra": "562790 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=32 - allocs/op",
+            "value": 34,
+            "unit": "allocs/op",
+            "extra": "562790 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=32",
+            "value": 2084,
+            "unit": "ns/op\t      96 B/op\t      34 allocs/op",
+            "extra": "573951 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=32 - ns/op",
+            "value": 2084,
+            "unit": "ns/op",
+            "extra": "573951 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=32 - B/op",
+            "value": 96,
+            "unit": "B/op",
+            "extra": "573951 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=32 - allocs/op",
+            "value": 34,
+            "unit": "allocs/op",
+            "extra": "573951 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=32",
+            "value": 2147,
+            "unit": "ns/op\t      96 B/op\t      34 allocs/op",
+            "extra": "573480 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=32 - ns/op",
+            "value": 2147,
+            "unit": "ns/op",
+            "extra": "573480 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=32 - B/op",
+            "value": 96,
+            "unit": "B/op",
+            "extra": "573480 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=32 - allocs/op",
+            "value": 34,
+            "unit": "allocs/op",
+            "extra": "573480 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=64",
+            "value": 4114,
+            "unit": "ns/op\t     192 B/op\t      66 allocs/op",
+            "extra": "266074 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=64 - ns/op",
+            "value": 4114,
+            "unit": "ns/op",
+            "extra": "266074 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=64 - B/op",
+            "value": 192,
+            "unit": "B/op",
+            "extra": "266074 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=64 - allocs/op",
+            "value": 66,
+            "unit": "allocs/op",
+            "extra": "266074 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=64",
+            "value": 4116,
+            "unit": "ns/op\t     192 B/op\t      66 allocs/op",
+            "extra": "288068 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=64 - ns/op",
+            "value": 4116,
+            "unit": "ns/op",
+            "extra": "288068 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=64 - B/op",
+            "value": 192,
+            "unit": "B/op",
+            "extra": "288068 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=64 - allocs/op",
+            "value": 66,
+            "unit": "allocs/op",
+            "extra": "288068 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=64",
+            "value": 4120,
+            "unit": "ns/op\t     192 B/op\t      66 allocs/op",
+            "extra": "285165 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=64 - ns/op",
+            "value": 4120,
+            "unit": "ns/op",
+            "extra": "285165 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=64 - B/op",
+            "value": 192,
+            "unit": "B/op",
+            "extra": "285165 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGeneratePassword/len=64 - allocs/op",
+            "value": 66,
+            "unit": "allocs/op",
+            "extra": "285165 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16",
+            "value": 533.4,
+            "unit": "ns/op\t  29.99 MB/s\t    1440 B/op\t       5 allocs/op",
+            "extra": "2241313 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16 - ns/op",
+            "value": 533.4,
+            "unit": "ns/op",
+            "extra": "2241313 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16 - MB/s",
+            "value": 29.99,
+            "unit": "MB/s",
+            "extra": "2241313 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16 - B/op",
+            "value": 1440,
+            "unit": "B/op",
+            "extra": "2241313 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "2241313 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16",
+            "value": 541.6,
+            "unit": "ns/op\t  29.54 MB/s\t    1440 B/op\t       5 allocs/op",
+            "extra": "2235469 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16 - ns/op",
+            "value": 541.6,
+            "unit": "ns/op",
+            "extra": "2235469 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16 - MB/s",
+            "value": 29.54,
+            "unit": "MB/s",
+            "extra": "2235469 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16 - B/op",
+            "value": 1440,
+            "unit": "B/op",
+            "extra": "2235469 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "2235469 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16",
+            "value": 538,
+            "unit": "ns/op\t  29.74 MB/s\t    1440 B/op\t       5 allocs/op",
+            "extra": "2156812 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16 - ns/op",
+            "value": 538,
+            "unit": "ns/op",
+            "extra": "2156812 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16 - MB/s",
+            "value": 29.74,
+            "unit": "MB/s",
+            "extra": "2156812 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16 - B/op",
+            "value": 1440,
+            "unit": "B/op",
+            "extra": "2156812 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "2156812 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-64",
+            "value": 581.1,
+            "unit": "ns/op\t 110.14 MB/s\t    1488 B/op\t       5 allocs/op",
+            "extra": "2080434 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-64 - ns/op",
+            "value": 581.1,
+            "unit": "ns/op",
+            "extra": "2080434 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-64 - MB/s",
+            "value": 110.14,
+            "unit": "MB/s",
+            "extra": "2080434 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-64 - B/op",
+            "value": 1488,
+            "unit": "B/op",
+            "extra": "2080434 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-64 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "2080434 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-64",
+            "value": 581.6,
+            "unit": "ns/op\t 110.05 MB/s\t    1488 B/op\t       5 allocs/op",
+            "extra": "2060167 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-64 - ns/op",
+            "value": 581.6,
+            "unit": "ns/op",
+            "extra": "2060167 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-64 - MB/s",
+            "value": 110.05,
+            "unit": "MB/s",
+            "extra": "2060167 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-64 - B/op",
+            "value": 1488,
+            "unit": "B/op",
+            "extra": "2060167 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-64 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "2060167 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-64",
+            "value": 582.7,
+            "unit": "ns/op\t 109.83 MB/s\t    1488 B/op\t       5 allocs/op",
+            "extra": "2063641 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-64 - ns/op",
+            "value": 582.7,
+            "unit": "ns/op",
+            "extra": "2063641 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-64 - MB/s",
+            "value": 109.83,
+            "unit": "MB/s",
+            "extra": "2063641 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-64 - B/op",
+            "value": 1488,
+            "unit": "B/op",
+            "extra": "2063641 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-64 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "2063641 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-256",
+            "value": 641,
+            "unit": "ns/op\t 399.37 MB/s\t    1696 B/op\t       5 allocs/op",
+            "extra": "1857224 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-256 - ns/op",
+            "value": 641,
+            "unit": "ns/op",
+            "extra": "1857224 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-256 - MB/s",
+            "value": 399.37,
+            "unit": "MB/s",
+            "extra": "1857224 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-256 - B/op",
+            "value": 1696,
+            "unit": "B/op",
+            "extra": "1857224 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-256 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "1857224 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-256",
+            "value": 638.3,
+            "unit": "ns/op\t 401.09 MB/s\t    1696 B/op\t       5 allocs/op",
+            "extra": "1875387 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-256 - ns/op",
+            "value": 638.3,
+            "unit": "ns/op",
+            "extra": "1875387 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-256 - MB/s",
+            "value": 401.09,
+            "unit": "MB/s",
+            "extra": "1875387 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-256 - B/op",
+            "value": 1696,
+            "unit": "B/op",
+            "extra": "1875387 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-256 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "1875387 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-256",
+            "value": 636.5,
+            "unit": "ns/op\t 402.22 MB/s\t    1696 B/op\t       5 allocs/op",
+            "extra": "1889803 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-256 - ns/op",
+            "value": 636.5,
+            "unit": "ns/op",
+            "extra": "1889803 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-256 - MB/s",
+            "value": 402.22,
+            "unit": "MB/s",
+            "extra": "1889803 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-256 - B/op",
+            "value": 1696,
+            "unit": "B/op",
+            "extra": "1889803 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-256 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "1889803 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-1024",
+            "value": 942.5,
+            "unit": "ns/op\t1086.47 MB/s\t    2560 B/op\t       5 allocs/op",
+            "extra": "1275554 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-1024 - ns/op",
+            "value": 942.5,
+            "unit": "ns/op",
+            "extra": "1275554 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-1024 - MB/s",
+            "value": 1086.47,
+            "unit": "MB/s",
+            "extra": "1275554 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-1024 - B/op",
+            "value": 2560,
+            "unit": "B/op",
+            "extra": "1275554 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-1024 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "1275554 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-1024",
+            "value": 941.7,
+            "unit": "ns/op\t1087.41 MB/s\t    2560 B/op\t       5 allocs/op",
+            "extra": "1265508 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-1024 - ns/op",
+            "value": 941.7,
+            "unit": "ns/op",
+            "extra": "1265508 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-1024 - MB/s",
+            "value": 1087.41,
+            "unit": "MB/s",
+            "extra": "1265508 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-1024 - B/op",
+            "value": 2560,
+            "unit": "B/op",
+            "extra": "1265508 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-1024 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "1265508 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-1024",
+            "value": 944.9,
+            "unit": "ns/op\t1083.76 MB/s\t    2560 B/op\t       5 allocs/op",
+            "extra": "1277972 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-1024 - ns/op",
+            "value": 944.9,
+            "unit": "ns/op",
+            "extra": "1277972 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-1024 - MB/s",
+            "value": 1083.76,
+            "unit": "MB/s",
+            "extra": "1277972 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-1024 - B/op",
+            "value": 2560,
+            "unit": "B/op",
+            "extra": "1277972 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-1024 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "1277972 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-4096",
+            "value": 2080,
+            "unit": "ns/op\t1968.76 MB/s\t    6272 B/op\t       5 allocs/op",
+            "extra": "559287 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-4096 - ns/op",
+            "value": 2080,
+            "unit": "ns/op",
+            "extra": "559287 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-4096 - MB/s",
+            "value": 1968.76,
+            "unit": "MB/s",
+            "extra": "559287 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-4096 - B/op",
+            "value": 6272,
+            "unit": "B/op",
+            "extra": "559287 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-4096 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "559287 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-4096",
+            "value": 2099,
+            "unit": "ns/op\t1951.86 MB/s\t    6272 B/op\t       5 allocs/op",
+            "extra": "545602 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-4096 - ns/op",
+            "value": 2099,
+            "unit": "ns/op",
+            "extra": "545602 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-4096 - MB/s",
+            "value": 1951.86,
+            "unit": "MB/s",
+            "extra": "545602 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-4096 - B/op",
+            "value": 6272,
+            "unit": "B/op",
+            "extra": "545602 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-4096 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "545602 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-4096",
+            "value": 2089,
+            "unit": "ns/op\t1960.59 MB/s\t    6272 B/op\t       5 allocs/op",
+            "extra": "510920 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-4096 - ns/op",
+            "value": 2089,
+            "unit": "ns/op",
+            "extra": "510920 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-4096 - MB/s",
+            "value": 1960.59,
+            "unit": "MB/s",
+            "extra": "510920 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-4096 - B/op",
+            "value": 6272,
+            "unit": "B/op",
+            "extra": "510920 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-4096 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "510920 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16384",
+            "value": 6397,
+            "unit": "ns/op\t2561.26 MB/s\t   19840 B/op\t       5 allocs/op",
+            "extra": "183979 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16384 - ns/op",
+            "value": 6397,
+            "unit": "ns/op",
+            "extra": "183979 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16384 - MB/s",
+            "value": 2561.26,
+            "unit": "MB/s",
+            "extra": "183979 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16384 - B/op",
+            "value": 19840,
+            "unit": "B/op",
+            "extra": "183979 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16384 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "183979 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16384",
+            "value": 6405,
+            "unit": "ns/op\t2558.14 MB/s\t   19840 B/op\t       5 allocs/op",
+            "extra": "186741 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16384 - ns/op",
+            "value": 6405,
+            "unit": "ns/op",
+            "extra": "186741 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16384 - MB/s",
+            "value": 2558.14,
+            "unit": "MB/s",
+            "extra": "186741 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16384 - B/op",
+            "value": 19840,
+            "unit": "B/op",
+            "extra": "186741 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16384 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "186741 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16384",
+            "value": 6396,
+            "unit": "ns/op\t2561.77 MB/s\t   19840 B/op\t       5 allocs/op",
+            "extra": "186453 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16384 - ns/op",
+            "value": 6396,
+            "unit": "ns/op",
+            "extra": "186453 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16384 - MB/s",
+            "value": 2561.77,
+            "unit": "MB/s",
+            "extra": "186453 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16384 - B/op",
+            "value": 19840,
+            "unit": "B/op",
+            "extra": "186453 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkEncryption/size-16384 - allocs/op",
+            "value": 5,
+            "unit": "allocs/op",
+            "extra": "186453 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16",
+            "value": 431.2,
+            "unit": "ns/op\t  37.10 MB/s\t    1328 B/op\t       4 allocs/op",
+            "extra": "2781444 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16 - ns/op",
+            "value": 431.2,
+            "unit": "ns/op",
+            "extra": "2781444 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16 - MB/s",
+            "value": 37.1,
+            "unit": "MB/s",
+            "extra": "2781444 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16 - B/op",
+            "value": 1328,
+            "unit": "B/op",
+            "extra": "2781444 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "2781444 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16",
+            "value": 433.7,
+            "unit": "ns/op\t  36.89 MB/s\t    1328 B/op\t       4 allocs/op",
+            "extra": "2794851 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16 - ns/op",
+            "value": 433.7,
+            "unit": "ns/op",
+            "extra": "2794851 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16 - MB/s",
+            "value": 36.89,
+            "unit": "MB/s",
+            "extra": "2794851 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16 - B/op",
+            "value": 1328,
+            "unit": "B/op",
+            "extra": "2794851 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "2794851 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16",
+            "value": 431.8,
+            "unit": "ns/op\t  37.06 MB/s\t    1328 B/op\t       4 allocs/op",
+            "extra": "2792409 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16 - ns/op",
+            "value": 431.8,
+            "unit": "ns/op",
+            "extra": "2792409 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16 - MB/s",
+            "value": 37.06,
+            "unit": "MB/s",
+            "extra": "2792409 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16 - B/op",
+            "value": 1328,
+            "unit": "B/op",
+            "extra": "2792409 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "2792409 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-64",
+            "value": 476.3,
+            "unit": "ns/op\t 134.38 MB/s\t    1424 B/op\t       4 allocs/op",
+            "extra": "2519240 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-64 - ns/op",
+            "value": 476.3,
+            "unit": "ns/op",
+            "extra": "2519240 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-64 - MB/s",
+            "value": 134.38,
+            "unit": "MB/s",
+            "extra": "2519240 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-64 - B/op",
+            "value": 1424,
+            "unit": "B/op",
+            "extra": "2519240 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-64 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "2519240 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-64",
+            "value": 477.6,
+            "unit": "ns/op\t 134.01 MB/s\t    1424 B/op\t       4 allocs/op",
+            "extra": "2497384 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-64 - ns/op",
+            "value": 477.6,
+            "unit": "ns/op",
+            "extra": "2497384 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-64 - MB/s",
+            "value": 134.01,
+            "unit": "MB/s",
+            "extra": "2497384 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-64 - B/op",
+            "value": 1424,
+            "unit": "B/op",
+            "extra": "2497384 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-64 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "2497384 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-64",
+            "value": 476.5,
+            "unit": "ns/op\t 134.30 MB/s\t    1424 B/op\t       4 allocs/op",
+            "extra": "2494040 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-64 - ns/op",
+            "value": 476.5,
+            "unit": "ns/op",
+            "extra": "2494040 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-64 - MB/s",
+            "value": 134.3,
+            "unit": "MB/s",
+            "extra": "2494040 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-64 - B/op",
+            "value": 1424,
+            "unit": "B/op",
+            "extra": "2494040 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-64 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "2494040 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-256",
+            "value": 563.7,
+            "unit": "ns/op\t 454.15 MB/s\t    1824 B/op\t       4 allocs/op",
+            "extra": "2128102 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-256 - ns/op",
+            "value": 563.7,
+            "unit": "ns/op",
+            "extra": "2128102 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-256 - MB/s",
+            "value": 454.15,
+            "unit": "MB/s",
+            "extra": "2128102 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-256 - B/op",
+            "value": 1824,
+            "unit": "B/op",
+            "extra": "2128102 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-256 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "2128102 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-256",
+            "value": 558.8,
+            "unit": "ns/op\t 458.10 MB/s\t    1824 B/op\t       4 allocs/op",
+            "extra": "2133182 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-256 - ns/op",
+            "value": 558.8,
+            "unit": "ns/op",
+            "extra": "2133182 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-256 - MB/s",
+            "value": 458.1,
+            "unit": "MB/s",
+            "extra": "2133182 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-256 - B/op",
+            "value": 1824,
+            "unit": "B/op",
+            "extra": "2133182 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-256 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "2133182 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-256",
+            "value": 572,
+            "unit": "ns/op\t 447.58 MB/s\t    1824 B/op\t       4 allocs/op",
+            "extra": "2128764 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-256 - ns/op",
+            "value": 572,
+            "unit": "ns/op",
+            "extra": "2128764 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-256 - MB/s",
+            "value": 447.58,
+            "unit": "MB/s",
+            "extra": "2128764 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-256 - B/op",
+            "value": 1824,
+            "unit": "B/op",
+            "extra": "2128764 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-256 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "2128764 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-1024",
+            "value": 977.7,
+            "unit": "ns/op\t1047.31 MB/s\t    3456 B/op\t       4 allocs/op",
+            "extra": "1236428 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-1024 - ns/op",
+            "value": 977.7,
+            "unit": "ns/op",
+            "extra": "1236428 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-1024 - MB/s",
+            "value": 1047.31,
+            "unit": "MB/s",
+            "extra": "1236428 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-1024 - B/op",
+            "value": 3456,
+            "unit": "B/op",
+            "extra": "1236428 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-1024 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "1236428 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-1024",
+            "value": 973.1,
+            "unit": "ns/op\t1052.29 MB/s\t    3456 B/op\t       4 allocs/op",
+            "extra": "1238058 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-1024 - ns/op",
+            "value": 973.1,
+            "unit": "ns/op",
+            "extra": "1238058 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-1024 - MB/s",
+            "value": 1052.29,
+            "unit": "MB/s",
+            "extra": "1238058 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-1024 - B/op",
+            "value": 3456,
+            "unit": "B/op",
+            "extra": "1238058 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-1024 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "1238058 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-1024",
+            "value": 976.4,
+            "unit": "ns/op\t1048.78 MB/s\t    3456 B/op\t       4 allocs/op",
+            "extra": "1226522 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-1024 - ns/op",
+            "value": 976.4,
+            "unit": "ns/op",
+            "extra": "1226522 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-1024 - MB/s",
+            "value": 1048.78,
+            "unit": "MB/s",
+            "extra": "1226522 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-1024 - B/op",
+            "value": 3456,
+            "unit": "B/op",
+            "extra": "1226522 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-1024 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "1226522 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-4096",
+            "value": 2588,
+            "unit": "ns/op\t1582.54 MB/s\t   10240 B/op\t       4 allocs/op",
+            "extra": "465081 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-4096 - ns/op",
+            "value": 2588,
+            "unit": "ns/op",
+            "extra": "465081 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-4096 - MB/s",
+            "value": 1582.54,
+            "unit": "MB/s",
+            "extra": "465081 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-4096 - B/op",
+            "value": 10240,
+            "unit": "B/op",
+            "extra": "465081 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-4096 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "465081 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-4096",
+            "value": 2588,
+            "unit": "ns/op\t1582.91 MB/s\t   10240 B/op\t       4 allocs/op",
+            "extra": "458808 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-4096 - ns/op",
+            "value": 2588,
+            "unit": "ns/op",
+            "extra": "458808 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-4096 - MB/s",
+            "value": 1582.91,
+            "unit": "MB/s",
+            "extra": "458808 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-4096 - B/op",
+            "value": 10240,
+            "unit": "B/op",
+            "extra": "458808 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-4096 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "458808 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-4096",
+            "value": 2597,
+            "unit": "ns/op\t1577.45 MB/s\t   10240 B/op\t       4 allocs/op",
+            "extra": "457749 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-4096 - ns/op",
+            "value": 2597,
+            "unit": "ns/op",
+            "extra": "457749 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-4096 - MB/s",
+            "value": 1577.45,
+            "unit": "MB/s",
+            "extra": "457749 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-4096 - B/op",
+            "value": 10240,
+            "unit": "B/op",
+            "extra": "457749 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-4096 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "457749 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16384",
+            "value": 8549,
+            "unit": "ns/op\t1916.59 MB/s\t   36096 B/op\t       4 allocs/op",
+            "extra": "142312 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16384 - ns/op",
+            "value": 8549,
+            "unit": "ns/op",
+            "extra": "142312 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16384 - MB/s",
+            "value": 1916.59,
+            "unit": "MB/s",
+            "extra": "142312 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16384 - B/op",
+            "value": 36096,
+            "unit": "B/op",
+            "extra": "142312 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16384 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "142312 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16384",
+            "value": 8468,
+            "unit": "ns/op\t1934.75 MB/s\t   36096 B/op\t       4 allocs/op",
+            "extra": "141217 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16384 - ns/op",
+            "value": 8468,
+            "unit": "ns/op",
+            "extra": "141217 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16384 - MB/s",
+            "value": 1934.75,
+            "unit": "MB/s",
+            "extra": "141217 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16384 - B/op",
+            "value": 36096,
+            "unit": "B/op",
+            "extra": "141217 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16384 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "141217 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16384",
+            "value": 8490,
+            "unit": "ns/op\t1929.81 MB/s\t   36096 B/op\t       4 allocs/op",
+            "extra": "140079 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16384 - ns/op",
+            "value": 8490,
+            "unit": "ns/op",
+            "extra": "140079 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16384 - MB/s",
+            "value": 1929.81,
+            "unit": "MB/s",
+            "extra": "140079 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16384 - B/op",
+            "value": 36096,
+            "unit": "B/op",
+            "extra": "140079 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDecryption/size-16384 - allocs/op",
+            "value": 4,
+            "unit": "allocs/op",
+            "extra": "140079 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkStoreOperations/List",
+            "value": 4072161939,
+            "unit": "ns/op\t5906740928 B/op\t   10108 allocs/op",
+            "extra": "1 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkStoreOperations/List - ns/op",
+            "value": 4072161939,
+            "unit": "ns/op",
+            "extra": "1 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkStoreOperations/List - B/op",
+            "value": 5906740928,
+            "unit": "B/op",
+            "extra": "1 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkStoreOperations/List - allocs/op",
+            "value": 10108,
             "unit": "allocs/op",
             "extra": "1 times\n4 procs"
           }
