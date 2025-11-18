@@ -547,6 +547,11 @@ jobs:
         summary-always: false
         save-data-file: true
 
+    - name: Prepare benchmark files
+      run: |
+        mkdir -p dev/bench/benchmarks
+        cp benchmark.txt dev/bench/benchmarks/
+        
     - name: Upload benchmark results
       uses: actions/upload-artifact@v4
       with:
@@ -686,7 +691,7 @@ jobs:
           args: >
             -Dsonar.projectKey=ayush1452_password-vault-cli
             -Dsonar.projectName="Password Vault CLI"
-            -Dsonar.organization="ayush1452"
+            -Dsonar.organization=ayush1452
             -Dsonar.sources=.
             -Dsonar.tests=.
             -Dsonar.test.inclusions=**/*_test.go
