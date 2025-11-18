@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Password Vault CLI - Benchmark Results</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .container {
+            margin-top: 30px;
+        }
+        .last-updated {
+            color: #666;
+            font-size: 0.9em;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Password Vault CLI - Benchmark Results</h1>
+    <div class="last-updated">Last updated: <span id="last-updated"></span></div>
+    
+    <div class="container">
+        <h2>Latest Benchmark Results</h2>
+        <pre id="benchmark-results">Loading benchmark data...</pre>
+    </div>
+
+    <script>
+        // Display last updated time
+        document.getElementById('last-updated').textContent = new Date().toLocaleString();
+        
+        // Load benchmark results
+        fetch('benchmark.txt')
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('benchmark-results').textContent = data;
+            })
+            .catch(error => {
+                console.error('Error loading benchmark data:', error);
+                document.getElementById('benchmark-results').textContent = 'Error loading benchmark data. Please check back later.';
+            });
+    </script>
+</body>
+</html>
