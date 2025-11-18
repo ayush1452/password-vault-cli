@@ -1,0 +1,58 @@
+goos: linux
+goarch: amd64
+pkg: github.com/vault-cli/vault/internal/crypto
+cpu: AMD EPYC 7763 64-Core Processor                
+BenchmarkGeneratePassword/len=16-4         	 1072303	      1069 ns/op	      48 B/op	      18 allocs/op
+BenchmarkGeneratePassword/len=16-4         	 1000000	      1080 ns/op	      48 B/op	      18 allocs/op
+BenchmarkGeneratePassword/len=16-4         	 1000000	      1072 ns/op	      48 B/op	      18 allocs/op
+BenchmarkGeneratePassword/len=32-4         	  556540	      2134 ns/op	      96 B/op	      34 allocs/op
+BenchmarkGeneratePassword/len=32-4         	  566430	      2090 ns/op	      96 B/op	      34 allocs/op
+BenchmarkGeneratePassword/len=32-4         	  566521	      2094 ns/op	      96 B/op	      34 allocs/op
+BenchmarkGeneratePassword/len=64-4         	  287250	      4130 ns/op	     192 B/op	      66 allocs/op
+BenchmarkGeneratePassword/len=64-4         	  287558	      4118 ns/op	     192 B/op	      66 allocs/op
+BenchmarkGeneratePassword/len=64-4         	  289916	      4117 ns/op	     192 B/op	      66 allocs/op
+goos: linux
+goarch: amd64
+pkg: github.com/vault-cli/vault/internal/vault
+cpu: AMD EPYC 7763 64-Core Processor                
+goos: linux
+goarch: amd64
+pkg: github.com/vault-cli/vault/tests
+cpu: AMD EPYC 7763 64-Core Processor                
+BenchmarkEncryption/size-16-4         	 2219476	       536.6 ns/op	  29.82 MB/s	    1440 B/op	       5 allocs/op
+BenchmarkEncryption/size-16-4         	 2226940	       535.0 ns/op	  29.91 MB/s	    1440 B/op	       5 allocs/op
+BenchmarkEncryption/size-16-4         	 2247669	       553.7 ns/op	  28.90 MB/s	    1440 B/op	       5 allocs/op
+BenchmarkEncryption/size-64-4         	 2047968	       584.1 ns/op	 109.56 MB/s	    1488 B/op	       5 allocs/op
+BenchmarkEncryption/size-64-4         	 2036144	       585.8 ns/op	 109.24 MB/s	    1488 B/op	       5 allocs/op
+BenchmarkEncryption/size-64-4         	 2086364	       579.9 ns/op	 110.36 MB/s	    1488 B/op	       5 allocs/op
+BenchmarkEncryption/size-256-4        	 1883389	       637.7 ns/op	 401.46 MB/s	    1696 B/op	       5 allocs/op
+BenchmarkEncryption/size-256-4        	 1877430	       642.7 ns/op	 398.33 MB/s	    1696 B/op	       5 allocs/op
+BenchmarkEncryption/size-256-4        	 1861224	       646.2 ns/op	 396.19 MB/s	    1696 B/op	       5 allocs/op
+BenchmarkEncryption/size-1024-4       	 1271803	       948.8 ns/op	1079.26 MB/s	    2560 B/op	       5 allocs/op
+BenchmarkEncryption/size-1024-4       	 1267693	       941.9 ns/op	1087.21 MB/s	    2560 B/op	       5 allocs/op
+BenchmarkEncryption/size-1024-4       	 1265622	       947.4 ns/op	1080.87 MB/s	    2560 B/op	       5 allocs/op
+BenchmarkEncryption/size-4096-4       	  532144	      2097 ns/op	1953.15 MB/s	    6272 B/op	       5 allocs/op
+BenchmarkEncryption/size-4096-4       	  536979	      2114 ns/op	1937.83 MB/s	    6272 B/op	       5 allocs/op
+BenchmarkEncryption/size-4096-4       	  560648	      2102 ns/op	1948.48 MB/s	    6272 B/op	       5 allocs/op
+BenchmarkEncryption/size-16384-4      	  187628	      6466 ns/op	2534.00 MB/s	   19840 B/op	       5 allocs/op
+BenchmarkEncryption/size-16384-4      	  182612	      6449 ns/op	2540.54 MB/s	   19840 B/op	       5 allocs/op
+BenchmarkEncryption/size-16384-4      	  184924	      6448 ns/op	2541.12 MB/s	   19840 B/op	       5 allocs/op
+BenchmarkDecryption/size-16-4         	 2768756	       435.3 ns/op	  36.76 MB/s	    1328 B/op	       4 allocs/op
+BenchmarkDecryption/size-16-4         	 2780671	       434.7 ns/op	  36.81 MB/s	    1328 B/op	       4 allocs/op
+BenchmarkDecryption/size-16-4         	 2650693	       436.3 ns/op	  36.67 MB/s	    1328 B/op	       4 allocs/op
+BenchmarkDecryption/size-64-4         	 2509713	       477.5 ns/op	 134.04 MB/s	    1424 B/op	       4 allocs/op
+BenchmarkDecryption/size-64-4         	 2506786	       474.8 ns/op	 134.79 MB/s	    1424 B/op	       4 allocs/op
+BenchmarkDecryption/size-64-4         	 2514540	       477.2 ns/op	 134.12 MB/s	    1424 B/op	       4 allocs/op
+BenchmarkDecryption/size-256-4        	 2130660	       565.9 ns/op	 452.37 MB/s	    1824 B/op	       4 allocs/op
+BenchmarkDecryption/size-256-4        	 2098659	       573.1 ns/op	 446.71 MB/s	    1824 B/op	       4 allocs/op
+BenchmarkDecryption/size-256-4        	 2108672	       569.9 ns/op	 449.19 MB/s	    1824 B/op	       4 allocs/op
+BenchmarkDecryption/size-1024-4       	 1230205	       965.4 ns/op	1060.69 MB/s	    3456 B/op	       4 allocs/op
+BenchmarkDecryption/size-1024-4       	 1234921	       974.9 ns/op	1050.40 MB/s	    3456 B/op	       4 allocs/op
+BenchmarkDecryption/size-1024-4       	 1233571	       973.9 ns/op	1051.48 MB/s	    3456 B/op	       4 allocs/op
+BenchmarkDecryption/size-4096-4       	  439010	      2580 ns/op	1587.62 MB/s	   10240 B/op	       4 allocs/op
+BenchmarkDecryption/size-4096-4       	  434862	      2587 ns/op	1583.45 MB/s	   10240 B/op	       4 allocs/op
+BenchmarkDecryption/size-4096-4       	  445495	      2589 ns/op	1582.22 MB/s	   10240 B/op	       4 allocs/op
+BenchmarkDecryption/size-16384-4      	  136581	      8671 ns/op	1889.52 MB/s	   36096 B/op	       4 allocs/op
+BenchmarkDecryption/size-16384-4      	  138471	      8614 ns/op	1902.10 MB/s	   36096 B/op	       4 allocs/op
+BenchmarkDecryption/size-16384-4      	  138519	      8636 ns/op	1897.18 MB/s	   36096 B/op	       4 allocs/op
+BenchmarkStoreOperations/List-4       	       1	3994204232 ns/op	5839619296 B/op	    9996 allocs/op

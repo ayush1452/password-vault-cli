@@ -45,14 +45,19 @@
         document.getElementById('last-updated').textContent = new Date().toLocaleString();
         
         // Load benchmark results
-        fetch('benchmark.txt')
-            .then(response => response.text())
+        fetch('benchmarks/benchmark.txt')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.text();
+            })
             .then(data => {
                 document.getElementById('benchmark-results').textContent = data;
             })
             .catch(error => {
                 console.error('Error loading benchmark data:', error);
-                document.getElementById('benchmark-results').textContent = 'Error loading benchmark data. Please check back later.';
+                document.getElementById('benchmark-results').textContent = 'Error loading benchmark data: ' + error.message + '\n\nPlease check if the benchmark has completed successfully.';
             });
     </script>
 </body>
