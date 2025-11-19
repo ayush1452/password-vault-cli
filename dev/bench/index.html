@@ -45,7 +45,7 @@
         document.getElementById('last-updated').textContent = new Date().toLocaleString();
         
         // Load benchmark results
-        fetch('benchmarks/benchmark.txt')
+        fetch('./benchmark.txt')
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);

@@ -502,6 +502,8 @@ jobs:
     if: (github.event_name == 'push' || github.event_name == 'pull_request') && (needs.test.result == 'success' || needs.test.result == 'failure')
     permissions:
       contents: write
+      pages: write
+      deployments: write
 
     steps:
       - name: Checkout code
@@ -584,10 +586,16 @@ jobs:
           path: dev/bench
           retention-days: 7
 
-      - name: Deploy benchmark results to GitHub Pages
-        uses: actions/deploy-pages@v4
+      - name: Deploy to GitHub Pages
+        if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) || 
+            (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged)
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          wait-for-deployment: true
+          branch: gh-pages
+          folder: dev/bench
+          clean: false
+          commit-message: 'Deploy benchmark results: ${{ github.sha }}'
+          target-folder: '.'
 
   # Performance check job compares benchmarks with previous runs
   performance-check:
