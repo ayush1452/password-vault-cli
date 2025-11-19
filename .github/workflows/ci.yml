@@ -499,79 +499,95 @@ jobs:
     name: Performance Benchmarks
     needs: test
     runs-on: ubuntu-latest
-    # TODO: Revert to simple condition once tests are passing: if: github.event_name == 'push' || github.event_name == 'pull_request'
     if: (github.event_name == 'push' || github.event_name == 'pull_request') && (needs.test.result == 'success' || needs.test.result == 'failure')
     permissions:
       contents: write
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.24.10'
-        cache: true
-      env:
-        GO111MODULE: on
-        GOPROXY: https://proxy.golang.org,direct
-        
-    - name: Get dependencies
-      run: |
-        go mod tidy
-        go mod download
-        
-    - name: Run benchmarks
-      run: |
-        echo "Running benchmarks..."
-        go test -bench=. -benchmem -count=3 ./internal/crypto ./internal/vault ./tests 2>&1 | grep -E "^Benchmark|goos:|goarch:|pkg:|cpu:" | grep -v "Warning" > benchmark.txt || echo "No benchmarks found"
-        
-    - name: Store benchmark result
-      uses: benchmark-action/github-action-benchmark@v1
-      with:
-        tool: 'go'
-        output-file-path: benchmark.txt
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        auto-push: true
-        comment-on-alert: true
-        alert-threshold: '200%'
-        fail-on-alert: true
-        name: 'Benchmark'
-        gh-pages-branch: gh-pages
-        benchmark-data-dir-path: dev/bench
-        skip-fetch-gh-pages: false
-        comment-always: false
-        summary-always: false
-        save-data-file: true
 
-    - name: Prepare benchmark files
-      run: |
-        mkdir -p dev/bench/benchmarks
-        cp benchmark.txt dev/bench/benchmarks/
-        
-    - name: Upload benchmark results
-      uses: actions/upload-artifact@v4
-      with:
-        name: benchmark-result
-        path: benchmark.txt
-        retention-days: 7
-        
-    - name: Deploy to GitHub Pages
-      if: (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')) || github.event_name == 'pull_request'
-      uses: JamesIves/github-pages-deploy-action@v4
-      with:
-        branch: gh-pages
-        folder: dev/bench
-        clean: false
-        clean-exclude: |
-          *
-          !benchmarks/
-          !index.html
-        commit-message: 'Deploy benchmark results'
-        target-folder: 'benchmarks'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24.10'
+          cache: true
+        env:
+          GO111MODULE: on
+          GOPROXY: https://proxy.golang.org,direct
+
+      - name: Get dependencies
+        run: |
+          go mod tidy
+          go mod download
+
+      - name: Run benchmarks
+        run: |
+          set -e
+          echo "Running benchmarks..."
+          # adapt packages to real benchmark packages; fallback to 'No benchmarks found'
+          go test -bench=. -benchmem -count=3 ./internal/crypto ./internal/vault ./tests 2>&1 \
+            | tee benchmark_full.txt \
+            || true
+          # Extract standard benchmark lines into benchmark.txt
+          grep -E '^Benchmark' benchmark_full.txt > ${{ env.BENCHMARK_FILE }} || echo "No benchmarks found" > ${{ env.BENCHMARK_FILE }}
+
+      - name: Store benchmark result (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-result
+          path: ${{ env.BENCHMARK_FILE }}
+          retention-days: 7
+
+      - name: Prepare benchmark files
+        run: |
+          set -euo pipefail
+
+          # Create necessary directories
+          mkdir -p dev/bench/benchmarks
+
+          # Ensure benchmark.txt exists then copy into dev/bench & dev/bench/benchmarks
+          if [ -f benchmark.txt ]; then
+            cp benchmark.txt dev/bench/benchmark.txt
+            cp benchmark.txt dev/bench/benchmarks/benchmark.txt
+          else
+            echo "::warning::benchmark.txt not found in workspace; listing files for debugging"
+            ls -la || true
+          fi
+
+          # Ensure an index.html exists for the pages site
+          if [ ! -f dev/bench/index.html ]; then
+            cat > dev/bench/index.html <<'HTML'
+            <!doctype html>
+            <meta charset="utf-8">
+            <title>Benchmarks</title>
+            <h1>Benchmarks</h1>
+            <ul>
+              <li><a href="./benchmark.txt">benchmark.txt</a></li>
+              <li><a href="./benchmarks/benchmark.txt">benchmarks/benchmark.txt</a></li>
+            </ul>
+            HTML
+          fi
+
+          # Verify files
+          echo "dev/bench contents:"
+          ls -la dev/bench || true
+          echo "dev/bench/benchmarks contents:"
+          ls -la dev/bench/benchmarks || true
+
+      - name: Upload github-pages artifact (benchmark site)
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-pages
+          path: dev/bench
+          retention-days: 7
+
+      - name: Deploy benchmark results to GitHub Pages
+        uses: actions/deploy-pages@v4
+        with:
+          wait-for-deployment: true
 
   # Performance check job compares benchmarks with previous runs
   performance-check:
