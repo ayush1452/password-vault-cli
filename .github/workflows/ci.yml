@@ -534,13 +534,13 @@ jobs:
             | tee benchmark_full.txt \
             || true
           # Extract standard benchmark lines into benchmark.txt
-          grep -E '^Benchmark' benchmark_full.txt > ${{ env.BENCHMARK_FILE }} || echo "No benchmarks found" > ${{ env.BENCHMARK_FILE }}
+          grep -E '^Benchmark' benchmark_full.txt > benchmark.txt || echo "No benchmarks found" > benchmark.txt
 
       - name: Store benchmark result (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-result
-          path: ${{ env.BENCHMARK_FILE }}
+          path: benchmark.txt
           retention-days: 7
 
       - name: Prepare benchmark files
@@ -557,20 +557,6 @@ jobs:
           else
             echo "::warning::benchmark.txt not found in workspace; listing files for debugging"
             ls -la || true
-          fi
-
-          # Ensure an index.html exists for the pages site
-          if [ ! -f dev/bench/index.html ]; then
-            cat > dev/bench/index.html <<'HTML'
-            <!doctype html>
-            <meta charset="utf-8">
-            <title>Benchmarks</title>
-            <h1>Benchmarks</h1>
-            <ul>
-              <li><a href="./benchmark.txt">benchmark.txt</a></li>
-              <li><a href="./benchmarks/benchmark.txt">benchmarks/benchmark.txt</a></li>
-            </ul>
-            HTML
           fi
 
           # Verify files
