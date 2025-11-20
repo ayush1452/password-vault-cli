@@ -1,66 +1,66 @@
-BenchmarkGeneratePassword/len=16-4         	  954164	      1070 ns/op	      48 B/op	      18 allocs/op
-BenchmarkGeneratePassword/len=16-4         	 1000000	      1076 ns/op	      48 B/op	      18 allocs/op
-BenchmarkGeneratePassword/len=16-4         	 1000000	      1075 ns/op	      48 B/op	      18 allocs/op
-BenchmarkGeneratePassword/len=32-4         	  558972	      2087 ns/op	      96 B/op	      34 allocs/op
-BenchmarkGeneratePassword/len=32-4         	  568472	      2092 ns/op	      96 B/op	      34 allocs/op
-BenchmarkGeneratePassword/len=32-4         	  560930	      2097 ns/op	      96 B/op	      34 allocs/op
-BenchmarkGeneratePassword/len=64-4         	  283906	      4127 ns/op	     192 B/op	      66 allocs/op
-BenchmarkGeneratePassword/len=64-4         	  288380	      4174 ns/op	     192 B/op	      66 allocs/op
-BenchmarkGeneratePassword/len=64-4         	  285606	      4144 ns/op	     192 B/op	      66 allocs/op
-BenchmarkDeriveKey-4   	Warning: Key derivation took only 48.758234ms, consider increasing parameters
-BenchmarkDeriveKey-4   	Warning: Key derivation took only 48.621381ms, consider increasing parameters
-BenchmarkDeriveKey-4   	Warning: Key derivation took only 49.051626ms, consider increasing parameters
-BenchmarkSeal-4        	Warning: Key derivation took only 49.260015ms, consider increasing parameters
-BenchmarkSeal-4        	Warning: Key derivation took only 70.266336ms, consider increasing parameters
-BenchmarkSeal-4        	Warning: Key derivation took only 70.054981ms, consider increasing parameters
-BenchmarkOpen-4        	Warning: Key derivation took only 48.91051ms, consider increasing parameters
-BenchmarkOpen-4        	Warning: Key derivation took only 69.827725ms, consider increasing parameters
-BenchmarkOpen-4        	Warning: Key derivation took only 68.730037ms, consider increasing parameters
-BenchmarkKeyDerivation-4     	Warning: Key derivation took only 47.404314ms, consider increasing parameters
-BenchmarkKeyDerivation-4     	Warning: Key derivation took only 46.763165ms, consider increasing parameters
-BenchmarkKeyDerivation-4     	Warning: Key derivation took only 47.278328ms, consider increasing parameters
-BenchmarkEncryption/size-16-4         	 2232920	       557.0 ns/op	  28.72 MB/s	    1440 B/op	       5 allocs/op
-BenchmarkEncryption/size-16-4         	 2227633	       546.3 ns/op	  29.29 MB/s	    1440 B/op	       5 allocs/op
-BenchmarkEncryption/size-16-4         	 2223873	       542.3 ns/op	  29.50 MB/s	    1440 B/op	       5 allocs/op
-BenchmarkEncryption/size-64-4         	 2027580	       583.4 ns/op	 109.70 MB/s	    1488 B/op	       5 allocs/op
-BenchmarkEncryption/size-64-4         	 2056120	       589.6 ns/op	 108.56 MB/s	    1488 B/op	       5 allocs/op
-BenchmarkEncryption/size-64-4         	 2051848	       588.3 ns/op	 108.78 MB/s	    1488 B/op	       5 allocs/op
-BenchmarkEncryption/size-256-4        	 1870520	       645.3 ns/op	 396.72 MB/s	    1696 B/op	       5 allocs/op
-BenchmarkEncryption/size-256-4        	 1862710	       647.3 ns/op	 395.50 MB/s	    1696 B/op	       5 allocs/op
-BenchmarkEncryption/size-256-4        	 1862775	       648.8 ns/op	 394.56 MB/s	    1696 B/op	       5 allocs/op
-BenchmarkEncryption/size-1024-4       	 1259610	       956.6 ns/op	1070.50 MB/s	    2560 B/op	       5 allocs/op
-BenchmarkEncryption/size-1024-4       	 1255054	       954.8 ns/op	1072.50 MB/s	    2560 B/op	       5 allocs/op
-BenchmarkEncryption/size-1024-4       	 1264341	       946.5 ns/op	1081.92 MB/s	    2560 B/op	       5 allocs/op
-BenchmarkEncryption/size-4096-4       	  543565	      2110 ns/op	1941.51 MB/s	    6272 B/op	       5 allocs/op
-BenchmarkEncryption/size-4096-4       	  549379	      2108 ns/op	1943.50 MB/s	    6272 B/op	       5 allocs/op
-BenchmarkEncryption/size-4096-4       	  546002	      2113 ns/op	1938.85 MB/s	    6272 B/op	       5 allocs/op
-BenchmarkEncryption/size-16384-4      	  179539	      6526 ns/op	2510.74 MB/s	   19840 B/op	       5 allocs/op
-BenchmarkEncryption/size-16384-4      	  182972	      6518 ns/op	2513.59 MB/s	   19840 B/op	       5 allocs/op
-BenchmarkEncryption/size-16384-4      	  181561	      6533 ns/op	2507.90 MB/s	   19840 B/op	       5 allocs/op
-BenchmarkDecryption/size-16-4         	 2742181	       438.6 ns/op	  36.48 MB/s	    1328 B/op	       4 allocs/op
-BenchmarkDecryption/size-16-4         	 2715966	       436.3 ns/op	  36.67 MB/s	    1328 B/op	       4 allocs/op
-BenchmarkDecryption/size-16-4         	 2739586	       438.1 ns/op	  36.52 MB/s	    1328 B/op	       4 allocs/op
-BenchmarkDecryption/size-64-4         	 2499700	       479.8 ns/op	 133.40 MB/s	    1424 B/op	       4 allocs/op
-BenchmarkDecryption/size-64-4         	 2489130	       481.0 ns/op	 133.05 MB/s	    1424 B/op	       4 allocs/op
-BenchmarkDecryption/size-64-4         	 2501827	       480.0 ns/op	 133.34 MB/s	    1424 B/op	       4 allocs/op
-BenchmarkDecryption/size-256-4        	 2100410	       579.2 ns/op	 441.99 MB/s	    1824 B/op	       4 allocs/op
-BenchmarkDecryption/size-256-4        	 2093942	       573.2 ns/op	 446.65 MB/s	    1824 B/op	       4 allocs/op
-BenchmarkDecryption/size-256-4        	 2093284	       573.3 ns/op	 446.50 MB/s	    1824 B/op	       4 allocs/op
-BenchmarkDecryption/size-1024-4       	 1209417	       994.4 ns/op	1029.81 MB/s	    3456 B/op	       4 allocs/op
-BenchmarkDecryption/size-1024-4       	 1210299	       991.3 ns/op	1032.94 MB/s	    3456 B/op	       4 allocs/op
-BenchmarkDecryption/size-1024-4       	 1213268	       987.3 ns/op	1037.22 MB/s	    3456 B/op	       4 allocs/op
-BenchmarkDecryption/size-4096-4       	  418826	      2651 ns/op	1545.28 MB/s	   10240 B/op	       4 allocs/op
-BenchmarkDecryption/size-4096-4       	  445455	      2639 ns/op	1552.05 MB/s	   10240 B/op	       4 allocs/op
-BenchmarkDecryption/size-4096-4       	  435120	      2633 ns/op	1555.87 MB/s	   10240 B/op	       4 allocs/op
-BenchmarkDecryption/size-16384-4      	  139706	      8650 ns/op	1894.12 MB/s	   36096 B/op	       4 allocs/op
-BenchmarkDecryption/size-16384-4      	  138949	      8678 ns/op	1887.89 MB/s	   36096 B/op	       4 allocs/op
-BenchmarkDecryption/size-16384-4      	  135518	      8693 ns/op	1884.76 MB/s	   36096 B/op	       4 allocs/op
-BenchmarkStoreOperations/Add-4        	Warning: Key derivation took only 46.282339ms, consider increasing parameters
-BenchmarkStoreOperations/Add-4        	Warning: Key derivation took only 47.041153ms, consider increasing parameters
-BenchmarkStoreOperations/Add-4        	Warning: Key derivation took only 47.014665ms, consider increasing parameters
-BenchmarkStoreOperations/Get-4        	Warning: Key derivation took only 47.555612ms, consider increasing parameters
-BenchmarkStoreOperations/Get-4        	Warning: Key derivation took only 46.582965ms, consider increasing parameters
-BenchmarkStoreOperations/Get-4        	Warning: Key derivation took only 46.157769ms, consider increasing parameters
-BenchmarkStoreOperations/List-4       	       1	4024308636 ns/op	5906747984 B/op	   10140 allocs/op
-BenchmarkStoreOperations/List-4       	Warning: Key derivation took only 45.736054ms, consider increasing parameters
-BenchmarkStoreOperations/List-4       	Warning: Key derivation took only 46.166544ms, consider increasing parameters
+BenchmarkGeneratePassword/len=16-4         	 1052994	      1067 ns/op	      48 B/op	      18 allocs/op
+BenchmarkGeneratePassword/len=16-4         	 1000000	      1071 ns/op	      48 B/op	      18 allocs/op
+BenchmarkGeneratePassword/len=16-4         	 1000000	      1070 ns/op	      48 B/op	      18 allocs/op
+BenchmarkGeneratePassword/len=32-4         	  570832	      2082 ns/op	      96 B/op	      34 allocs/op
+BenchmarkGeneratePassword/len=32-4         	  568335	      2087 ns/op	      96 B/op	      34 allocs/op
+BenchmarkGeneratePassword/len=32-4         	  566335	      2176 ns/op	      96 B/op	      34 allocs/op
+BenchmarkGeneratePassword/len=64-4         	  289281	      4130 ns/op	     192 B/op	      66 allocs/op
+BenchmarkGeneratePassword/len=64-4         	  284485	      4139 ns/op	     192 B/op	      66 allocs/op
+BenchmarkGeneratePassword/len=64-4         	  288728	      4236 ns/op	     192 B/op	      66 allocs/op
+BenchmarkDeriveKey-4   	Warning: Key derivation took only 45.353095ms, consider increasing parameters
+BenchmarkDeriveKey-4   	Warning: Key derivation took only 46.86699ms, consider increasing parameters
+BenchmarkDeriveKey-4   	Warning: Key derivation took only 45.033187ms, consider increasing parameters
+BenchmarkSeal-4        	Warning: Key derivation took only 48.255575ms, consider increasing parameters
+BenchmarkSeal-4        	Warning: Key derivation took only 67.245714ms, consider increasing parameters
+BenchmarkSeal-4        	Warning: Key derivation took only 68.720839ms, consider increasing parameters
+BenchmarkOpen-4        	Warning: Key derivation took only 46.084904ms, consider increasing parameters
+BenchmarkOpen-4        	Warning: Key derivation took only 67.891343ms, consider increasing parameters
+BenchmarkOpen-4        	Warning: Key derivation took only 68.053999ms, consider increasing parameters
+BenchmarkKeyDerivation-4     	Warning: Key derivation took only 45.411375ms, consider increasing parameters
+BenchmarkKeyDerivation-4     	Warning: Key derivation took only 46.381694ms, consider increasing parameters
+BenchmarkKeyDerivation-4     	Warning: Key derivation took only 46.242462ms, consider increasing parameters
+BenchmarkEncryption/size-16-4         	 2186212	       539.7 ns/op	  29.65 MB/s	    1440 B/op	       5 allocs/op
+BenchmarkEncryption/size-16-4         	 2247547	       551.5 ns/op	  29.01 MB/s	    1440 B/op	       5 allocs/op
+BenchmarkEncryption/size-16-4         	 2238193	       537.3 ns/op	  29.78 MB/s	    1440 B/op	       5 allocs/op
+BenchmarkEncryption/size-64-4         	 2054536	       583.0 ns/op	 109.79 MB/s	    1488 B/op	       5 allocs/op
+BenchmarkEncryption/size-64-4         	 2051283	       578.4 ns/op	 110.65 MB/s	    1488 B/op	       5 allocs/op
+BenchmarkEncryption/size-64-4         	 2071912	       577.7 ns/op	 110.78 MB/s	    1488 B/op	       5 allocs/op
+BenchmarkEncryption/size-256-4        	 1883970	       636.8 ns/op	 401.99 MB/s	    1696 B/op	       5 allocs/op
+BenchmarkEncryption/size-256-4        	 1879597	       635.0 ns/op	 403.14 MB/s	    1696 B/op	       5 allocs/op
+BenchmarkEncryption/size-256-4        	 1855291	       641.9 ns/op	 398.83 MB/s	    1696 B/op	       5 allocs/op
+BenchmarkEncryption/size-1024-4       	 1275850	       941.3 ns/op	1087.91 MB/s	    2560 B/op	       5 allocs/op
+BenchmarkEncryption/size-1024-4       	 1271964	       946.6 ns/op	1081.77 MB/s	    2560 B/op	       5 allocs/op
+BenchmarkEncryption/size-1024-4       	 1273462	       942.8 ns/op	1086.08 MB/s	    2560 B/op	       5 allocs/op
+BenchmarkEncryption/size-4096-4       	  537112	      2110 ns/op	1941.60 MB/s	    6272 B/op	       5 allocs/op
+BenchmarkEncryption/size-4096-4       	  536304	      2108 ns/op	1943.37 MB/s	    6272 B/op	       5 allocs/op
+BenchmarkEncryption/size-4096-4       	  548144	      2109 ns/op	1941.82 MB/s	    6272 B/op	       5 allocs/op
+BenchmarkEncryption/size-16384-4      	  182034	      6517 ns/op	2514.10 MB/s	   19840 B/op	       5 allocs/op
+BenchmarkEncryption/size-16384-4      	  184764	      6511 ns/op	2516.52 MB/s	   19840 B/op	       5 allocs/op
+BenchmarkEncryption/size-16384-4      	  181480	      6503 ns/op	2519.32 MB/s	   19840 B/op	       5 allocs/op
+BenchmarkDecryption/size-16-4         	 2698231	       438.5 ns/op	  36.49 MB/s	    1328 B/op	       4 allocs/op
+BenchmarkDecryption/size-16-4         	 2769716	       435.5 ns/op	  36.74 MB/s	    1328 B/op	       4 allocs/op
+BenchmarkDecryption/size-16-4         	 2782239	       435.8 ns/op	  36.71 MB/s	    1328 B/op	       4 allocs/op
+BenchmarkDecryption/size-64-4         	 2491147	       481.9 ns/op	 132.81 MB/s	    1424 B/op	       4 allocs/op
+BenchmarkDecryption/size-64-4         	 2473418	       482.6 ns/op	 132.61 MB/s	    1424 B/op	       4 allocs/op
+BenchmarkDecryption/size-64-4         	 2499633	       480.6 ns/op	 133.16 MB/s	    1424 B/op	       4 allocs/op
+BenchmarkDecryption/size-256-4        	 2063608	       566.8 ns/op	 451.68 MB/s	    1824 B/op	       4 allocs/op
+BenchmarkDecryption/size-256-4        	 2117142	       568.5 ns/op	 450.32 MB/s	    1824 B/op	       4 allocs/op
+BenchmarkDecryption/size-256-4        	 2110814	       562.8 ns/op	 454.84 MB/s	    1824 B/op	       4 allocs/op
+BenchmarkDecryption/size-1024-4       	 1228638	       981.6 ns/op	1043.25 MB/s	    3456 B/op	       4 allocs/op
+BenchmarkDecryption/size-1024-4       	 1226770	       974.3 ns/op	1051.03 MB/s	    3456 B/op	       4 allocs/op
+BenchmarkDecryption/size-1024-4       	 1234015	       967.0 ns/op	1058.96 MB/s	    3456 B/op	       4 allocs/op
+BenchmarkDecryption/size-4096-4       	  451496	      2611 ns/op	1568.65 MB/s	   10240 B/op	       4 allocs/op
+BenchmarkDecryption/size-4096-4       	  465019	      2604 ns/op	1572.76 MB/s	   10240 B/op	       4 allocs/op
+BenchmarkDecryption/size-4096-4       	  425974	      2617 ns/op	1565.42 MB/s	   10240 B/op	       4 allocs/op
+BenchmarkDecryption/size-16384-4      	  136996	      8722 ns/op	1878.36 MB/s	   36096 B/op	       4 allocs/op
+BenchmarkDecryption/size-16384-4      	  131974	      8739 ns/op	1874.78 MB/s	   36096 B/op	       4 allocs/op
+BenchmarkDecryption/size-16384-4      	  135753	      8679 ns/op	1887.83 MB/s	   36096 B/op	       4 allocs/op
+BenchmarkStoreOperations/Add-4        	Warning: Key derivation took only 45.111792ms, consider increasing parameters
+BenchmarkStoreOperations/Add-4        	Warning: Key derivation took only 45.085306ms, consider increasing parameters
+BenchmarkStoreOperations/Add-4        	Warning: Key derivation took only 45.136802ms, consider increasing parameters
+BenchmarkStoreOperations/Get-4        	Warning: Key derivation took only 45.1862ms, consider increasing parameters
+BenchmarkStoreOperations/Get-4        	Warning: Key derivation took only 45.263297ms, consider increasing parameters
+BenchmarkStoreOperations/Get-4        	Warning: Key derivation took only 46.166316ms, consider increasing parameters
+BenchmarkStoreOperations/List-4       	       1	3994488079 ns/op	5906740032 B/op	   10100 allocs/op
+BenchmarkStoreOperations/List-4       	Warning: Key derivation took only 44.467319ms, consider increasing parameters
+BenchmarkStoreOperations/List-4       	Warning: Key derivation took only 44.719312ms, consider increasing parameters
