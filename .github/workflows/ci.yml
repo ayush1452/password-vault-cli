@@ -640,7 +640,7 @@ jobs:
 
           # Cleanup
           cd "$GITHUB_WORKSPACE"
-          rm -rf /tmp/
+          rm -rf /tmp/gh-pages || true
 
   # Performance check job compares benchmarks with previous runs
   performance-check:
