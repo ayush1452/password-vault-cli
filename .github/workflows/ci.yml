@@ -2,7 +2,7 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop, 'feature/*', 'fix/*', 'hotfix/*', '**' ]
+    branches: [ main, develop ]
     # paths:
     #   - '**.go'
     #   - 'go.mod'
