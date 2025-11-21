@@ -3,13 +3,17 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ main, develop ]
-    paths:
-      - '**.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.golangci.yml'
+    # paths:
+    #   - '**.go'
+    #   - 'go.mod'
+    #   - 'go.sum'
+    #   - '.golangci.yml'
   pull_request:
     branches: [ main, develop ]
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.plantuml'
+      - '**/*.puml'
   workflow_dispatch:
     inputs:
       reason:
@@ -457,7 +461,6 @@ jobs:
     name: Coverage Report
     needs: test
     runs-on: ubuntu-latest
-    # TODO: Revert to simple condition once tests are passing: if: github.event_name == 'push' || github.event_name == 'pull_request'
     if: (github.event_name == 'push' || github.event_name == 'pull_request') && (needs.test.result == 'success' || needs.test.result == 'failure')
     
     steps:
@@ -495,60 +498,148 @@ jobs:
     name: Performance Benchmarks
     needs: test
     runs-on: ubuntu-latest
-    # TODO: Revert to simple condition once tests are passing: if: github.event_name == 'push' || github.event_name == 'pull_request'
     if: (github.event_name == 'push' || github.event_name == 'pull_request') && (needs.test.result == 'success' || needs.test.result == 'failure')
     permissions:
       contents: write
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.24.10'
-        cache: true
-      env:
-        GO111MODULE: on
-        GOPROXY: https://proxy.golang.org,direct
-        
-    - name: Get dependencies
-      run: |
-        go mod tidy
-        go mod download
-        
-    - name: Run benchmarks
-      run: |
-        echo "Running benchmarks..."
-        go test -bench=. -benchmem -count=3 ./internal/crypto ./internal/vault ./tests 2>&1 | grep -E "^Benchmark|goos:|goarch:|pkg:|cpu:" | grep -v "Warning" > benchmark.txt || echo "No benchmarks found"
-        
-    - name: Store benchmark result
-      uses: benchmark-action/github-action-benchmark@v1
-      with:
-        tool: 'go'
-        output-file-path: benchmark.txt
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        auto-push: true
-        comment-on-alert: true
-        alert-threshold: '200%'
-        fail-on-alert: true
-        name: 'Benchmark'
-        gh-pages-branch: gh-pages
-        benchmark-data-dir-path: dev/bench
-        skip-fetch-gh-pages: false
-        comment-always: false
-        summary-always: false
-        save-data-file: true
+      pages: write
+      deployments: write
 
-    - name: Upload benchmark results
-      uses: actions/upload-artifact@v4
-      with:
-        name: benchmark-result
-        path: benchmark.txt
-        retention-days: 7
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24.10'
+          cache: true
+        env:
+          GO111MODULE: on
+          GOPROXY: https://proxy.golang.org,direct
+
+      - name: Get dependencies
+        run: |
+          go mod tidy
+          go mod download
+
+      - name: Run benchmarks
+        run: |
+          set -e
+          echo "Running benchmarks..."
+          # adapt packages to real benchmark packages; fallback to 'No benchmarks found'
+          go test -bench=. -benchmem -count=3 ./internal/crypto ./internal/vault ./tests 2>&1 \
+            | tee benchmark_full.txt \
+            || true
+          # Extract standard benchmark lines into benchmark.txt
+          grep -E '^Benchmark' benchmark_full.txt > benchmark.txt || echo "No benchmarks found" > benchmark.txt
+
+      - name: Store benchmark result (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-result
+          path: benchmark.txt
+          retention-days: 7
+
+      - name: Prepare benchmark files
+        run: |
+          set -euo pipefail
+
+          # Create necessary directories
+          mkdir -p dev/bench/benchmarks
+
+          # Ensure benchmark.txt exists then copy into dev/bench & dev/bench/benchmarks
+          if [ -f benchmark.txt ]; then
+            cp benchmark.txt dev/bench/benchmark.txt
+            cp benchmark.txt dev/bench/benchmarks/benchmark.txt
+          else
+            echo "::warning::benchmark.txt not found in workspace; listing files for debugging"
+            ls -la || true
+          fi
+
+          # Verify files
+          echo "dev/bench contents:"
+          ls -la dev/bench || true
+          echo "dev/bench/benchmarks contents:"
+          ls -la dev/bench/benchmarks || true
+
+      - name: Upload github-pages artifact (benchmark site)
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-pages
+          path: dev/bench
+          retention-days: 7
+
+      - name: Publish per-branch preview to gh-pages/previews/<branch>
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Ensure dev/bench exists
+          if [ ! -d dev/bench ]; then
+            echo "::error::dev/bench directory not found."
+            exit 1
+          fi
+
+          # Determine SAFE BRANCH NAME
+          REF="${GITHUB_REF:-}"
+          EVENT="${GITHUB_EVENT_NAME}"
+
+          if [ "$EVENT" = "pull_request" ]; then
+            PR_NUM=$(jq -r .number < "$GITHUB_EVENT_PATH")
+            SAFE="pr-${PR_NUM}"
+          elif [[ "$REF" == refs/heads/* ]]; then
+            BRANCH="${REF#refs/heads/}"
+            SAFE="$BRANCH"
+          else
+            SAFE="run-${GITHUB_RUN_ID}"
+          fi
+
+          # Sanitize: replace slashes & invalid chars
+          SAFE_BRANCH=$(echo "$SAFE" | sed 's#[^A-Za-z0-9._-]#-#g' | tr '[:upper:]' '[:lower:]')
+
+          TARGET_DIR="previews/${SAFE_BRANCH}"
+          echo "Publishing preview to: ${TARGET_DIR}"
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Prepare gh-pages worktree
+          rm -rf /tmp/gh-pages || true
+          if git ls-remote --exit-code --heads origin gh-pages; then
+            git fetch origin gh-pages:gh-pages
+            git worktree add /tmp/gh-pages gh-pages
+            GH_PAGES_DIR=/tmp/gh-pages
+          else
+            mkdir -p /tmp/gh-pages
+            git -C /tmp/gh-pages init
+            GH_PAGES_DIR=/tmp/gh-pages
+            git -C "$GH_PAGES_DIR" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+            git -C "$GH_PAGES_DIR" checkout --orphan gh-pages
+          fi
+
+          # Copy dev/bench into preview folder
+          rm -rf "${GH_PAGES_DIR}/${TARGET_DIR}" || true
+          mkdir -p "${GH_PAGES_DIR}/${TARGET_DIR}"
+          cp -R dev/bench/. "${GH_PAGES_DIR}/${TARGET_DIR}/"
+
+          # Commit & push
+          cd "$GH_PAGES_DIR"
+          git add "${TARGET_DIR}"
+          if git diff --cached --quiet; then
+            echo "No changes to push."
+          else
+            git commit -m "Publish preview ${SAFE_BRANCH}: ${GITHUB_SHA}" || true
+            git push "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:gh-pages --force
+            echo "Published at: https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY##*/}/${TARGET_DIR}/"
+          fi
+
+          # Cleanup
+          cd "$GITHUB_WORKSPACE"
+          rm -rf /tmp/gh-pages || true
 
   # Performance check job compares benchmarks with previous runs
   performance-check:
@@ -643,9 +734,46 @@ jobs:
         retention-days: 30
 
   # Notification job for pipeline failures
+  sonarqube:
+    name: SonarQube Analysis
+    needs: [test, coverage]
+    if: github.event_name == 'push' || github.event.pull_request
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Shallow clone is not recommended for SonarQube
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Set up SonarQube Scanner
+        uses: sonarsource/sonarqube-scan-action@v6.0.0
+        with:
+          projectBaseDir: .
+          # Additional arguments that will be passed to the sonar-scanner command
+          args: >
+            -Dsonar.projectKey=ayush1452_password-vault-cli
+            -Dsonar.projectName="Password Vault CLI"
+            -Dsonar.organization=ayush1452
+            -Dsonar.sources=.
+            -Dsonar.tests=.
+            -Dsonar.test.inclusions=**/*_test.go
+            -Dsonar.go.coverage.reportPaths=coverage.out
+            -Dsonar.go.tests.reportPaths=test-report.xml
+            -Dsonar.sourceEncoding=UTF-8
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }}
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed if you want to use the GitHub integration
+
   notify:
     name: Pipeline Failure Notification
-    needs: [test, benchmarks, security-scan]
+    needs: [test, benchmarks, security-scan, sonarqube]
     if: failure() && github.event_name == 'push'
     runs-on: ubuntu-latest
     

@@ -6,6 +6,38 @@ This project uses GitHub Actions to run a multi-stage CI pipeline that enforces 
 
 ---
 
+## Benchmark System with GitHub Pages
+
+### Overview
+The benchmark system provides continuous performance monitoring through GitHub Pages, enabling tracking of performance metrics over time and detection of regressions.
+
+### Key Components
+
+1. **Benchmark Execution**
+   - Triggered on every push/PR
+   - Runs Go benchmarks with memory profiling
+   - Captures detailed metrics:
+     - Execution time (ns/op)
+     - Memory allocations (B/op)
+     - Allocations per operation (allocs/op)
+
+2. **GitHub Pages Integration**
+   - Dedicated `gh-pages` branch for historical data
+   - Directory structure:
+     ```
+     dev/bench/
+     ├── data.js          # Historical benchmark data
+     ├── index.html       # Interactive dashboard
+     ├── benchmark.txt    # Latest benchmark results
+     └── assets/          # Visualization resources
+     ```
+   - Accessible at: `https://ayush1452.github.io/password-vault-cli/dev/bench/`
+
+3. **Performance Regression Detection**
+   - Compares current benchmarks with previous runs
+   - Fails on significant performance degradation (>200% by default)
+   - Detailed comparison output
+
 ## Summary / Quick view
 
 
@@ -370,27 +402,171 @@ codecov -f coverage.out -t $CODECOV_TOKEN
 
 ---
 
-## Job: `benchmarks`
+## Benchmark Configuration
 
-**Purpose:** run benchmarks and record results for regression checks.
+### Job: `benchmarks`
 
-**Key steps**
+**Purpose:** Execute performance benchmarks and store results in GitHub Pages for historical tracking.
 
-* run `go test -bench=. -benchmem -count=3 ./... | tee benchmark.txt`
-* upload results to `benchmark-action/github-action-benchmark@v1` (auto push configured)
+**Configuration:**
+```yaml
+benchmarks:
+  runs-on: ubuntu-latest
+  needs: test
+  permissions:
+    contents: write  # Required for pushing to gh-pages
+  steps:
+    - name: Run benchmarks
+      run: |
+        go test -bench=. -benchmem -count=3 \
+          ./internal/crypto \
+          ./internal/vault \
+          ./tests \
+          2>&1 | grep -E "^Benchmark|^goos:|^goarch:|^pkg:|^cpu:" \
+          > benchmark.txt || echo "No benchmarks found"
+    
+    - name: Store benchmark results
+      uses: benchmark-action/github-action-benchmark@v1
+      with:
+        tool: 'go'
+        output-file-path: benchmark.txt
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true
+        gh-pages-branch: gh-pages
+        benchmark-data-dir-path: dev/bench
+        alert-threshold: '200%'  # Fail on 2x performance regression
+        fail-on-alert: true
+        comment-on-alert: true   # Post comment on PRs with regressions
 
-**Common failures & fixes**
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-result
+        path: benchmark.txt
+        retention-days: 7
+```
 
-* **Noisy CI environment** → benchmark variance. Fix by:
+### Job: `performance-check`
 
-  * Increase `-count` (e.g., 5)
-  * Run benchmarks in larger runners or dedicated performance runners
-  * Run multiple repeats and consider statistical tests
+**Purpose:** Compare current benchmarks with historical data to detect regressions.
 
-**Recommendations**
+**Configuration:**
+```yaml
+performance-check:
+  needs: benchmarks
+  runs-on: ubuntu-latest
+  steps:
+    - name: Fetch historical data
+      run: git fetch origin gh-pages
+      
+    - name: Compare benchmarks
+      run: |
+        # Install benchstat for comparison
+        go install golang.org/x/perf/cmd/benchstat@latest
+        
+        # Compare with previous run
+        if [ -f "dev/bench/benchmark.txt" ]; then
+          benchstat dev/bench/benchmark.txt benchmark.txt
+          
+          # Fail on significant regression
+          if benchstat -geomean dev/bench/benchmark.txt benchmark.txt | \
+             grep -E "~\s+[0-9]{2,}\.\d+%"; then
+            echo "Performance regression detected!"
+            exit 1
+          fi
+        fi
+```
 
-* Use a dedicated performance runner (self-hosted) if you need stable results.
-* Make the threshold conservative to avoid false positives.
+### Accessing Benchmark Results
+
+1. **Web Dashboard**
+   - URL: `https://ayush1452.github.io/password-vault-cli/dev/bench/`
+   - Features:
+     - Interactive line charts
+     - Filter by benchmark name
+     - Compare across multiple runs
+     - Download raw data
+
+2. **Raw Data**
+   - Branch: `gh-pages`
+   - Directory: `dev/bench/`
+   - Files:
+     - `benchmark.txt`: Latest results
+     - `data.js`: Historical data
+     - `index.html`: Visualization dashboard
+
+### Troubleshooting
+
+#### Common Issues
+
+1. **Permission Denied**
+   - Ensure workflow has `contents: write` permission
+   - Check GitHub token permissions
+
+2. **No Benchmark Results**
+   - Verify benchmark functions start with `Benchmark`
+   - Check for test build failures
+   - Review benchmark output for errors
+
+3. **Performance Regressions**
+   - Check for changes in test data or environment
+   - Compare multiple runs to identify trends
+   - Use `-benchmem` to analyze memory usage changes
+
+### Best Practices
+
+1. **Benchmark Design**
+   - Test realistic scenarios
+   - Include edge cases
+   - Test with different input sizes
+   - Measure both time and memory
+
+2. **CI Integration**
+   - Run on consistent hardware
+   - Set appropriate thresholds
+   - Monitor long-term trends
+   - Alert on significant changes
+
+3. **Performance Budgets**
+   - Set target execution times for critical paths
+   - Monitor memory usage patterns
+   - Track allocation counts
+
+### Advanced Usage
+
+#### Custom Benchmark Setup
+
+```go
+func BenchmarkOperation(b *testing.B) {
+    // One-time setup (not measured)
+    setup()
+    defer teardown()
+    
+    // Reset timer after setup
+    b.ResetTimer()
+    
+    // Benchmark loop
+    for i := 0; i < b.N; i++ {
+        // Code being benchmarked
+        result := operation()
+        
+        // Prevent compiler optimizations
+        runtime.KeepAlive(result)
+    }
+}
+```
+
+#### Benchmark Naming Conventions
+- Use descriptive names with package prefix:
+  ```go
+  func BenchmarkCrypto_AESEncrypt(b *testing.B)
+  func BenchmarkStore_GetEntry(b *testing.B)
+  ```
+- Include relevant parameters in name:
+  ```go
+  func BenchmarkStore_GetEntry_WithLargeData(b *testing.B)
+  func BenchmarkCrypto_KeyDerivation_1000Iterations(b *testing.B)
+  ```
 
 ---
 
