@@ -503,8 +503,7 @@ jobs:
     if: (github.event_name == 'push' || github.event_name == 'pull_request') && (needs.test.result == 'success' || needs.test.result == 'failure')
     permissions:
       contents: write
-      pages: write
-      id-token: write
+      pull-requests: write
     
     # Allow only one concurrent deployment
     concurrency:
@@ -572,7 +571,7 @@ jobs:
           ./scripts/benchmark-regression.sh
 
       - name: Promote benchmarks
-        if: steps.regression.outcome == 'success'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.regression.outcome == 'success'
         run: |
           chmod +x scripts/benchmark-promote.sh
           ./scripts/benchmark-promote.sh
@@ -588,17 +587,16 @@ jobs:
           chmod +x scripts/generate-index.sh
           ./scripts/generate-index.sh
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: '/tmp/pages'
-
+      # Deploy to gh-pages branch (works for all branches without environment restrictions)
       - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: /tmp/pages
+          keep_files: true
+          commit_message: 'Deploy benchmarks from ${{ github.ref }}'
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
 
       - name: Comment deployment URL
         if: github.event_name == 'pull_request'
