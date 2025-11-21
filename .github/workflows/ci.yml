@@ -32,6 +32,8 @@ env:
   LINT_TIMEOUT: '5m'
   GOLANGCI_LINT_VERSION: 'v2.3.1'
   GOSEC_VERSION: 'v2.19.0'
+  REGRESSION_THRESHOLD: '10'  # Percentage threshold for benchmark regression
+  MAX_OLD_ARCHIVES: '10'      # Number of old benchmark archives to retain
 
 # Job defaults
 defaults:
@@ -493,7 +495,7 @@ jobs:
         fail_ci_if_error: false
         token: ${{ secrets.CODECOV_TOKEN }}
 
-  # Benchmarks job runs performance benchmarks
+  # Benchmarks job runs performance benchmarks and publishes to GitHub Pages
   benchmarks:
     name: Performance Benchmarks
     needs: test
@@ -502,7 +504,12 @@ jobs:
     permissions:
       contents: write
       pages: write
-      deployments: write
+      id-token: write
+    
+    # Allow only one concurrent deployment
+    concurrency:
+      group: "pages"
+      cancel-in-progress: false
 
     steps:
       - name: Checkout code
@@ -528,177 +535,96 @@ jobs:
         run: |
           set -e
           echo "Running benchmarks..."
-          # adapt packages to real benchmark packages; fallback to 'No benchmarks found'
-          go test -bench=. -benchmem -count=3 ./internal/crypto ./internal/vault ./tests 2>&1 \
-            | tee benchmark_full.txt \
+          # Run benchmarks on crypto, vault, and tests packages
+          go test -bench=. -benchmem -count=3 ./internal/crypto ./internal/vault ./tests 2>&1 \\
+            | tee benchmark_full.txt \\
             || true
           # Extract standard benchmark lines into benchmark.txt
           grep -E '^Benchmark' benchmark_full.txt > benchmark.txt || echo "No benchmarks found" > benchmark.txt
 
-      - name: Store benchmark result (artifact)
+      - name: Upload benchmark artifact
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-result
           path: benchmark.txt
           retention-days: 7
 
-      - name: Prepare benchmark files
+      - name: Prepare benchmark files for Pages
         run: |
           set -euo pipefail
-
-          # Create necessary directories
+          # Create dev/bench structure for compatibility
           mkdir -p dev/bench/benchmarks
-
-          # Ensure benchmark.txt exists then copy into dev/bench & dev/bench/benchmarks
           if [ -f benchmark.txt ]; then
             cp benchmark.txt dev/bench/benchmark.txt
             cp benchmark.txt dev/bench/benchmarks/benchmark.txt
-          else
-            echo "::warning::benchmark.txt not found in workspace; listing files for debugging"
-            ls -la || true
           fi
 
-          # Verify files
-          echo "dev/bench contents:"
-          ls -la dev/bench || true
-          echo "dev/bench/benchmarks contents:"
-          ls -la dev/bench/benchmarks || true
-
-      - name: Upload github-pages artifact (benchmark site)
-        uses: actions/upload-artifact@v4
-        with:
-          name: github-pages
-          path: dev/bench
-          retention-days: 7
-
-      - name: Publish per-branch preview to gh-pages/previews/<branch>
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Stage benchmarks
         run: |
-          set -euo pipefail
+          chmod +x scripts/benchmark-stage.sh
+          ./scripts/benchmark-stage.sh
 
-          # Ensure dev/bench exists
-          if [ ! -d dev/bench ]; then
-            echo "::error::dev/bench directory not found."
-            exit 1
-          fi
+      - name: Run regression check
+        id: regression
+        continue-on-error: true
+        run: |
+          chmod +x scripts/benchmark-regression.sh
+          ./scripts/benchmark-regression.sh
 
-          # Determine SAFE BRANCH NAME
-          REF="${GITHUB_REF:-}"
-          EVENT="${GITHUB_EVENT_NAME}"
+      - name: Promote benchmarks
+        if: steps.regression.outcome == 'success'
+        run: |
+          chmod +x scripts/benchmark-promote.sh
+          ./scripts/benchmark-promote.sh
 
-          if [ "$EVENT" = "pull_request" ]; then
-            PR_NUM=$(jq -r .number < "$GITHUB_EVENT_PATH")
-            SAFE="pr-${PR_NUM}"
-          elif [[ "$REF" == refs/heads/* ]]; then
-            BRANCH="${REF#refs/heads/}"
-            SAFE="$BRANCH"
-          else
-            SAFE="run-${GITHUB_RUN_ID}"
-          fi
+      - name: Skip promotion on regression failure
+        if: steps.regression.outcome == 'failure'
+        run: |
+          echo "::warning::Regression detected - skipping promotion to baselines"
+          echo "Preview will still be published for inspection"
 
-          # Sanitize: replace slashes & invalid chars
-          SAFE_BRANCH=$(echo "$SAFE" | sed 's#[^A-Za-z0-9._-]#-#g' | tr '[:upper:]' '[:lower:]')
+      - name: Generate index pages
+        run: |
+          chmod +x scripts/generate-index.sh
+          ./scripts/generate-index.sh
 
-          TARGET_DIR="previews/${SAFE_BRANCH}"
-          echo "Publishing preview to: ${TARGET_DIR}"
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
 
-          # Configure git
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '/tmp/pages'
 
-          # Prepare gh-pages worktree
-          rm -rf /tmp/gh-pages || true
-          if git ls-remote --exit-code --heads origin gh-pages; then
-            git fetch origin gh-pages:gh-pages
-            git worktree add /tmp/gh-pages gh-pages
-            GH_PAGES_DIR=/tmp/gh-pages
-          else
-            mkdir -p /tmp/gh-pages
-            git -C /tmp/gh-pages init
-            GH_PAGES_DIR=/tmp/gh-pages
-            git -C "$GH_PAGES_DIR" remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
-            git -C "$GH_PAGES_DIR" checkout --orphan gh-pages
-          fi
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
-          # Copy dev/bench into preview folder
-          rm -rf "${GH_PAGES_DIR}/${TARGET_DIR}" || true
-          mkdir -p "${GH_PAGES_DIR}/${TARGET_DIR}"
-          cp -R dev/bench/. "${GH_PAGES_DIR}/${TARGET_DIR}/"
-
-          # Commit & push
-          cd "$GH_PAGES_DIR"
-          git add "${TARGET_DIR}"
-          if git diff --cached --quiet; then
-            echo "No changes to push."
-          else
-            git commit -m "Publish preview ${SAFE_BRANCH}: ${GITHUB_SHA}" || true
-            git push "https://${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:gh-pages --force
-            echo "Published at: https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY##*/}/${TARGET_DIR}/"
-          fi
-
-          # Cleanup
-          cd "$GITHUB_WORKSPACE"
-          rm -rf /tmp/gh-pages || true
-
-  # Performance check job compares benchmarks with previous runs
-  performance-check:
-    name: Performance Regression Check
-    needs: benchmarks
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        
-    - name: Fetch gh-pages branch
-      run: |
-        git fetch origin gh-pages:gh-pages
-        
-    - name: Download benchmark results
-      uses: actions/download-artifact@v4
-      with:
-        name: benchmark-result
-        path: .
-        
-    - name: Check performance regression
-      run: |
-        # Check if benchmark data exists on gh-pages
-        if [ -f "dev/bench/data.js" ]; then
-          echo "Checking for performance regressions..."
-          # Install benchstat if not present
-          go install golang.org/x/perf/cmd/benchstat@latest
-          
-          # Extract current benchmark results from the benchmark.txt file
-          if [ -f "benchmark.txt" ]; then
-            echo "Current benchmark results found"
+      - name: Comment deployment URL
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const safeName = process.env.SAFE_NAME || 'unknown';
+            const deploymentUrl = `https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/previews/${safeName}/`;
+            const regressionStatus = '${{ steps.regression.outcome }}';
             
-            # Get previous benchmark data from gh-pages
-            git checkout gh-pages -- dev/bench/benchmark.txt 2>/dev/null || echo "No previous benchmark.txt found on gh-pages"
+            let message = `## 📊 Benchmark Results\\n\\n`;
+            message += `Preview published at: [${deploymentUrl}](${deploymentUrl})\\n\\n`;
             
-            if [ -f "dev/bench/benchmark.txt" ]; then
-              echo "Comparing with previous benchmarks from gh-pages..."
-              benchstat dev/bench/benchmark.txt benchmark.txt
-              
-              # Fail if performance degrades >10%
-              if benchstat dev/bench/benchmark.txt benchmark.txt | grep -E "~\s+[0-9]{2,}\.\d+%"; then
-                echo "Performance regression detected!"
-                exit 1
-              fi
-            else
-              echo "No previous benchmark data found on gh-pages, storing current as baseline"
-            fi
-          else
-            echo "No current benchmark data found"
-            exit 1
-          fi
-        else
-          echo "No benchmark history found on gh-pages branch"
-          exit 0
-        fi
+            if (regressionStatus === 'failure') {
+              message += `⚠️ **Regression Detected**: Performance degradation exceeds threshold. Baselines were NOT updated.\\n`;
+            } else {
+              message += `✅ **No Regression**: Benchmarks passed regression checks.\\n`;
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });
+
 
   # Security scan job using Trivy
   security-scan:
