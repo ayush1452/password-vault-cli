@@ -432,5 +432,9 @@ fi
 echo "✅ Index generation complete"
 echo "Generated:"
 echo "  - ${STAGING_DIR}/index.html"
-[ -f "${STAGING_DIR}/previews/index.html" ] && echo "  - ${STAGING_DIR}/previews/index.html"
-[ -f "${STAGING_DIR}/old/index.html" ] && echo "  - ${STAGING_DIR}/old/index.html"
+if [ -f "${STAGING_DIR}/previews/index.html" ]; then
+  echo "  - ${STAGING_DIR}/previews/index.html"
+fi
+if [ -f "${STAGING_DIR}/old/index.html" ]; then
+  echo "  - ${STAGING_DIR}/old/index.html"
+fi
