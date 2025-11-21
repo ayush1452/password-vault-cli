@@ -506,11 +506,6 @@ jobs:
       pages: write
       id-token: write
     
-    # GitHub Pages environment configuration
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    
     # Allow only one concurrent deployment
     concurrency:
       group: "pages"
