@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Preview Benchmarks - password-vault-cli</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 40px 30px;
+    }
+    .header h1 {
+      font-size: 2em;
+      margin-bottom: 10px;
+    }
+    .header a {
+      color: white;
+      text-decoration: none;
+      opacity: 0.9;
+      font-size: 0.9em;
+    }
+    .header a:hover { opacity: 1; }
+    .content {
+      padding: 30px;
+    }
+    .preview-item {
+      background: #f8f9fa;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      border-left: 4px solid #667eea;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .preview-item:hover {
+      transform: translateX(4px);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .preview-item a {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 20px;
+      text-decoration: none;
+      color: #333;
+    }
+    .preview-name {
+      font-weight: 600;
+      font-size: 1.1em;
+      font-family: 'Monaco', 'Courier New', monospace;
+    }
+    .badge-default, .badge-pr, .badge-main {
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 0.8em;
+      font-weight: 600;
+      color: white;
+    }
+    .badge-default { background: #6c757d; }
+    .badge-pr { background: #17a2b8; }
+    .badge-main { background: #28a745; }
+    .empty {
+      text-align: center;
+      padding: 60px 20px;
+      color: #999;
+    }
+    .footer {
+      text-align: center;
+      padding: 20px;
+      color: #999;
+      font-size: 0.9em;
+      border-top: 1px solid #eee;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔍 Preview Benchmarks</h1>
+      <a href="../">← Back to Home</a>
+    </div>
+    <div class="content">
+      <div class="preview-item"><a href="pr-9/"><span class="preview-name">pr-9</span><span class="badge-pr">Pull Request</span></a></div>
+    </div>
+    <div class="footer">
+      Last updated: 2025-11-21 19:12:15 UTC
+    </div>
+  </div>
+</body>
+</html>
