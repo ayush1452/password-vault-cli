@@ -148,9 +148,8 @@ cat > "${STAGING_DIR}/index.html" << 'EOF'
 EOF
 
 # Replace placeholders
-sed -i.bak "s/PASSWORD_VAULT_CLI/${REPO_NAME}/g" "${STAGING_DIR}/index.html"
-sed -i.bak "s/TIMESTAMP_PLACEHOLDER/${TIMESTAMP}/g" "${STAGING_DIR}/index.html"
-rm -f "${STAGING_DIR}/index.html.bak"
+sed "s/PASSWORD_VAULT_CLI/${REPO_NAME}/g" "${STAGING_DIR}/index.html" > "${STAGING_DIR}/index.html.tmp" && mv "${STAGING_DIR}/index.html.tmp" "${STAGING_DIR}/index.html"
+sed "s/TIMESTAMP_PLACEHOLDER/${TIMESTAMP}/g" "${STAGING_DIR}/index.html" > "${STAGING_DIR}/index.html.tmp" && mv "${STAGING_DIR}/index.html.tmp" "${STAGING_DIR}/index.html"
 
 # Generate previews/index.html
 if [ -d "${STAGING_DIR}/previews" ]; then
@@ -291,10 +290,9 @@ EOF
     PREVIEW_LIST="<div class=\"empty\">No preview benchmarks available yet.</div>"
   fi
   
-  sed -i.bak "s/PASSWORD_VAULT_CLI/${REPO_NAME}/g" "${STAGING_DIR}/previews/index.html"
-  sed -i.bak "s|PREVIEW_LIST_PLACEHOLDER|${PREVIEW_LIST}|g" "${STAGING_DIR}/previews/index.html"
-  sed -i.bak "s/TIMESTAMP_PLACEHOLDER/${TIMESTAMP}/g" "${STAGING_DIR}/previews/index.html"
-  rm -f "${STAGING_DIR}/previews/index.html.bak"
+  sed "s/PASSWORD_VAULT_CLI/${REPO_NAME}/g" "${STAGING_DIR}/previews/index.html" > "${STAGING_DIR}/previews/index.html.tmp" && mv "${STAGING_DIR}/previews/index.html.tmp" "${STAGING_DIR}/previews/index.html"
+  sed "s|PREVIEW_LIST_PLACEHOLDER|${PREVIEW_LIST}|g" "${STAGING_DIR}/previews/index.html" > "${STAGING_DIR}/previews/index.html.tmp" && mv "${STAGING_DIR}/previews/index.html.tmp" "${STAGING_DIR}/previews/index.html"
+  sed "s/TIMESTAMP_PLACEHOLDER/${TIMESTAMP}/g" "${STAGING_DIR}/previews/index.html" > "${STAGING_DIR}/previews/index.html.tmp" && mv "${STAGING_DIR}/previews/index.html.tmp" "${STAGING_DIR}/previews/index.html"
 fi
 
 # Generate old/index.html
@@ -426,10 +424,9 @@ EOF
     ARCHIVE_LIST="<div class=\"empty\">No archived benchmarks available yet.</div>"
   fi
   
-  sed -i.bak "s/PASSWORD_VAULT_CLI/${REPO_NAME}/g" "${STAGING_DIR}/old/index.html"
-  sed -i.bak "s|ARCHIVE_LIST_PLACEHOLDER|${ARCHIVE_LIST}|g" "${STAGING_DIR}/old/index.html"
-  sed -i.bak "s/TIMESTAMP_PLACEHOLDER/${TIMESTAMP}/g" "${STAGING_DIR}/old/index.html"
-  rm -f "${STAGING_DIR}/old/index.html.bak"
+  sed "s/PASSWORD_VAULT_CLI/${REPO_NAME}/g" "${STAGING_DIR}/old/index.html" > "${STAGING_DIR}/old/index.html.tmp" && mv "${STAGING_DIR}/old/index.html.tmp" "${STAGING_DIR}/old/index.html"
+  sed "s|ARCHIVE_LIST_PLACEHOLDER|${ARCHIVE_LIST}|g" "${STAGING_DIR}/old/index.html" > "${STAGING_DIR}/old/index.html.tmp" && mv "${STAGING_DIR}/old/index.html.tmp" "${STAGING_DIR}/old/index.html"
+  sed "s/TIMESTAMP_PLACEHOLDER/${TIMESTAMP}/g" "${STAGING_DIR}/old/index.html" > "${STAGING_DIR}/old/index.html.tmp" && mv "${STAGING_DIR}/old/index.html.tmp" "${STAGING_DIR}/old/index.html"
 fi
 
 echo "✅ Index generation complete"
