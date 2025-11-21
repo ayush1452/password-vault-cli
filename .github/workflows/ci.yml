@@ -536,8 +536,8 @@ jobs:
           set -e
           echo "Running benchmarks..."
           # Run benchmarks on crypto, vault, and tests packages
-          go test -bench=. -benchmem -count=3 ./internal/crypto ./internal/vault ./tests 2>&1 \\
-            | tee benchmark_full.txt \\
+          go test -bench=. -benchmem -count=3 ./internal/crypto ./internal/vault ./tests 2>&1 \
+            | tee benchmark_full.txt \
             || true
           # Extract standard benchmark lines into benchmark.txt
           grep -E '^Benchmark' benchmark_full.txt > benchmark.txt || echo "No benchmarks found" > benchmark.txt
