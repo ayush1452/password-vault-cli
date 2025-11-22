@@ -2,439 +2,429 @@
 set -euo pipefail
 
 # generate-index.sh
-# Purpose: Generate HTML index pages for navigation
-# Outputs: index.html files in /, /previews/, and /old/
+# Purpose: Generate HTML index pages for the new directory structure
+# Structure: / → previews/ → master/ | pull-requests/ → pr-N/ → latest/ | old/
 
 echo "=== Generating Index Pages ==="
 
-STAGING_DIR="${STAGING_DIR:-/tmp/pages}"
+PAGES_DIR="/tmp/gh-pages"
 
-if [ ! -d "$STAGING_DIR" ]; then
-  echo "::error::Staging directory not found: $STAGING_DIR"
+if [ ! -d "$PAGES_DIR" ]; then
+  echo "::error::Pages directory not found: $PAGES_DIR"
   exit 1
 fi
 
-TIMESTAMP=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
-REPO_NAME="${GITHUB_REPOSITORY##*/}"
-REPO_OWNER="${GITHUB_REPOSITORY_OWNER:-}"
+cd "$PAGES_DIR"
 
-# Generate root index.html
-echo "Generating root index..."
-cat > "${STAGING_DIR}/index.html" << 'EOF'
+# CSS styles for all index pages
+read -r -d '' STYLES <<'EOF' || true
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  max-width: 1200px;
+  margin: 40px auto;
+  padding: 0 20px;
+  background: #0d1117;
+  color: #c9d1d9;
+}
+h1 {
+  color: #58a6ff;
+  border-bottom: 2px solid #21262d;
+  padding-bottom: 10px;
+}
+h2 {
+  color: #8b949e;
+  margin-top: 30px;
+}
+a {
+  color: #58a6ff;
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+.card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 16px;
+  margin: 12px 0;
+}
+.card:hover {
+  border-color: #58a6ff;
+}
+.meta {
+  color: #8b949e;
+  font-size: 14px;
+  margin-top: 8px;
+}
+.breadcrumb {
+  color: #8b949e;
+  margin-bottom: 20px;
+}
+.breadcrumb a {
+  color: #58a6ff;
+}
+ul {
+  list-style: none;
+  padding: 0;
+}
+li {
+  margin: 8px 0;
+}
+.icon {
+  margin-right: 8px;
+}
+EOF
+
+# Function to generate root index
+generate_root_index() {
+  echo "Generating root index..."
+  cat > index.html <<EOF
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Benchmark Results - PASSWORD_VAULT_CLI</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-    }
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-      overflow: hidden;
-    }
-    .header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 40px 30px;
-      text-align: center;
-    }
-    .header h1 {
-      font-size: 2.5em;
-      margin-bottom: 10px;
-      font-weight: 700;
-    }
-    .header p {
-      font-size: 1.1em;
-      opacity: 0.9;
-    }
-    .content {
-      padding: 40px 30px;
-    }
-    .card {
-      background: #f8f9fa;
-      border-radius: 8px;
-      padding: 25px;
-      margin-bottom: 20px;
-      border-left: 4px solid #667eea;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    .card h2 {
-      color: #667eea;
-      margin-bottom: 10px;
-      font-size: 1.5em;
-    }
-    .card p {
-      color: #666;
-      margin-bottom: 15px;
-    }
-    .card a {
-      display: inline-block;
-      background: #667eea;
-      color: white;
-      padding: 10px 20px;
-      border-radius: 6px;
-      text-decoration: none;
-      font-weight: 600;
-      transition: background 0.2s;
-    }
-    .card a:hover {
-      background: #5568d3;
-    }
-    .footer {
-      text-align: center;
-      padding: 20px;
-      color: #999;
-      font-size: 0.9em;
-      border-top: 1px solid #eee;
-    }
-    .badge {
-      display: inline-block;
-      background: #28a745;
-      color: white;
-      padding: 4px 12px;
-      border-radius: 12px;
-      font-size: 0.85em;
-      font-weight: 600;
-      margin-left: 10px;
-    }
-  </style>
+    <title>Benchmark Results</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>${STYLES}</style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>🔐 PASSWORD_VAULT_CLI</h1>
-      <p>Performance Benchmark Results</p>
+    <h1>📊 Benchmark Results</h1>
+    <p>Performance benchmarks for the password-vault-cli project.</p>
+    
+    <div class="card">
+        <h2>📁 <a href="previews/">Browse Previews</a></h2>
+        <p class="meta">View benchmark results organized by branch type</p>
     </div>
-    <div class="content">
-      <div class="card">
-        <h2>📊 Latest Benchmarks <span class="badge">Current</span></h2>
-        <p>View the most recent validated benchmark results from the main branch.</p>
-        <a href="latest/">View Latest Results →</a>
-      </div>
-      <div class="card">
-        <h2>🔍 Preview Benchmarks</h2>
-        <p>Browse benchmark results from all pull requests and feature branches.</p>
-        <a href="previews/">Browse All Previews →</a>
-      </div>
-      <div class="card">
-        <h2>📦 Archived Baselines</h2>
-        <p>Access historical benchmark baselines for trend analysis.</p>
-        <a href="old/">View Archives →</a>
-      </div>
-    </div>
-    <div class="footer">
-      Last updated: TIMESTAMP_PLACEHOLDER
-    </div>
-  </div>
+    
+    <h2>Quick Links</h2>
+    <ul>
+        <li><span class="icon">🎯</span><a href="previews/master/latest/">Latest Master Benchmarks</a></li>
+        <li><span class="icon">📜</span><a href="previews/master/old/">Master Archive</a></li>
+        <li><span class="icon">🔀</span><a href="previews/pull-requests/">Pull Request Benchmarks</a></li>
+    </ul>
+    
+    <p class="meta">Last updated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")</p>
 </body>
 </html>
 EOF
+}
 
-# Replace placeholders
-sed "s/PASSWORD_VAULT_CLI/${REPO_NAME}/g" "${STAGING_DIR}/index.html" > "${STAGING_DIR}/index.html.tmp" && mv "${STAGING_DIR}/index.html.tmp" "${STAGING_DIR}/index.html"
-sed "s/TIMESTAMP_PLACEHOLDER/${TIMESTAMP}/g" "${STAGING_DIR}/index.html" > "${STAGING_DIR}/index.html.tmp" && mv "${STAGING_DIR}/index.html.tmp" "${STAGING_DIR}/index.html"
-
-# Generate previews/index.html
-if [ -d "${STAGING_DIR}/previews" ]; then
+# Function to generate previews index
+generate_previews_index() {
   echo "Generating previews index..."
+  mkdir -p previews
+  cat > previews/index.html <<EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Benchmark Previews</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>${STYLES}</style>
+</head>
+<body>
+    <div class="breadcrumb">
+        <a href="../">Home</a> / Previews
+    </div>
+    
+    <h1>📁 Benchmark Previews</h1>
+    
+    <div class="card">
+        <h2>🎯 <a href="master/">Master Branch</a></h2>
+        <p class="meta">Benchmarks from the main branch</p>
+        <ul>
+            <li><a href="master/latest/">Latest</a> - Current master benchmarks</li>
+            <li><a href="master/old/">Archive</a> - Historical master benchmarks</li>
+        </ul>
+    </div>
+    
+    <div class="card">
+        <h2>🔀 <a href="pull-requests/">Pull Requests</a></h2>
+        <p class="meta">Benchmarks from pull requests and feature branches</p>
+    </div>
+    
+    <p class="meta">Last updated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")</p>
+</body>
+</html>
+EOF
+}
+
+# Function to generate master index
+generate_master_index() {
+  echo "Generating master index..."
+  mkdir -p previews/master
   
-  # Build list of preview folders
-  PREVIEW_LIST=""
-  if [ -d "${STAGING_DIR}/previews" ]; then
-    for preview in $(ls -1 "${STAGING_DIR}/previews" | sort -r); do
-      if [ -d "${STAGING_DIR}/previews/${preview}" ]; then
-        # Determine badge color and label
-        BADGE_CLASS="badge-default"
-        BADGE_LABEL="Branch"
-        
-        if [[ "$preview" == pr-* ]]; then
-          BADGE_CLASS="badge-pr"
-          BADGE_LABEL="Pull Request"
-        elif [[ "$preview" == "main" ]] || [[ "$preview" == "master" ]]; then
-          BADGE_CLASS="badge-main"
-          BADGE_LABEL="Main Branch"
+  # Count archives
+  ARCHIVE_COUNT=0
+  if [ -d "previews/master/old" ]; then
+    ARCHIVE_COUNT=$(find previews/master/old -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
+  fi
+  
+  cat > previews/master/index.html <<EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Master Branch Benchmarks</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>${STYLES}</style>
+</head>
+<body>
+    <div class="breadcrumb">
+        <a href="../../">Home</a> / <a href="../">Previews</a> / Master
+    </div>
+    
+    <h1>🎯 Master Branch Benchmarks</h1>
+    
+    <div class="card">
+        <h2><a href="latest/">📈 Latest</a></h2>
+        <p class="meta">Current benchmarks from the main branch</p>
+    </div>
+    
+    <div class="card">
+        <h2><a href="old/">📜 Archive</a></h2>
+        <p class="meta">Historical benchmarks (${ARCHIVE_COUNT} archived versions)</p>
+    </div>
+    
+    <p class="meta">Last updated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")</p>
+</body>
+</html>
+EOF
+}
+
+# Function to generate master/old index
+generate_master_old_index() {
+  echo "Generating master/old index..."
+  mkdir -p previews/master/old
+  
+  cat > previews/master/old/index.html <<EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Master Branch Archive</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>${STYLES}</style>
+</head>
+<body>
+    <div class="breadcrumb">
+        <a href="../../../">Home</a> / <a href="../../">Previews</a> / <a href="../">Master</a> / Archive
+    </div>
+    
+    <h1>📜 Master Branch Archive</h1>
+    <p>Historical benchmark results from the main branch</p>
+    
+    <h2>Archived Versions</h2>
+EOF
+
+  # List archived versions (newest first)
+  if [ -d "previews/master/old" ]; then
+    find previews/master/old -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' 2>/dev/null | \
+      sort -rn | \
+      cut -d' ' -f2- | \
+      while read -r dir; do
+        name=$(basename "$dir")
+        echo "    <div class=\"card\">" >> previews/master/old/index.html
+        echo "        <a href=\"${name}/\">📦 ${name}</a>" >> previews/master/old/index.html
+        echo "    </div>" >> previews/master/old/index.html
+      done
+  fi
+
+  cat >> previews/master/old/index.html <<EOF
+    
+    <p class="meta">Last updated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")</p>
+</body>
+</html>
+EOF
+}
+
+# Function to generate pull-requests index
+generate_pull_requests_index() {
+  echo "Generating pull-requests index..."
+  mkdir -p previews/pull-requests
+  
+  cat > previews/pull-requests/index.html <<EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Pull Request Benchmarks</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>${STYLES}</style>
+</head>
+<body>
+    <div class="breadcrumb">
+        <a href="../../">Home</a> / <a href="../">Previews</a> / Pull Requests
+    </div>
+    
+    <h1>🔀 Pull Request Benchmarks</h1>
+    <p>Benchmark results from pull requests and feature branches</p>
+    
+    <h2>Active PRs and Branches</h2>
+EOF
+
+  # List PR directories (newest first)
+  if [ -d "previews/pull-requests" ]; then
+    find previews/pull-requests -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' 2>/dev/null | \
+      sort -rn | \
+      cut -d' ' -f2- | \
+      while read -r dir; do
+        name=$(basename "$dir")
+        # Count archives for this PR
+        archive_count=0
+        if [ -d "$dir/old" ]; then
+          archive_count=$(find "$dir/old" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
         fi
         
-        PREVIEW_LIST="${PREVIEW_LIST}<div class=\"preview-item\"><a href=\"${preview}/\"><span class=\"preview-name\">${preview}</span><span class=\"${BADGE_CLASS}\">${BADGE_LABEL}</span></a></div>"
-      fi
-    done
+        echo "    <div class=\"card\">" >> previews/pull-requests/index.html
+        echo "        <h3><a href=\"${name}/\">${name}</a></h3>" >> previews/pull-requests/index.html
+        echo "        <p class=\"meta\">${archive_count} archived versions</p>" >> previews/pull-requests/index.html
+        echo "        <ul>" >> previews/pull-requests/index.html
+        echo "            <li><a href=\"${name}/latest/\">Latest</a></li>" >> previews/pull-requests/index.html
+        echo "            <li><a href=\"${name}/old/\">Archive</a></li>" >> previews/pull-requests/index.html
+        echo "        </ul>" >> previews/pull-requests/index.html
+        echo "    </div>" >> previews/pull-requests/index.html
+      done
   fi
-  
-  cat > "${STAGING_DIR}/previews/index.html" << 'EOF'
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Preview Benchmarks - PASSWORD_VAULT_CLI</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-    }
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-      overflow: hidden;
-    }
-    .header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 40px 30px;
-    }
-    .header h1 {
-      font-size: 2em;
-      margin-bottom: 10px;
-    }
-    .header a {
-      color: white;
-      text-decoration: none;
-      opacity: 0.9;
-      font-size: 0.9em;
-    }
-    .header a:hover { opacity: 1; }
-    .content {
-      padding: 30px;
-    }
-    .preview-item {
-      background: #f8f9fa;
-      border-radius: 8px;
-      margin-bottom: 12px;
-      border-left: 4px solid #667eea;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .preview-item:hover {
-      transform: translateX(4px);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    .preview-item a {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 18px 20px;
-      text-decoration: none;
-      color: #333;
-    }
-    .preview-name {
-      font-weight: 600;
-      font-size: 1.1em;
-      font-family: 'Monaco', 'Courier New', monospace;
-    }
-    .badge-default, .badge-pr, .badge-main {
-      padding: 4px 12px;
-      border-radius: 12px;
-      font-size: 0.8em;
-      font-weight: 600;
-      color: white;
-    }
-    .badge-default { background: #6c757d; }
-    .badge-pr { background: #17a2b8; }
-    .badge-main { background: #28a745; }
-    .empty {
-      text-align: center;
-      padding: 60px 20px;
-      color: #999;
-    }
-    .footer {
-      text-align: center;
-      padding: 20px;
-      color: #999;
-      font-size: 0.9em;
-      border-top: 1px solid #eee;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>🔍 Preview Benchmarks</h1>
-      <a href="../">← Back to Home</a>
-    </div>
-    <div class="content">
-      PREVIEW_LIST_PLACEHOLDER
-    </div>
-    <div class="footer">
-      Last updated: TIMESTAMP_PLACEHOLDER
-    </div>
-  </div>
+
+  cat >> previews/pull-requests/index.html <<EOF
+    
+    <p class="meta">Last updated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")</p>
 </body>
 </html>
 EOF
+}
+
+# Function to generate individual PR index
+generate_pr_index() {
+  local pr_dir="$1"
+  local pr_name=$(basename "$pr_dir")
   
-  if [ -z "$PREVIEW_LIST" ]; then
-    PREVIEW_LIST="<div class=\"empty\">No preview benchmarks available yet.</div>"
+  echo "Generating index for $pr_name..."
+  
+  # Count archives
+  archive_count=0
+  if [ -d "$pr_dir/old" ]; then
+    archive_count=$(find "$pr_dir/old" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
   fi
   
-  sed "s/PASSWORD_VAULT_CLI/${REPO_NAME}/g" "${STAGING_DIR}/previews/index.html" > "${STAGING_DIR}/previews/index.html.tmp" && mv "${STAGING_DIR}/previews/index.html.tmp" "${STAGING_DIR}/previews/index.html"
-  sed "s|PREVIEW_LIST_PLACEHOLDER|${PREVIEW_LIST}|g" "${STAGING_DIR}/previews/index.html" > "${STAGING_DIR}/previews/index.html.tmp" && mv "${STAGING_DIR}/previews/index.html.tmp" "${STAGING_DIR}/previews/index.html"
-  sed "s/TIMESTAMP_PLACEHOLDER/${TIMESTAMP}/g" "${STAGING_DIR}/previews/index.html" > "${STAGING_DIR}/previews/index.html.tmp" && mv "${STAGING_DIR}/previews/index.html.tmp" "${STAGING_DIR}/previews/index.html"
+  cat > "$pr_dir/index.html" <<EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <title>${pr_name} Benchmarks</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>${STYLES}</style>
+</head>
+<body>
+    <div class="breadcrumb">
+        <a href="../../../">Home</a> / <a href="../../">Previews</a> / <a href="../">Pull Requests</a> / ${pr_name}
+    </div>
+    
+    <h1>📊 ${pr_name} Benchmarks</h1>
+    
+    <div class="card">
+        <h2><a href="latest/">📈 Latest</a></h2>
+        <p class="meta">Current benchmarks for this PR</p>
+    </div>
+    
+    <div class="card">
+        <h2><a href="old/">📜 Archive</a></h2>
+        <p class="meta">Historical benchmarks (${archive_count} archived versions)</p>
+    </div>
+    
+    <p class="meta">Last updated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")</p>
+</body>
+</html>
+EOF
+}
+
+# Function to generate PR old index
+generate_pr_old_index() {
+  local pr_old_dir="$1"
+  local pr_name=$(basename "$(dirname "$pr_old_dir")")
+  
+  echo "Generating old index for $pr_name..."
+  
+  cat > "$pr_old_dir/index.html" <<EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <title>${pr_name} Archive</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>${STYLES}</style>
+</head>
+<body>
+    <div class="breadcrumb">
+        <a href="../../../../">Home</a> / <a href="../../../">Previews</a> / <a href="../../">Pull Requests</a> / <a href="../">${pr_name}</a> / Archive
+    </div>
+    
+    <h1>📜 ${pr_name} Archive</h1>
+    <p>Historical benchmark results for this PR</p>
+    
+    <h2>Archived Versions</h2>
+EOF
+
+  # List archived versions (newest first)
+  find "$pr_old_dir" -mindepth 1 -maxdepth 1 -type d -printf '%T@ %p\n' 2>/dev/null | \
+    sort -rn | \
+    cut -d' ' -f2- | \
+    while read -r dir; do
+      name=$(basename "$dir")
+      echo "    <div class=\"card\">" >> "$pr_old_dir/index.html"
+      echo "        <a href=\"${name}/\">📦 ${name}</a>" >> "$pr_old_dir/index.html"
+      echo "    </div>" >> "$pr_old_dir/index.html"
+    done
+
+  cat >> "$pr_old_dir/index.html" <<EOF
+    
+    <p class="meta">Last updated: $(date -u +"%Y-%m-%d %H:%M:%S UTC")</p>
+</body>
+</html>
+EOF
+}
+
+# Generate all index pages
+generate_root_index
+generate_previews_index
+
+# Generate master indexes if directory exists
+if [ -d "previews/master" ]; then
+  generate_master_index
+  if [ -d "previews/master/old" ]; then
+    generate_master_old_index
+  fi
 fi
 
-# Generate old/index.html
-if [ -d "${STAGING_DIR}/old" ]; then
-  echo "Generating old archives index..."
+# Generate pull-requests indexes if directory exists
+if [ -d "previews/pull-requests" ]; then
+  generate_pull_requests_index
   
-  # Build list of archived folders
-  ARCHIVE_LIST=""
-  if [ -d "${STAGING_DIR}/old" ]; then
-    for archive in $(ls -1 "${STAGING_DIR}/old" | sort -r); do
-      if [ -d "${STAGING_DIR}/old/${archive}" ]; then
-        # Parse timestamp for display
-        DISPLAY_DATE=$(echo "$archive" | sed 's/T/ /g' | sed 's/-/:/g' | sed 's/Z//g')
-        ARCHIVE_LIST="${ARCHIVE_LIST}<div class=\"archive-item\"><a href=\"${archive}/\"><span class=\"archive-name\">${DISPLAY_DATE}</span><span class=\"badge\">Archived</span></a></div>"
-      fi
-    done
-  fi
-  
-  mkdir -p "${STAGING_DIR}/old"
-  
-  cat > "${STAGING_DIR}/old/index.html" << 'EOF'
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Archived Benchmarks - PASSWORD_VAULT_CLI</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      padding: 20px;
-    }
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-      overflow: hidden;
-    }
-    .header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 40px 30px;
-    }
-    .header h1 {
-      font-size: 2em;
-      margin-bottom: 10px;
-    }
-    .header a {
-      color: white;
-      text-decoration: none;
-      opacity: 0.9;
-      font-size: 0.9em;
-    }
-    .header a:hover { opacity: 1; }
-    .content {
-      padding: 30px;
-    }
-    .archive-item {
-      background: #f8f9fa;
-      border-radius: 8px;
-      margin-bottom: 12px;
-      border-left: 4px solid #6c757d;
-      transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .archive-item:hover {
-      transform: translateX(4px);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    .archive-item a {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 18px 20px;
-      text-decoration: none;
-      color: #333;
-    }
-    .archive-name {
-      font-weight: 600;
-      font-size: 1.1em;
-      font-family: 'Monaco', 'Courier New', monospace;
-    }
-    .badge {
-      background: #6c757d;
-      color: white;
-      padding: 4px 12px;
-      border-radius: 12px;
-      font-size: 0.8em;
-      font-weight: 600;
-    }
-    .empty {
-      text-align: center;
-      padding: 60px 20px;
-      color: #999;
-    }
-    .footer {
-      text-align: center;
-      padding: 20px;
-      color: #999;
-      font-size: 0.9em;
-      border-top: 1px solid #eee;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>📦 Archived Benchmarks</h1>
-      <a href="../">← Back to Home</a>
-    </div>
-    <div class="content">
-      ARCHIVE_LIST_PLACEHOLDER
-    </div>
-    <div class="footer">
-      Last updated: TIMESTAMP_PLACEHOLDER
-    </div>
-  </div>
-</body>
-</html>
-EOF
-  
-  if [ -z "$ARCHIVE_LIST" ]; then
-    ARCHIVE_LIST="<div class=\"empty\">No archived benchmarks available yet.</div>"
-  fi
-  
-  sed "s/PASSWORD_VAULT_CLI/${REPO_NAME}/g" "${STAGING_DIR}/old/index.html" > "${STAGING_DIR}/old/index.html.tmp" && mv "${STAGING_DIR}/old/index.html.tmp" "${STAGING_DIR}/old/index.html"
-  sed "s|ARCHIVE_LIST_PLACEHOLDER|${ARCHIVE_LIST}|g" "${STAGING_DIR}/old/index.html" > "${STAGING_DIR}/old/index.html.tmp" && mv "${STAGING_DIR}/old/index.html.tmp" "${STAGING_DIR}/old/index.html"
-  sed "s/TIMESTAMP_PLACEHOLDER/${TIMESTAMP}/g" "${STAGING_DIR}/old/index.html" > "${STAGING_DIR}/old/index.html.tmp" && mv "${STAGING_DIR}/old/index.html.tmp" "${STAGING_DIR}/old/index.html"
+  # Generate index for each PR
+  find previews/pull-requests -mindepth 1 -maxdepth 1 -type d 2>/dev/null | while read -r pr_dir; do
+    generate_pr_index "$pr_dir"
+    
+    # Generate old index if it exists
+    if [ -d "$pr_dir/old" ]; then
+      generate_pr_old_index "$pr_dir/old"
+    fi
+  done
 fi
 
 echo "✅ Index generation complete"
+echo ""
 echo "Generated:"
-echo "  - ${STAGING_DIR}/index.html"
-if [ -f "${STAGING_DIR}/previews/index.html" ]; then
-  echo "  - ${STAGING_DIR}/previews/index.html"
-fi
-if [ -f "${STAGING_DIR}/old/index.html" ]; then
-  echo "  - ${STAGING_DIR}/old/index.html"
+if [ -f "index.html" ]; then echo "  - /index.html"; fi
+if [ -f "previews/index.html" ]; then echo "  - /previews/index.html"; fi
+if [ -f "previews/master/index.html" ]; then echo "  - /previews/master/index.html"; fi
+if [ -f "previews/master/old/index.html" ]; then echo "  - /previews/master/old/index.html"; fi
+if [ -f "previews/pull-requests/index.html" ]; then echo "  - /previews/pull-requests/index.html"; fi
+
+# Count PR indexes
+pr_count=$(find previews/pull-requests -mindepth 1 -maxdepth 1 -name "index.html" 2>/dev/null | wc -l)
+if [ "$pr_count" -gt 0 ]; then
+  echo "  - ${pr_count} PR index pages"
 fi

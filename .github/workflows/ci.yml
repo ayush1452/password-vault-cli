@@ -519,46 +519,19 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
-          go-version: '1.24.10'
+          go-version-file: 'go.mod'
           cache: true
-        env:
-          GO111MODULE: on
-          GOPROXY: https://proxy.golang.org,direct
-
-      - name: Get dependencies
-        run: |
-          go mod tidy
-          go mod download
 
       - name: Run benchmarks
         run: |
-          set -e
-          echo "Running benchmarks..."
-          # Run benchmarks on crypto, vault, and tests packages
-          go test -bench=. -benchmem -count=3 ./internal/crypto ./internal/vault ./tests 2>&1 \
-            | tee benchmark_full.txt \
-            || true
-          # Extract standard benchmark lines into benchmark.txt
-          grep -E '^Benchmark' benchmark_full.txt > benchmark.txt || echo "No benchmarks found" > benchmark.txt
+          mkdir -p benchmarks
+          go test -bench=. -benchmem -count=3 \
+            ./internal/crypto \
+            ./internal/storage \
+            ./pkg/vault \
+            | tee benchmarks/benchmark.txt
 
-      - name: Upload benchmark artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: benchmark-result
-          path: benchmark.txt
-          retention-days: 7
-
-      - name: Prepare benchmark files for Pages
-        run: |
-          set -euo pipefail
-          # Create dev/bench structure for compatibility
-          mkdir -p dev/bench/benchmarks
-          if [ -f benchmark.txt ]; then
-            cp benchmark.txt dev/bench/benchmark.txt
-            cp benchmark.txt dev/bench/benchmarks/benchmark.txt
-          fi
-
-      - name: Stage benchmarks
+      - name: Stage benchmark results
         run: |
           chmod +x scripts/benchmark-stage.sh
           ./scripts/benchmark-stage.sh
@@ -569,31 +542,32 @@ jobs:
         run: |
           chmod +x scripts/benchmark-regression.sh
           ./scripts/benchmark-regression.sh
-
-      - name: Promote benchmarks
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.regression.outcome == 'success'
+      
+      - name: Archive and publish benchmarks
         run: |
-          chmod +x scripts/benchmark-promote.sh
-          ./scripts/benchmark-promote.sh
-
-      - name: Skip promotion on regression failure
-        if: steps.regression.outcome == 'failure'
+          chmod +x scripts/benchmark-archive.sh
+          ./scripts/benchmark-archive.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Block on regression (main branch only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.regression.outcome == 'failure'
         run: |
-          echo "::warning::Regression detected - skipping promotion to baselines"
-          echo "Preview will still be published for inspection"
+          echo "::error::Regression detected on main branch - blocking deployment"
+          exit 1
 
       - name: Generate index pages
         run: |
           chmod +x scripts/generate-index.sh
           ./scripts/generate-index.sh
 
-      # Deploy to gh-pages branch (works for all branches without environment restrictions)
+      # Deploy to gh-pages branch
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: /tmp/pages
-          keep_files: true
+          publish_dir: /tmp/gh-pages
+          keep_files: false
           commit_message: 'Deploy benchmarks from ${{ github.ref }}'
           user_name: 'github-actions[bot]'
           user_email: 'github-actions[bot]@users.noreply.github.com'
@@ -603,18 +577,27 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const safeName = process.env.SAFE_NAME || 'unknown';
-            const deploymentUrl = `https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/previews/${safeName}/`;
+            const prNumber = context.issue.number;
+            const repoName = context.repo.repo;
+            const owner = context.repo.owner;
+            const deploymentUrl = `https://${owner}.github.io/${repoName}/previews/pull-requests/pr-${prNumber}/latest/`;
             const regressionStatus = '${{ steps.regression.outcome }}';
             
-            let message = `## 📊 Benchmark Results\\n\\n`;
-            message += `Preview published at: [${deploymentUrl}](${deploymentUrl})\\n\\n`;
+            let message = `## 📊 Benchmark Results\n\n`;
+            message += `**Preview**: [View Benchmarks](${deploymentUrl})\n\n`;
             
             if (regressionStatus === 'failure') {
-              message += `⚠️ **Regression Detected**: Performance degradation exceeds threshold. Baselines were NOT updated.\\n`;
+              message += `⚠️ **Performance Note**: This commit is slower than the previous commit in this PR.\n`;
+              message += `This is informational only and won't block the PR.\n`;
+            } else if (regressionStatus === 'success') {
+              message += `✅ **Performance**: No regression detected compared to previous commit.\n`;
             } else {
-              message += `✅ **No Regression**: Benchmarks passed regression checks.\\n`;
+              message += `ℹ️ **First Run**: No previous benchmark to compare against.\n`;
             }
+            
+            message += `\n---\n`;
+            message += `📁 [View all PR benchmarks](https://${owner}.github.io/${repoName}/previews/pull-requests/pr-${prNumber}/)\n`;
+            message += `📈 [Compare with master](https://${owner}.github.io/${repoName}/previews/master/latest/)\n`;
             
             github.rest.issues.createComment({
               issue_number: context.issue.number,

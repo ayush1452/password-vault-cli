@@ -3,23 +3,24 @@ set -euo pipefail
 
 # benchmark-stage.sh
 # Purpose: Stage benchmark results into the proper folder structure
+# New structure: previews/master/ or previews/pull-requests/pr-N/
 # Outputs: /tmp/pages/ directory with staged content and environment variables
 
 echo "=== Benchmark Staging Script ==="
 
 # Validate inputs
-if [ ! -f "benchmark.txt" ]; then
-  echo "::error::benchmark.txt not found. Cannot stage benchmarks."
+if [ ! -f "benchmarks/benchmark.txt" ]; then
+  echo "::error::benchmarks/benchmark.txt not found. Cannot stage benchmarks."
   exit 1
 fi
 
 # Check if benchmark.txt has actual results
-if grep -q "No benchmarks found" benchmark.txt; then
+if ! grep -q "^Benchmark" benchmarks/benchmark.txt; then
   echo "::error::No benchmarks found in benchmark.txt. Cannot stage empty results."
   exit 1
 fi
 
-# Determine safe folder name based on event type
+# Determine context
 EVENT="${GITHUB_EVENT_NAME:-unknown}"
 REF="${GITHUB_REF:-}"
 BASE_REF="${GITHUB_BASE_REF:-}"
@@ -28,88 +29,97 @@ echo "Event: $EVENT"
 echo "Ref: $REF"
 echo "Base Ref: $BASE_REF"
 
-# Compute SAFE_NAME for preview folder
+# Initialize variables
+IS_MAIN_BRANCH="false"
+IS_PR="false"
+PR_NUMBER=""
+TARGET_PATH=""
+
+# Determine target path based on context
 if [ "$EVENT" = "pull_request" ]; then
-  # Extract PR number from event path
-  if [ -f "$GITHUB_EVENT_PATH" ]; then
-    PR_NUM=$(jq -r '.number // "unknown"' < "$GITHUB_EVENT_PATH")
-    SAFE_NAME="pr-${PR_NUM}"
-    echo "Pull Request #${PR_NUM}"
-  else
-    SAFE_NAME="pr-unknown"
-  fi
-elif [[ "$REF" == refs/heads/* ]]; then
-  # Extract branch name
-  BRANCH="${REF#refs/heads/}"
-  SAFE_NAME="$BRANCH"
-  echo "Branch: $BRANCH"
-else
-  # Fallback to run ID
-  SAFE_NAME="run-${GITHUB_RUN_ID:-unknown}"
-  echo "Using run ID for safe name"
-fi
-
-# Sanitize SAFE_NAME: replace special chars with dash, lowercase
-SAFE_NAME=$(echo "$SAFE_NAME" | sed 's#[^A-Za-z0-9._-]#-#g' | tr '[:upper:]' '[:lower:]')
-echo "Safe folder name: $SAFE_NAME"
-
-# Determine target branch for PRs
-TARGET_BRANCH=""
-IS_PR_TO_MAIN="false"
-IS_MAIN_PUSH="false"
-
-if [ "$EVENT" = "pull_request" ]; then
-  TARGET_BRANCH="${BASE_REF}"
-  echo "PR targets branch: $TARGET_BRANCH"
+  IS_PR="true"
   
-  if [ "$TARGET_BRANCH" = "main" ] || [ "$TARGET_BRANCH" = "master" ]; then
-    IS_PR_TO_MAIN="true"
-    echo "This PR targets main branch"
+  # Extract PR number from event
+  if [ -f "$GITHUB_EVENT_PATH" ]; then
+    PR_NUMBER=$(jq -r '.number // ""' < "$GITHUB_EVENT_PATH")
+    if [ -n "$PR_NUMBER" ]; then
+      TARGET_PATH="previews/pull-requests/pr-${PR_NUMBER}"
+      echo "Pull Request #${PR_NUMBER}"
+    else
+      echo "::error::Could not extract PR number from event"
+      exit 1
+    fi
+  else
+    echo "::error::GITHUB_EVENT_PATH not found"
+    exit 1
   fi
+  
 elif [ "$EVENT" = "push" ]; then
   if [[ "$REF" == "refs/heads/main" ]] || [[ "$REF" == "refs/heads/master" ]]; then
-    IS_MAIN_PUSH="true"
-    echo "This is a push to main branch"
+    IS_MAIN_BRANCH="true"
+    TARGET_PATH="previews/master"
+    echo "Push to main branch"
+  else
+    # Non-main branch push (treat like a PR without number)
+    BRANCH="${REF#refs/heads/}"
+    SAFE_BRANCH=$(echo "$BRANCH" | sed 's#[^A-Za-z0-9._-]#-#g' | tr '[:upper:]' '[:lower:]')
+    TARGET_PATH="previews/pull-requests/${SAFE_BRANCH}"
+    echo "Push to branch: $BRANCH"
   fi
+else
+  echo "::error::Unsupported event type: $EVENT"
+  exit 1
 fi
 
+echo "Target path: $TARGET_PATH"
+
 # Create staging directory structure
-STAGING_DIR="/tmp/pages"
-PREVIEW_DIR="${STAGING_DIR}/previews/${SAFE_NAME}"
+STAGING_DIR="/tmp/staging"
+STAGING_PATH="${STAGING_DIR}/${TARGET_PATH}/latest"
 
 echo "Creating staging directories..."
 rm -rf "$STAGING_DIR" || true
-mkdir -p "$PREVIEW_DIR"
+mkdir -p "$STAGING_PATH"
 
-# Copy benchmark results to preview folder
-echo "Copying benchmark.txt to preview folder..."
-cp benchmark.txt "$PREVIEW_DIR/"
+# Copy benchmark results
+echo "Copying benchmark results..."
+cp benchmarks/benchmark.txt "$STAGING_PATH/"
 
-# Copy any HTML files if they exist (from benchmark-action or custom templates)
-if [ -d "dev/bench" ]; then
-  echo "Copying dev/bench contents to preview folder..."
-  cp -r dev/bench/. "$PREVIEW_DIR/" || true
-fi
+# Create a simple index.html for the benchmark results
+cat > "$STAGING_PATH/index.html" <<EOF
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Benchmark Results</title>
+    <style>
+        body { font-family: monospace; margin: 20px; background: #1e1e1e; color: #d4d4d4; }
+        pre { background: #2d2d2d; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        h1 { color: #4ec9b0; }
+        a { color: #569cd6; }
+    </style>
+</head>
+<body>
+    <h1>Benchmark Results</h1>
+    <p><a href="../">← Back</a></p>
+    <pre>$(cat benchmarks/benchmark.txt)</pre>
+</body>
+</html>
+EOF
 
-# Create .nojekyll file to prevent Jekyll processing
-touch "${STAGING_DIR}/.nojekyll"
-
-# Verify staging
-echo "Staging directory contents:"
-ls -la "$STAGING_DIR" || true
-echo "Preview directory contents:"
-ls -la "$PREVIEW_DIR" || true
+# Create timestamp for archiving
+TIMESTAMP=$(date -u +"%Y-%m-%d-%H%M%S")
 
 # Export environment variables for downstream steps
 echo "Exporting environment variables..."
 {
-  echo "SAFE_NAME=${SAFE_NAME}"
-  echo "TARGET_BRANCH=${TARGET_BRANCH}"
-  echo "IS_PR_TO_MAIN=${IS_PR_TO_MAIN}"
-  echo "IS_MAIN_PUSH=${IS_MAIN_PUSH}"
+  echo "IS_MAIN_BRANCH=${IS_MAIN_BRANCH}"
+  echo "IS_PR=${IS_PR}"
+  echo "PR_NUMBER=${PR_NUMBER}"
+  echo "TARGET_PATH=${TARGET_PATH}"
   echo "STAGING_DIR=${STAGING_DIR}"
-  echo "PREVIEW_DIR=${PREVIEW_DIR}"
+  echo "STAGING_PATH=${STAGING_PATH}"
+  echo "TIMESTAMP=${TIMESTAMP}"
 } >> "$GITHUB_ENV"
 
 echo "✅ Benchmark staging complete"
-echo "Preview will be published to: previews/${SAFE_NAME}/"
+echo "Staged to: ${TARGET_PATH}/latest"
