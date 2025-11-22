@@ -527,8 +527,8 @@ jobs:
           mkdir -p benchmarks
           go test -bench=. -benchmem -count=3 \
             ./internal/crypto \
-            ./internal/storage \
-            ./pkg/vault \
+            ./internal/vault \
+            ./tests \
             | tee benchmarks/benchmark.txt
 
       - name: Stage benchmark results
