@@ -202,6 +202,12 @@ Typical performance characteristics:
 - **Database Operations**: <5ms per operation
 - **Startup Time**: <100ms
 
+**Live Benchmarks**: View detailed performance benchmarks and historical trends at our [GitHub Pages benchmark dashboard](https://vault-cli.github.io/vault/previews/master/latest/).
+
+**Documentation**:
+- [Benchmark Publishing System](docs/BENCHMARK_PUBLISHING.md) - Architecture and workflow
+- [Testing Benchmarks](docs/TESTING_BENCHMARKS.md) - Testing guide and scenarios
+
 ## 🔒 Threat Model
 
 This vault protects against:
@@ -288,39 +294,42 @@ This project uses GitHub Actions for continuous integration and continuous deplo
 The CI/CD pipeline consists of 9 interconnected stages that run automatically on pushes and pull requests:
 
 ```
-                                   ┌────────────────────┐
-                                   │    code-quality    │
-                                   │ (lint, vet, gosec) │
-                                   └─────────┬──────────┘
-                                             │
-               ┌─────────────────────────────┴────────────────────────────┐
-               ▼                                                          ▼
-      ┌────────────────────┐                                     ┌────────────────────┐
-      │       build        │                                     │   security-scan    │
-      │ (Linux / macOS /   │                                     │       (Trivy)      │
-      │   Windows matrix)  │                                     └─────────┬──────────┘
-      └─────────┬──────────┘                                               │
-                │                                                          │
+                                    ┌────────────────────┐
+                                    │    code-quality    │
+                                    │ (lint, vet, gosec) │
+                                    └─────────┬──────────┘
+                                              │
+                ┌─────────────────────────────┴────────────────────────────┐
                 ▼                                                          ▼
-      ┌────────────────────┐                                        (artifact / SARIF)
-      │        test        │                                               │
-      │ (unit / race / cov)│                                               │
-      └─────────┬──────────┘                                               │
-                │                                                          │
-      ┌─────────┴─────--───┐                                               │
-      ▼                    ▼                                               │
-┌────────────────────┐  ┌────────────────────┐                             │
-│      coverage      │  │     benchmarks     │                             │
-│      (Codecov)     │  │  (go test -bench)  │                             │
-└────────────────────┘  └─────────┬──────────┘                             │
-                                  │                                        │
-                                  │                                        │
-                     ┌────────────┴──────────────┐                         │
-                     ▼                           ▼                         │
-          ┌──────────────────────┐     ┌────────────────────┐              │ 
-          │   performance-check  │     │       notify       │              |
-          │      (benchstat)     │     │  (GitHub Issue)    │◄─────────────┘      
-          └──────────────────────┘     └────────────────────┘
+       ┌────────────────────┐                                     ┌────────────────────┐
+       │       build        │                                     │   security-scan    │
+       │ (Linux / macOS /   │                                     │       (Trivy)      │
+       │   Windows matrix)  │                                     └─────────┬──────────┘
+       └─────────┬──────────┘                                               │
+                 │                                                          │
+                 ▼                                                          ▼
+       ┌────────────────────┐                                        (artifact / SARIF)
+       │        test        │                                               │
+       │ (unit / race / cov)│                                               │
+       └─────────┬──────────┘                                               │
+                 │                                                          │
+       ┌─────────┴───────────────────┐                                      │
+       ▼                             ▼                                      │
+┌────────────────────┐  ┌────────────────────┐                              │
+│      coverage      │  │     benchmarks     │                              │
+│      (Codecov)     │  │ (publish to Pages) │                              │
+└──────┬─────────────┘  └────────────┬───────┘                              │
+       │                             │                                      │
+       │     ┌────────────────────┐  │                                      │
+       └────►│  sonarqube-analysis│  │                                      │
+             │  (code quality)    │  │                                      │
+             └───────────┬────────┘  │                                      │
+                         │           │                                      │
+                         ▼           ▼                                      │
+                        ┌────────────────────┐                              │ 
+                        │       notify       │◄─────────────────────────────┘      
+                        │  (GitHub Issue)    │
+                        └────────────────────┘
 
 
 Parallel / Independent:
@@ -344,14 +353,15 @@ The pipeline automatically triggers on:
 **Parallel Execution:**
 - `codeql-analysis` runs independently (parallel to all)
 - `security-scan` runs after `code-quality` (parallel to build/test)
+- `benchmarks` runs parallel to `coverage` (both after `test`)
 
 **Critical Path:**
-`code-quality` → `build` → `test` → `benchmarks` → `performance-check`
-Total critical path time: ~14-23 minutes
+`code-quality` → `build` → `test` → `coverage` → `sonarqube`
+Total critical path time: ~12-20 minutes
 
 **All Stages Complete When:**
-- Critical path finishes
-- `coverage` completes (parallel to benchmarks)
+- Critical path finishes (`sonarqube` completes)
+- `benchmarks` completes (parallel to coverage)
 - `security-scan` completes
 - `notify` runs only on failures
 
@@ -367,22 +377,24 @@ graph TD
     %% Main pipeline
     B --> E[test<br/>5-8 min]
     E --> F[coverage<br/>1-2 min]
-    E --> G[benchmarks<br/>3-5 min]
-    G --> H[performance-check<br/>1-2 min]
+    E --> G[benchmarks<br/>3-5 min<br/>publish to Pages]
+    E --> H[sonarqube<br/>30-60s<br/>code quality]
+    F --> H
     
     %% Notification (only on failure)
     E -.-> I[notify<br/>1 min]
     G -.-> I
     D -.-> I
+    H -.-> I
     
     %% Styling
     classDef critical fill:#ff9999,stroke:#ff0000,stroke-width:2px
     classDef parallel fill:#99ccff,stroke:#0066cc,stroke-width:2px
     classDef optional fill:#ffff99,stroke:#cccc00,stroke-width:2px
     
-    class A,B,E,G,H critical
+    class A,B,E,F,G,H critical
     class C parallel
-    class D,F,I optional
+    class D,I optional
 ```
 
 **Legend:**
@@ -395,7 +407,7 @@ graph TD
 2. **Group 2**: `build`, `security-scan` (after `code-quality`)
 3. **Group 3**: `test` (after `build`)
 4. **Group 4**: `coverage`, `benchmarks` (after `test`)
-5. **Group 5**: `performance-check` (after `benchmarks`)
+5. **Group 5**: `sonarqube` (after `coverage`)
 6. **Group 6**: `notify` (on failure only)
 
 ### 📋 Detailed Stage Breakdown
@@ -481,33 +493,83 @@ graph TD
 **Runtime**: ~1-2 minutes
 
 #### 6. Benchmarks (`benchmarks`)
-**Purpose**: Runs performance benchmarks and tracks regressions
+**Purpose**: Runs performance benchmarks, detects regressions, and publishes results to GitHub Pages
 
 **Tools & Versions**:
 - Go benchmark runner: 1.24.10
-- benchmark-action: v1.1.0
+- benchstat: golang.org/x/perf/cmd/benchstat
+- peaceiris/actions-gh-pages: v3
 
 **Configuration**:
 - Count: 3 iterations per benchmark
-- Alert threshold: 200% degradation
-- Auto-push: enabled
+- Regression threshold: 10% degradation
+- Archive retention: Last 10 versions
+
+**Regression Strategy**:
+| Context | Baseline | Action | Purpose |
+|---------|----------|--------|---------|
+| **PR Commits** | Previous commit in same PR | Informational only | Track incremental changes |
+| **Main Branch** | Current master baseline | **BLOCKS on regression** | Protect main from regressions |
+
+**Published Results**:
+- **Master**: `https://<username>.github.io/<repo>/previews/master/latest/`
+- **PRs**: `https://<username>.github.io/<repo>/previews/pull-requests/pr-N/latest/`
+
+**Directory Structure**:
+```
+previews/
+├── master/
+│   ├── latest/          # Current main branch benchmarks
+│   └── old/             # Archived versions (last 10)
+└── pull-requests/
+    └── pr-N/
+        ├── latest/      # Current PR benchmarks
+        └── old/         # Archived commits (last 10)
+```
+
+**Features**:
+- ✅ Automated benchmark execution on every commit
+- ✅ Smart regression detection (PRs: informational, main: blocking)
+- ✅ Version history with archiving (keep last 10)
+- ✅ GitHub Pages deployment with navigation
+- ✅ PR comments with benchmark links
+- ✅ Organized by master/pull-requests
+
+**Documentation**:
+- [Benchmark Publishing Guide](docs/BENCHMARK_PUBLISHING.md) - System architecture
+- [Testing Benchmarks](docs/TESTING_BENCHMARKS.md) - Testing guide with scenarios
 
 **Dependencies**: `test`
 **Runtime**: ~3-5 minutes
 
-#### 7. Performance Check (`performance-check`)
-**Purpose**: Compares benchmarks with previous runs to detect regressions
+#### 7. SonarQube Analysis (`sonarqube`)
+**Purpose**: Static code analysis for code quality, bugs, and security vulnerabilities
 
 **Tools & Versions**:
-- benchstat: golang.org/x/perf/cmd/benchstat
+- SonarQube Scanner: v6.0.0
+- Analysis platform: SonarCloud/SonarQube
 
-**Regression Detection**:
-- Threshold: 10% degradation
-- Comparison: Previous successful run
-- Action: Fails pipeline if regression detected
+**Configuration**:
+- Project key: `ayush1452_password-vault-cli`
+- Organization: `ayush1452`
+- Coverage integration: Uses `coverage.out` from test stage
+- Test reports: `test-report.xml`
 
-**Dependencies**: `benchmarks`
-**Runtime**: ~1-2 minutes
+**Analysis Scope**:
+- **Code Quality**: Maintainability, reliability, and technical debt
+- **Security**: Security hotspots and vulnerabilities
+- **Coverage**: Test coverage metrics and trends
+- **Duplications**: Code duplication detection
+- **Complexity**: Cyclomatic complexity analysis
+
+**Quality Gates**:
+- Minimum coverage threshold
+- No new critical/blocker issues
+- Security rating requirements
+- Maintainability rating requirements
+
+**Dependencies**: `test`, `coverage`
+**Runtime**: ~30-60 seconds
 
 #### 8. Security Scan (`security-scan`)
 **Purpose**: Additional vulnerability scanning with Trivy
@@ -539,7 +601,7 @@ graph TD
   - Links to workflow run
   - Troubleshooting steps
 
-**Dependencies**: `test`, `benchmarks`, `security-scan`
+**Dependencies**: `test`, `benchmarks`, `security-scan`, `sonarqube`
 **Runtime**: ~1 minute
 
 ### 🔗 Dependencies Flow
@@ -552,9 +614,9 @@ Stage Dependencies:
 ├── test → build
 ├── coverage → test
 ├── benchmarks → test
-├── performance-check → benchmarks
+├── sonarqube → test, coverage
 ├── security-scan → code-quality
-└── notify → test, benchmarks, security-scan
+└── notify → test, benchmarks, security-scan, sonarqube
 ```
 
 ### ⚡ Performance Optimizations
