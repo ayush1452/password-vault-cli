@@ -1,4 +1,4 @@
-package store
+package store_test
 
 import (
 	"bytes"
@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/vault-cli/vault/internal/domain"
+	storepkg "github.com/vault-cli/vault/internal/store"
 	"github.com/vault-cli/vault/internal/vault"
 )
 
@@ -32,7 +33,7 @@ func TestStoreIntegration(t *testing.T) {
 	}
 
 	// Test initialization
-	store := NewBoltStore()
+	store := storepkg.NewBoltStore()
 	defer store.CloseVault()
 
 	// Create vault with KDF params
@@ -211,7 +212,7 @@ func TestConcurrentAccess(t *testing.T) {
 	}
 
 	// Initialize store
-	store := NewBoltStore()
+	store := storepkg.NewBoltStore()
 	defer store.CloseVault()
 
 	kdfParams := map[string]interface{}{
@@ -308,7 +309,7 @@ func TestStoreRecovery(t *testing.T) {
 	}
 
 	// Create and populate store
-	store := NewBoltStore()
+	store := storepkg.NewBoltStore()
 
 	kdfParams := map[string]interface{}{
 		"algorithm": "argon2id",
@@ -355,7 +356,7 @@ func TestStoreRecovery(t *testing.T) {
 	}
 
 	// Try to open corrupted store
-	corruptedStore := NewBoltStore()
+	corruptedStore := storepkg.NewBoltStore()
 	err = corruptedStore.OpenVault(vaultPath, masterKey)
 	if err == nil {
 		corruptedStore.CloseVault()
@@ -372,7 +373,7 @@ func TestStoreRecovery(t *testing.T) {
 		}
 
 		// Try to open restored store
-		restoredStore := NewBoltStore()
+		restoredStore := storepkg.NewBoltStore()
 		defer restoredStore.CloseVault()
 
 		err = restoredStore.OpenVault(vaultPath, masterKey)
@@ -412,7 +413,7 @@ func TestStorePersistence(t *testing.T) {
 
 	// Session 1: Create and populate store
 	{
-		store := NewBoltStore()
+		store := storepkg.NewBoltStore()
 
 		kdfParams := map[string]interface{}{
 			"algorithm": "argon2id",
@@ -448,7 +449,7 @@ func TestStorePersistence(t *testing.T) {
 
 	// Session 2: Reopen and verify data
 	{
-		store := NewBoltStore()
+		store := storepkg.NewBoltStore()
 		defer store.CloseVault()
 
 		err := store.OpenVault(vaultPath, masterKey)
@@ -500,7 +501,7 @@ func TestStoreMetrics(t *testing.T) {
 		t.Fatalf("Failed to derive master key: %v", err)
 	}
 
-	store := NewBoltStore()
+	store := storepkg.NewBoltStore()
 	defer store.CloseVault()
 
 	kdfParams := map[string]interface{}{

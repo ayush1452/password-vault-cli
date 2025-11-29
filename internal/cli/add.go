@@ -104,6 +104,11 @@ func runAdd(entryName string) (err error) {
 
 	vaultStore := GetVaultStore()
 
+	// Ensure profile is set to default if empty
+	if profile == "" {
+		profile = "default"
+	}
+
 	// Check if entry already exists
 	if vaultStore.EntryExists(profile, entryName) {
 		return fmt.Errorf("entry '%s' already exists in profile '%s'", entryName, profile)

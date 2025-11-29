@@ -79,6 +79,11 @@ func runDelete(entryName string) error {
 
 	vaultStore := GetVaultStore()
 
+	// Ensure profile is set to default if empty
+	if profile == "" {
+		profile = "default"
+	}
+
 	// Check if entry exists
 	if !vaultStore.EntryExists(profile, entryName) {
 		return fmt.Errorf("entry '%s' does not exist in profile '%s'", entryName, profile)
