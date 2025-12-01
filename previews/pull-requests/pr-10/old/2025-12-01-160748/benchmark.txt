@@ -1,0 +1,241 @@
+goos: linux
+goarch: amd64
+pkg: github.com/vault-cli/vault/internal/crypto
+cpu: AMD EPYC 7763 64-Core Processor                
+BenchmarkGeneratePassword/len=16-4         	 1117705	      1071 ns/op	      48 B/op	      18 allocs/op
+BenchmarkGeneratePassword/len=16-4         	 1000000	      1069 ns/op	      48 B/op	      18 allocs/op
+BenchmarkGeneratePassword/len=16-4         	 1000000	      1070 ns/op	      48 B/op	      18 allocs/op
+BenchmarkGeneratePassword/len=32-4         	  553498	      2090 ns/op	      96 B/op	      34 allocs/op
+BenchmarkGeneratePassword/len=32-4         	  566248	      2103 ns/op	      96 B/op	      34 allocs/op
+BenchmarkGeneratePassword/len=32-4         	  569623	      2091 ns/op	      96 B/op	      34 allocs/op
+BenchmarkGeneratePassword/len=64-4         	  287676	      4119 ns/op	     192 B/op	      66 allocs/op
+BenchmarkGeneratePassword/len=64-4         	  286404	      4130 ns/op	     192 B/op	      66 allocs/op
+BenchmarkGeneratePassword/len=64-4         	  287757	      4125 ns/op	     192 B/op	      66 allocs/op
+PASS
+ok  	github.com/vault-cli/vault/internal/crypto	11.389s
+Warning: Key derivation took only 75.0886ms, consider increasing parameters
+Warning: Key derivation took only 72.990251ms, consider increasing parameters
+Warning: Key derivation took only 47.855357ms, consider increasing parameters
+Warning: Key derivation took only 46.812537ms, consider increasing parameters
+Warning: Key derivation took only 47.532297ms, consider increasing parameters
+Warning: Key derivation took only 47.120836ms, consider increasing parameters
+Warning: Key derivation took only 48.832232ms, consider increasing parameters
+Warning: Key derivation took only 53.944019ms, consider increasing parameters
+Warning: Key derivation took only 58.605882ms, consider increasing parameters
+Warning: Key derivation took only 46.668413ms, consider increasing parameters
+Warning: Key derivation took only 50.0299ms, consider increasing parameters
+Warning: Key derivation took only 53.455196ms, consider increasing parameters
+Warning: Key derivation took only 64.030777ms, consider increasing parameters
+Warning: Key derivation took only 46.779005ms, consider increasing parameters
+Warning: Key derivation took only 50.797543ms, consider increasing parameters
+Warning: Key derivation took only 49.268627ms, consider increasing parameters
+Warning: Key derivation took only 45.284681ms, consider increasing parameters
+Warning: Key derivation took only 83.783599ms, consider increasing parameters
+Warning: Key derivation took only 84.322607ms, consider increasing parameters
+Warning: Key derivation took only 64.30275ms, consider increasing parameters
+Warning: Key derivation took only 48.084665ms, consider increasing parameters
+Warning: Key derivation took only 47.502468ms, consider increasing parameters
+Warning: Key derivation took only 46.333294ms, consider increasing parameters
+Warning: Key derivation took only 49.326295ms, consider increasing parameters
+Warning: Key derivation took only 47.704767ms, consider increasing parameters
+Warning: Key derivation took only 48.578482ms, consider increasing parameters
+Warning: Key derivation took only 45.899924ms, consider increasing parameters
+Warning: Key derivation took only 44.835788ms, consider increasing parameters
+Warning: Key derivation took only 46.222788ms, consider increasing parameters
+Warning: Key derivation took only 45.20031ms, consider increasing parameters
+Warning: Key derivation took only 54.986698ms, consider increasing parameters
+Warning: Key derivation took only 47.40224ms, consider increasing parameters
+Warning: Key derivation took only 711.99µs, consider increasing parameters
+Warning: Key derivation took only 685.22µs, consider increasing parameters
+Warning: Key derivation took only 46.036049ms, consider increasing parameters
+Warning: Key derivation took only 46.45401ms, consider increasing parameters
+Warning: Key derivation took only 45.169151ms, consider increasing parameters
+Warning: Key derivation took only 46.12193ms, consider increasing parameters
+Warning: Key derivation took only 44.725503ms, consider increasing parameters
+Warning: Key derivation took only 46.231012ms, consider increasing parameters
+Warning: Key derivation took only 45.570983ms, consider increasing parameters
+Warning: Key derivation took only 46.283397ms, consider increasing parameters
+Warning: Key derivation took only 45.701009ms, consider increasing parameters
+Warning: Key derivation took only 46.804062ms, consider increasing parameters
+Warning: Key derivation took only 45.289061ms, consider increasing parameters
+Warning: Key derivation took only 46.618658ms, consider increasing parameters
+Warning: Key derivation took only 44.784627ms, consider increasing parameters
+Warning: Key derivation took only 45.893283ms, consider increasing parameters
+Warning: Key derivation took only 46.59398ms, consider increasing parameters
+Warning: Key derivation took only 45.897022ms, consider increasing parameters
+Warning: Key derivation took only 45.380134ms, consider increasing parameters
+Warning: Key derivation took only 48.425641ms, consider increasing parameters
+Warning: Key derivation took only 46.007844ms, consider increasing parameters
+Warning: Key derivation took only 47.600995ms, consider increasing parameters
+Warning: Key derivation took only 44.820198ms, consider increasing parameters
+Warning: Key derivation took only 46.429982ms, consider increasing parameters
+Warning: Key derivation took only 45.266686ms, consider increasing parameters
+Warning: Key derivation took only 47.819998ms, consider increasing parameters
+Warning: Key derivation took only 45.003561ms, consider increasing parameters
+Warning: Key derivation took only 46.26979ms, consider increasing parameters
+Warning: Key derivation took only 45.337ms, consider increasing parameters
+Warning: Key derivation took only 46.74174ms, consider increasing parameters
+Warning: Key derivation took only 45.019371ms, consider increasing parameters
+Warning: Key derivation took only 46.154551ms, consider increasing parameters
+Warning: Key derivation took only 46.426188ms, consider increasing parameters
+Warning: Key derivation took only 45.83115ms, consider increasing parameters
+Warning: Key derivation took only 631.411µs, consider increasing parameters
+Warning: Key derivation took only 596.454µs, consider increasing parameters
+Warning: Key derivation took only 49.588103ms, consider increasing parameters
+Warning: Key derivation took only 46.552774ms, consider increasing parameters
+Warning: Key derivation took only 46.259655ms, consider increasing parameters
+Warning: Key derivation took only 45.262236ms, consider increasing parameters
+Warning: Key derivation took only 46.392901ms, consider increasing parameters
+Warning: Key derivation took only 45.304265ms, consider increasing parameters
+Warning: Key derivation took only 45.900574ms, consider increasing parameters
+Warning: Key derivation took only 45.063412ms, consider increasing parameters
+Warning: Key derivation took only 46.180614ms, consider increasing parameters
+Warning: Key derivation took only 46.988504ms, consider increasing parameters
+Warning: Key derivation took only 46.188118ms, consider increasing parameters
+Warning: Key derivation took only 44.880922ms, consider increasing parameters
+Warning: Key derivation took only 46.108242ms, consider increasing parameters
+Warning: Key derivation took only 44.763675ms, consider increasing parameters
+Warning: Key derivation took only 46.891315ms, consider increasing parameters
+Warning: Key derivation took only 48.438006ms, consider increasing parameters
+Warning: Key derivation took only 46.509924ms, consider increasing parameters
+Warning: Key derivation took only 45.156276ms, consider increasing parameters
+Warning: Key derivation took only 46.046181ms, consider increasing parameters
+Warning: Key derivation took only 45.663469ms, consider increasing parameters
+Warning: Key derivation took only 45.922671ms, consider increasing parameters
+Warning: Key derivation took only 44.633327ms, consider increasing parameters
+Warning: Key derivation took only 46.635994ms, consider increasing parameters
+Warning: Key derivation took only 45.396724ms, consider increasing parameters
+Warning: Key derivation took only 46.089536ms, consider increasing parameters
+Warning: Key derivation took only 45.253892ms, consider increasing parameters
+Warning: Key derivation took only 46.48081ms, consider increasing parameters
+Warning: Key derivation took only 46.331301ms, consider increasing parameters
+Warning: Key derivation took only 46.113344ms, consider increasing parameters
+Warning: Key derivation took only 44.950353ms, consider increasing parameters
+Warning: Key derivation took only 45.09144ms, consider increasing parameters
+Warning: Key derivation took only 46.121905ms, consider increasing parameters
+Warning: Key derivation took only 635.697µs, consider increasing parameters
+Warning: Key derivation took only 632.913µs, consider increasing parameters
+Warning: Key derivation took only 46.881411ms, consider increasing parameters
+goos: linux
+goarch: amd64
+pkg: github.com/vault-cli/vault/internal/vault
+cpu: AMD EPYC 7763 64-Core Processor                
+BenchmarkDeriveKey-4   	Warning: Key derivation took only 46.737319ms, consider increasing parameters
+Warning: Key derivation took only 47.515279ms, consider increasing parameters
+Warning: Key derivation took only 46.162947ms, consider increasing parameters
+Warning: Key derivation took only 45.125243ms, consider increasing parameters
+Warning: Key derivation took only 45.934703ms, consider increasing parameters
+Warning: Key derivation took only 45.009637ms, consider increasing parameters
+Warning: Key derivation took only 46.126534ms, consider increasing parameters
+Warning: Key derivation took only 45.537475ms, consider increasing parameters
+Warning: Key derivation took only 46.146479ms, consider increasing parameters
+Warning: Key derivation took only 44.937152ms, consider increasing parameters
+Warning: Key derivation took only 46.04022ms, consider increasing parameters
+Warning: Key derivation took only 44.891987ms, consider increasing parameters
+Warning: Key derivation took only 46.437285ms, consider increasing parameters
+Warning: Key derivation took only 45.141865ms, consider increasing parameters
+Warning: Key derivation took only 45.856175ms, consider increasing parameters
+Warning: Key derivation took only 45.120302ms, consider increasing parameters
+Warning: Key derivation took only 46.177527ms, consider increasing parameters
+Warning: Key derivation took only 45.017063ms, consider increasing parameters
+Warning: Key derivation took only 47.304852ms, consider increasing parameters
+Warning: Key derivation took only 44.876537ms, consider increasing parameters
+Warning: Key derivation took only 46.196196ms, consider increasing parameters
+Warning: Key derivation took only 45.077844ms, consider increasing parameters
+Warning: Key derivation took only 45.941485ms, consider increasing parameters
+Warning: Key derivation took only 47.502684ms, consider increasing parameters
+Warning: Key derivation took only 46.259171ms, consider increasing parameters
+      25	  45908381 ns/op	67119351 B/op	      96 allocs/op
+BenchmarkDeriveKey-4   	Warning: Key derivation took only 46.820115ms, consider increasing parameters
+Warning: Key derivation took only 46.740947ms, consider increasing parameters
+Warning: Key derivation took only 49.992247ms, consider increasing parameters
+Warning: Key derivation took only 45.996439ms, consider increasing parameters
+Warning: Key derivation took only 48.758017ms, consider increasing parameters
+Warning: Key derivation took only 46.044997ms, consider increasing parameters
+Warning: Key derivation took only 45.514841ms, consider increasing parameters
+Warning: Key derivation took only 45.929617ms, consider increasing parameters
+Warning: Key derivation took only 44.96738ms, consider increasing parameters
+Warning: Key derivation took only 53.505434ms, consider increasing parameters
+Warning: Key derivation took only 44.911779ms, consider increasing parameters
+Warning: Key derivation took only 46.392083ms, consider increasing parameters
+Warning: Key derivation took only 45.223487ms, consider increasing parameters
+Warning: Key derivation took only 45.918779ms, consider increasing parameters
+Warning: Key derivation took only 45.639602ms, consider increasing parameters
+Warning: Key derivation took only 46.207904ms, consider increasing parameters
+Warning: Key derivation took only 45.338988ms, consider increasing parameters
+Warning: Key derivation took only 46.487296ms, consider increasing parameters
+Warning: Key derivation took only 45.216371ms, consider increasing parameters
+Warning: Key derivation took only 46.055172ms, consider increasing parameters
+Warning: Key derivation took only 45.282787ms, consider increasing parameters
+Warning: Key derivation took only 46.070137ms, consider increasing parameters
+Warning: Key derivation took only 45.088495ms, consider increasing parameters
+Warning: Key derivation took only 46.745124ms, consider increasing parameters
+Warning: Key derivation took only 44.85468ms, consider increasing parameters
+Warning: Key derivation took only 46.7069ms, consider increasing parameters
+      25	  46408376 ns/op	67119138 B/op	      96 allocs/op
+BenchmarkDeriveKey-4   	Warning: Key derivation took only 46.475389ms, consider increasing parameters
+Warning: Key derivation took only 46.877403ms, consider increasing parameters
+Warning: Key derivation took only 46.123802ms, consider increasing parameters
+Warning: Key derivation took only 46.159296ms, consider increasing parameters
+Warning: Key derivation took only 45.623725ms, consider increasing parameters
+Warning: Key derivation took only 46.712063ms, consider increasing parameters
+Warning: Key derivation took only 45.004037ms, consider increasing parameters
+Warning: Key derivation took only 46.197453ms, consider increasing parameters
+Warning: Key derivation took only 45.279272ms, consider increasing parameters
+Warning: Key derivation took only 46.300766ms, consider increasing parameters
+Warning: Key derivation took only 45.917482ms, consider increasing parameters
+Warning: Key derivation took only 45.956702ms, consider increasing parameters
+Warning: Key derivation took only 45.336843ms, consider increasing parameters
+Warning: Key derivation took only 45.889743ms, consider increasing parameters
+Warning: Key derivation took only 45.133638ms, consider increasing parameters
+Warning: Key derivation took only 46.043408ms, consider increasing parameters
+Warning: Key derivation took only 48.270654ms, consider increasing parameters
+Warning: Key derivation took only 46.66431ms, consider increasing parameters
+Warning: Key derivation took only 45.884663ms, consider increasing parameters
+Warning: Key derivation took only 46.189394ms, consider increasing parameters
+Warning: Key derivation took only 45.249524ms, consider increasing parameters
+Warning: Key derivation took only 46.889111ms, consider increasing parameters
+Warning: Key derivation took only 45.251342ms, consider increasing parameters
+Warning: Key derivation took only 48.603701ms, consider increasing parameters
+Warning: Key derivation took only 45.07465ms, consider increasing parameters
+Warning: Key derivation took only 45.797498ms, consider increasing parameters
+      25	  46122646 ns/op	67119036 B/op	      95 allocs/op
+Warning: Key derivation took only 46.816203ms, consider increasing parameters
+BenchmarkSeal-4        	Warning: Key derivation took only 47.346161ms, consider increasing parameters
+Warning: Key derivation took only 46.863234ms, consider increasing parameters
+Warning: Key derivation took only 46.448217ms, consider increasing parameters
+Warning: Key derivation took only 68.931408ms, consider increasing parameters
+ 1269289	       955.8 ns/op	    2560 B/op	       5 allocs/op
+BenchmarkSeal-4        	Warning: Key derivation took only 69.240874ms, consider increasing parameters
+Warning: Key derivation took only 47.149012ms, consider increasing parameters
+Warning: Key derivation took only 47.379261ms, consider increasing parameters
+Warning: Key derivation took only 47.252268ms, consider increasing parameters
+Warning: Key derivation took only 68.998012ms, consider increasing parameters
+ 1246100	       954.5 ns/op	    2560 B/op	       5 allocs/op
+BenchmarkSeal-4        	Warning: Key derivation took only 68.505059ms, consider increasing parameters
+Warning: Key derivation took only 46.987745ms, consider increasing parameters
+Warning: Key derivation took only 47.44771ms, consider increasing parameters
+Warning: Key derivation took only 47.610889ms, consider increasing parameters
+Warning: Key derivation took only 68.932729ms, consider increasing parameters
+ 1246322	       952.5 ns/op	    2560 B/op	       5 allocs/op
+Warning: Key derivation took only 69.223694ms, consider increasing parameters
+BenchmarkOpen-4        	Warning: Key derivation took only 47.723569ms, consider increasing parameters
+Warning: Key derivation took only 46.989399ms, consider increasing parameters
+Warning: Key derivation took only 47.554646ms, consider increasing parameters
+Warning: Key derivation took only 68.867589ms, consider increasing parameters
+ 1213524	       981.7 ns/op	    3456 B/op	       4 allocs/op
+BenchmarkOpen-4        	Warning: Key derivation took only 69.247696ms, consider increasing parameters
+Warning: Key derivation took only 46.937178ms, consider increasing parameters
+Warning: Key derivation took only 47.39531ms, consider increasing parameters
+Warning: Key derivation took only 47.614391ms, consider increasing parameters
+Warning: Key derivation took only 68.790185ms, consider increasing parameters
+ 1210690	       977.9 ns/op	    3456 B/op	       4 allocs/op
+BenchmarkOpen-4        	Warning: Key derivation took only 69.491924ms, consider increasing parameters
+Warning: Key derivation took only 47.166492ms, consider increasing parameters
+Warning: Key derivation took only 47.025902ms, consider increasing parameters
+Warning: Key derivation took only 46.918117ms, consider increasing parameters
+Warning: Key derivation took only 69.291712ms, consider increasing parameters
+ 1209970	       981.1 ns/op	    3456 B/op	       4 allocs/op
+PASS
+ok  	github.com/vault-cli/vault/internal/vault	21.121s
+?   	github.com/vault-cli/vault/tests	[no test files]
