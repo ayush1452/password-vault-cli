@@ -39,6 +39,7 @@ type VaultMetadata struct {
 	KDFParams map[string]interface{} `json:"kdf_params"`
 	CreatedAt time.Time              `json:"created_at"`
 	UpdatedAt time.Time              `json:"updated_at,omitempty"`
+	FileHMAC  string                 `json:"file_hmac,omitempty"` // HMAC of vault file for integrity checking
 }
 
 // Filter represents entry filtering options
