@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/vault-cli/vault/internal/config"
 )
 
 var (
@@ -34,6 +35,42 @@ func init() {
 	auditLogCmd.Flags().BoolVar(&auditShow, "show", false, "Display audit log")
 	auditLogCmd.Flags().BoolVar(&auditVerify, "verify", false, "Verify HMAC chain integrity")
 	auditLogCmd.Flags().StringVar(&auditExport, "export", "", "Export audit log to file")
+}
+
+// NewAudit creates a new audit command
+func NewAudit(cfg *config.Config) *cobra.Command {
+	auditCmd := &cobra.Command{
+		Use:   "audit",
+		Short: "Audit vault operations",
+		Long:  "View and verify audit logs of vault operations",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runAuditLog()
+		},
+	}
+
+	auditCmd.AddCommand(newAuditLogCmd())
+	return auditCmd
+}
+
+func newAuditLogCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "log",
+		Short: "View and verify audit logs",
+		Long: `View and verify the vault's audit log.
+
+The audit log contains a cryptographically-chained record of all
+operations performed on the vault. This helps detect tampering
+and provides an accountability trail.`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runAuditLog()
+		},
+	}
+
+	cmd.Flags().BoolVar(&auditShow, "show", false, "Display audit log")
+	cmd.Flags().BoolVar(&auditVerify, "verify", false, "Verify HMAC chain integrity")
+	cmd.Flags().StringVar(&auditExport, "export", "", "Export audit log to file")
+
+	return cmd
 }
 
 func runAuditLog() error {
