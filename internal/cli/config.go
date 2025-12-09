@@ -69,7 +69,13 @@ func init() {
 	configCmd.AddCommand(configPathCmd)
 }
 
+// NewConfig creates a new config command
+func NewConfig(cfg *config.Config) *cobra.Command {
+	return NewConfigCommand(cfg)
+}
+
 // NewConfigCommand creates a new config command for testing
+// Deprecated: Use NewConfig instead
 func NewConfigCommand(cfg *config.Config) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
