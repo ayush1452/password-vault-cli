@@ -7,7 +7,30 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/vault-cli/vault/internal/config"
 )
+
+// NewDoctor creates a new doctor command
+func NewDoctor(cfg *config.Config) *cobra.Command {
+	return &cobra.Command{
+		Use:   "doctor",
+		Short: "Perform security and health checks",
+		Long: `Perform comprehensive security and health checks on the vault.
+
+This command checks:
+- File permissions and ownership
+- Vault integrity and structure
+- KDF parameter strength
+- Configuration security
+- System security recommendations
+
+Example:
+  vault doctor`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runDoctor()
+		},
+	}
+}
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
