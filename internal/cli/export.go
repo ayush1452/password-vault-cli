@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/vault-cli/vault/internal/config"
 	"github.com/vault-cli/vault/internal/vault"
 )
 
@@ -15,6 +16,35 @@ var (
 	exportIncludeSecrets bool
 	exportPassphrase     string
 )
+
+// NewExport creates a new export command
+func NewExport(cfg *config.Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "export",
+		Short: "Export vault data",
+		Long: `Export vault data for backup or migration purposes.
+
+You can export in encrypted format (recommended) or plaintext format.
+Encrypted exports require a passphrase and can be safely stored anywhere.
+Plaintext exports are unencrypted and should only be used in secure locations.
+
+Example:
+  vault export --path backup.json --encrypted --passphrase "backup-pass"
+  vault export --path backup.json --plaintext --include-secrets`,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runExport()
+		},
+	}
+
+	cmd.Flags().BoolVar(&exportEncrypted, "encrypted", false, "Export in encrypted format")
+	cmd.Flags().BoolVar(&exportPlaintext, "plaintext", false, "Export in plaintext format")
+	cmd.Flags().StringVar(&exportPath, "path", "", "Export file path (required)")
+	cmd.Flags().BoolVar(&exportIncludeSecrets, "include-secrets", false, "Include secrets in export (requires confirmation)")
+	cmd.Flags().StringVar(&exportPassphrase, "passphrase", "", "Passphrase for encrypted export")
+	cmd.MarkFlagRequired("path")
+
+	return cmd
+}
 
 var exportCmd = &cobra.Command{
 	Use:   "export",
