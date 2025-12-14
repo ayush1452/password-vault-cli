@@ -92,6 +92,11 @@ func runGet(cmd *cobra.Command, entryName string) (err error) {
 
 	vaultStore := GetVaultStore()
 
+	// Ensure profile is set to default if empty
+	if profile == "" {
+		profile = "default"
+	}
+
 	// Get entry
 	entry, err := vaultStore.GetEntry(profile, entryName)
 	if err != nil {
