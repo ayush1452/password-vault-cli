@@ -118,6 +118,11 @@ func runList(cmd *cobra.Command) (err error) {
 
 	vaultStore := GetVaultStore()
 
+	// Ensure profile is set to default if empty
+	if profile == "" {
+		profile = "default"
+	}
+
 	// Create filter
 	filter := &domain.Filter{
 		Tags:         listTags,
