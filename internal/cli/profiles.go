@@ -14,6 +14,90 @@ import (
 	"github.com/vault-cli/vault/internal/config"
 )
 
+// NewProfiles creates a new profiles command
+func NewProfiles(cfg *config.Config) *cobra.Command {
+	profilesCmd := &cobra.Command{
+		Use:   "profiles",
+		Short: "Manage vault profiles",
+		Long: `Manage vault profiles for organizing entries by environment or category.
+
+Profiles allow you to separate entries into different namespaces, such as
+'work', 'personal', 'production', 'development', etc.
+
+Example:
+  vault profiles list                    # List all profiles
+  vault profiles create production       # Create production profile
+  vault profiles delete old-project     # Delete a profile
+  vault profiles set-default work       # Set default profile`,
+	}
+
+	profilesCmd.AddCommand(newProfilesListCmd())
+	profilesCmd.AddCommand(newProfilesCreateCmd())
+	profilesCmd.AddCommand(newProfilesDeleteCmd())
+	profilesCmd.AddCommand(newProfilesRenameCmd())
+	profilesCmd.AddCommand(newProfilesSetDefaultCmd())
+
+	return profilesCmd
+}
+
+func newProfilesListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List all profiles",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runProfilesList()
+		},
+	}
+}
+
+func newProfilesCreateCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "create <name> [description]",
+		Short: "Create a new profile",
+		Args:  cobra.RangeArgs(1, 2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			description := ""
+			if len(args) > 1 {
+				description = args[1]
+			}
+			return runProfilesCreate(args[0], description)
+		},
+	}
+}
+
+func newProfilesDeleteCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "delete <name>",
+		Short: "Delete a profile",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runProfilesDelete(args[0])
+		},
+	}
+}
+
+func newProfilesRenameCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "rename <old-name> <new-name>",
+		Short: "Rename a profile",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runProfilesRename(args[0], args[1])
+		},
+	}
+}
+
+func newProfilesSetDefaultCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "set-default <name>",
+		Short: "Set the default profile",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runProfilesSetDefault(args[0])
+		},
+	}
+}
+
 var profilesCmd = &cobra.Command{
 	Use:   "profiles",
 	Short: "Manage vault profiles",
