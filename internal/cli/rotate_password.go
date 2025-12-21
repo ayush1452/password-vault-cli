@@ -10,8 +10,8 @@ import (
 	"github.com/vault-cli/vault/internal/domain"
 )
 
-// NewRotatePasswordCommand creates a new command for rotating passwords
-func NewRotatePasswordCommand(cfg *config.Config) *cobra.Command {
+// NewRotatePassword creates a new command for rotating passwords
+func NewRotatePassword(cfg *config.Config) *cobra.Command {
 	var (
 		length     int
 		copyToClip bool
