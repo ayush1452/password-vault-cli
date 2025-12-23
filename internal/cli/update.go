@@ -22,10 +22,12 @@ var (
 	updateTotpSeed     string
 )
 
-var updateCmd = &cobra.Command{
-	Use:   "update <entry-name>",
-	Short: "Update an existing entry",
-	Long: `Update an existing entry in the vault.
+// NewUpdate creates a new update command
+func NewUpdate(cfg *config.Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "update <entry-name>",
+		Short: "Update an existing entry",
+		Long: `Update an existing entry in the vault.
 
 You can update any field of an entry. If no flags are provided,
 you'll be prompted to update each field interactively.
@@ -34,11 +36,23 @@ Example:
   vault update github --username newuser@example.com
   vault update aws --secret-prompt --notes "Updated credentials"
   vault update database --tags prod,critical --url new-host:5432`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return runUpdate(cmd, args[0])
-	},
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runUpdate(cmd, args[0])
+		},
+	}
+
+	registerUpdateFlags(cmd)
+	return cmd
 }
+
+// NewUpdateCommand is an alias for NewUpdate for backward compatibility
+// Deprecated: Use NewUpdate instead
+func NewUpdateCommand(cfg *config.Config) *cobra.Command {
+	return NewUpdate(cfg)
+}
+
+var updateCmd = NewUpdate(nil)
 
 func runUpdate(cmd *cobra.Command, entryName string) error {
 	defer func() {
@@ -53,6 +67,11 @@ func runUpdate(cmd *cobra.Command, entryName string) error {
 	}
 
 	vaultStore := GetVaultStore()
+
+	// Ensure profile is set to default if empty
+	if profile == "" {
+		profile = "default"
+	}
 
 	// Get existing entry
 	entry, err := vaultStore.GetEntry(profile, entryName)
@@ -251,28 +270,4 @@ func registerUpdateFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&updateTotpSeed, "totp-seed", "", "New TOTP seed (base32)")
 }
 
-func init() {
-	registerUpdateFlags(updateCmd)
-}
-
-// NewUpdateCommand creates a new update command for testing
-func NewUpdateCommand(cfg *config.Config) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "update <entry-name>",
-		Short: "Update an existing entry",
-		Long:  updateCmd.Long,
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if cfg != nil && vaultPath == "" {
-				vaultPath = cfg.VaultPath
-			}
-			if cfg != nil && profile == "" {
-				profile = cfg.DefaultProfile
-			}
-			return runUpdate(cmd, args[0])
-		},
-	}
-
-	registerUpdateFlags(cmd)
-	return cmd
-}
+// Removed init() as flags are now registered in NewUpdate
