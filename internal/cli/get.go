@@ -137,6 +137,11 @@ func runGet(cmd *cobra.Command, entryName string) (err error) {
 		shouldCopy = true
 	}
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after get: %v", err)
+	}
+
 	if shouldCopy || (!show && sensitive) {
 		// Copy to clipboard
 		if !clipboard.IsAvailable() {
