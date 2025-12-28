@@ -113,6 +113,11 @@ func runDelete(entryName string) error {
 	// Refresh session
 	RefreshSession()
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after delete: %v", err)
+	}
+
 	if err := writeOutput(os.Stdout, "✓ Entry '%s' deleted successfully from profile '%s'\n", entryName, profile); err != nil {
 		return err
 	}
