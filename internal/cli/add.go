@@ -201,5 +201,9 @@ func runAdd(entryName string) (err error) {
 		}
 	}
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after add: %v", err)
+	}
 	return nil
 }
