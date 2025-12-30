@@ -361,5 +361,10 @@ func runDoctor() error {
 		return err
 	}
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after doctor check: %v", err)
+	}
+
 	return nil
 }
