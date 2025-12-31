@@ -171,5 +171,10 @@ func runExport() error {
 		fmt.Println("WARNING: This file contains unencrypted secrets. Store it securely!")
 	}
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after export: %v", err)
+	}
+
 	return nil
 }
