@@ -153,6 +153,11 @@ func runImport() error {
 	// Refresh session
 	RefreshSession()
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after import: %v", err)
+	}
+
 	// Success message
 	fmt.Printf("✓ Import completed:\n")
 	if imported > 0 {
