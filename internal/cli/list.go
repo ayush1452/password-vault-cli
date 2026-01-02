@@ -164,9 +164,17 @@ func runList(cmd *cobra.Command) (err error) {
 
 	// Output based on format
 	if outputJSON {
+		// Close session store to release lock file
+		if err := CloseSessionStore(); err != nil {
+			logWarning("Failed to close session store after list: %v", err)
+		}
 		return outputEntriesJSON(out, entries)
 	}
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after list: %v", err)
+	}
 	return outputEntriesTable(out, entries)
 }
 
