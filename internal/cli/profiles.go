@@ -50,30 +50,37 @@ func newProfilesListCmd() *cobra.Command {
 	}
 }
 
+var profileCreateDescription string
+
 func newProfilesCreateCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "create <name> [description]",
+	cmd := &cobra.Command{
+		Use:   "create <name>",
 		Short: "Create a new profile",
-		Args:  cobra.RangeArgs(1, 2),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			description := ""
-			if len(args) > 1 {
-				description = args[1]
-			}
-			return runProfilesCreate(args[0], description)
+			// Use flag value, don't prompt if empty (for non-interactive use)
+			desc, _ := cmd.Flags().GetString("description")
+			return runProfilesCreateNonInteractive(args[0], desc)
 		},
 	}
+	cmd.Flags().StringVar(&profileCreateDescription, "description", "", "Profile description")
+	return cmd
 }
 
+var profileDeleteYes bool
+
 func newProfilesDeleteCmd() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete a profile",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runProfilesDelete(args[0])
+			yes, _ := cmd.Flags().GetBool("yes")
+			return runProfilesDeleteWithFlag(args[0], yes)
 		},
 	}
+	cmd.Flags().BoolVar(&profileDeleteYes, "yes", false, "Skip confirmation prompt")
+	return cmd
 }
 
 func newProfilesRenameCmd() *cobra.Command {
@@ -195,6 +202,11 @@ func runProfilesList() error {
 	// Refresh session
 	RefreshSession()
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after profile list: %v", err)
+	}
+
 	if len(profiles) == 0 {
 		if err := writeOutput(os.Stdout, "No profiles found\n"); err != nil {
 			return err
@@ -208,6 +220,10 @@ func runProfilesList() error {
 	})
 
 	if outputJSON {
+		// Close session store to release lock file
+		if err := CloseSessionStore(); err != nil {
+			logWarning("Failed to close session store after profile list: %v", err)
+		}
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
 		if err := encoder.Encode(profiles); err != nil {
@@ -261,6 +277,11 @@ func runProfilesList() error {
 		return fmt.Errorf("failed to write summary for %d profiles: %w", len(profiles), err)
 	}
 
+	// Close session store to release lock file (already closed above, but safe to call again)
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after profile list: %v", err)
+	}
+
 	return nil
 }
 
@@ -293,6 +314,11 @@ func runProfilesCreate(name, description string) error {
 
 	// Refresh session
 	RefreshSession()
+
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after profile creation: %v", err)
+	}
 
 	fmt.Printf("✓ Profile '%s' created successfully\n", name)
 	return nil
@@ -344,6 +370,11 @@ func runProfilesDelete(name string) error {
 	// Refresh session
 	RefreshSession()
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after profile deletion: %v", err)
+	}
+
 	fmt.Printf("✓ Profile '%s' deleted successfully\n", name)
 	return nil
 }
@@ -375,6 +406,100 @@ func runProfilesSetDefault(name string) error {
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after setting default profile: %v", err)
+	}
+
 	fmt.Printf("✓ Default profile set to '%s'\n", name)
+	return nil
+}
+
+// runProfilesCreateNonInteractive creates a profile without prompting for description
+func runProfilesCreateNonInteractive(name, description string) error {
+	// Check if vault is unlocked
+	if !IsUnlocked() {
+		return fmt.Errorf("vault is locked, run 'vault unlock' first")
+	}
+
+	vaultStore := GetVaultStore()
+
+	// Check if profile already exists
+	if vaultStore.ProfileExists(name) {
+		return fmt.Errorf("profile '%s' already exists", name)
+	}
+
+	// Create profile (don't prompt for description - use what's provided)
+	if err := vaultStore.CreateProfile(name, description); err != nil {
+		return fmt.Errorf("failed to create profile: %w", err)
+	}
+
+	// Refresh session
+	RefreshSession()
+
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after profile creation: %v", err)
+	}
+
+	fmt.Printf("✓ Profile '%s' created successfully\n", name)
+	return nil
+}
+
+// runProfilesDeleteWithFlag deletes a profile with optional --yes flag
+func runProfilesDeleteWithFlag(name string, skipConfirm bool) error {
+	// Check if vault is unlocked
+	if !IsUnlocked() {
+		return fmt.Errorf("vault is locked, run 'vault unlock' first")
+	}
+
+	if name == "default" {
+		return fmt.Errorf("cannot delete the default profile")
+	}
+
+	vaultStore := GetVaultStore()
+
+	// Check if profile exists
+	if !vaultStore.ProfileExists(name) {
+		return fmt.Errorf("profile '%s' does not exist", name)
+	}
+
+	// Get entries count for confirmation
+	entries, err := vaultStore.ListEntries(name, nil)
+	if err != nil {
+		return fmt.Errorf("failed to check profile entries: %w", err)
+	}
+
+	// Confirm deletion unless --yes flag is used
+	if !skipConfirm {
+		if len(entries) > 0 {
+			fmt.Printf("⚠️  Profile '%s' contains %d entries\n", name, len(entries))
+		}
+
+		confirmed, err := PromptConfirm(fmt.Sprintf("Delete profile '%s'?", name), false)
+		if err != nil {
+			return fmt.Errorf("failed to get confirmation: %w", err)
+		}
+
+		if !confirmed {
+			fmt.Println("Profile deletion canceled")
+			return nil
+		}
+	}
+
+	// Delete profile
+	if err := vaultStore.DeleteProfile(name); err != nil {
+		return fmt.Errorf("failed to delete profile: %w", err)
+	}
+
+	// Refresh session
+	RefreshSession()
+
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after profile deletion: %v", err)
+	}
+
+	fmt.Printf("✓ Profile '%s' deleted successfully\n", name)
 	return nil
 }
