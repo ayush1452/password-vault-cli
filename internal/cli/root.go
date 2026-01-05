@@ -85,7 +85,7 @@ func init() {
 	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(statusCmd)
-	rootCmd.AddCommand(profilesCmd)
+	rootCmd.AddCommand(NewProfiles(nil))
 	rootCmd.AddCommand(exportCmd)
 	rootCmd.AddCommand(importCmd)
 	rootCmd.AddCommand(rotateMasterKeyCmd)
