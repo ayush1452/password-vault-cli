@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 	"time"
 
@@ -175,14 +174,18 @@ func runStatus() error {
 
 	ttl := RemainingSessionTTL()
 
+	// Format KDF as string
+	kdfStr := fmt.Sprintf("Argon2id (memory %d KB, iterations %d, parallelism %d)",
+		metaInfo.KDF.Memory, metaInfo.KDF.Iterations, metaInfo.KDF.Parallelism)
+
 	// Prepare status output
 	status := &StatusInfo{
 		VaultPath:        vaultPath,
 		Profile:          profile,
 		Cipher:           metaInfo.Cipher,
-		KDF:              metaInfo.KDF,
+		KDF:              kdfStr,
 		SaltLength:       metaInfo.SaltLength,
-		MetadataCreated:  metaInfo.CreatedAt.Format(time.RFC3339),
+		MetadataCreated:  metaInfo.MetadataCreated,
 		SessionState:     sessionState,
 		RemainingTTL:     ttl,
 		RemainingTTLSecs: int64(ttl.Seconds()),
@@ -234,61 +237,9 @@ func runStatus() error {
 	// Print the result
 	fmt.Print(result.String())
 
-	// Use a helper function to handle fmt.Fprintf errors
-	printStatus := func(format string, args ...interface{}) error {
-		_, err := fmt.Fprintf(os.Stdout, format, args...)
-		if err != nil {
-			return fmt.Errorf("failed to write status: %w", err)
-		}
-		return nil
-	}
-
-	// Write each status line with error checking
-	if err := printStatus("Vault: %s\n", result.VaultPath); err != nil {
-		return err
-	}
-	if err := printStatus("Cipher: %s\n", result.Cipher); err != nil {
-		return err
-	}
-	if err := printStatus("KDF: Argon2id (memory %d KB, iterations %d, parallelism %d, salt %d bytes)\n",
-		result.KDF.Memory, result.KDF.Iterations, result.KDF.Parallelism, result.SaltLength); err != nil {
-		return err
-	}
-	if err := printStatus("Created: %s\n", result.MetadataCreated); err != nil {
-		return err
-	}
-
-	if unlocked {
-		if err := printStatus("Entries: %d\n", *entryCount); err != nil {
-			return err
-		}
-		if lastUpdated != nil {
-			if err := printStatus("Last Updated: %s\n", lastUpdated.Format(time.RFC3339)); err != nil {
-				return err
-			}
-		} else {
-			if _, err := fmt.Fprintln(os.Stdout, "Last Updated: n/a"); err != nil {
-				return fmt.Errorf("failed to write status: %w", err)
-			}
-		}
-	} else {
-		if _, err := fmt.Fprintln(os.Stdout, "Entries: (locked)"); err != nil {
-			return fmt.Errorf("failed to write status: %w", err)
-		}
-	}
-
-	if unlocked {
-		if err := printStatus("Session: %s (expires in %s)\n", sessionState, ttl.Round(time.Second)); err != nil {
-			return err
-		}
-	} else {
-		if err := printStatus("Session: %s\n", sessionState); err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
+
 
 func loadMetadataInfo() (*vault.MetadataInfo, error) {
 	if IsUnlocked() {
