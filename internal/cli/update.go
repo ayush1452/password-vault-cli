@@ -257,6 +257,10 @@ func runUpdate(cmd *cobra.Command, entryName string) error {
 	if _, err := fmt.Fprintf(os.Stdout, "✓ Entry '%s' updated successfully\n", entryName); err != nil {
 		return fmt.Errorf("failed to write success message: %w", err)
 	}
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after update: %v", err)
+	}
 	return nil
 }
 
