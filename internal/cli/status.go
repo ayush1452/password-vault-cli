@@ -240,7 +240,6 @@ func runStatus() error {
 	return nil
 }
 
-
 func loadMetadataInfo() (*vault.MetadataInfo, error) {
 	if IsUnlocked() {
 		vaultStore := GetVaultStore()

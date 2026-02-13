@@ -92,7 +92,6 @@ func runRotatePassword(cmd *cobra.Command, name string, length int, copyToClip b
 		return fmt.Errorf("failed to update entry: %w", err)
 	}
 
-
 	// Handle output and clipboard
 	if show {
 		if _, err := fmt.Fprintln(cmd.OutOrStdout(), newPassword); err != nil {
