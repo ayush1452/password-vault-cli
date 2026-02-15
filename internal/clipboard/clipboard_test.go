@@ -8,11 +8,11 @@ import (
 
 // mockClipboard is a mock implementation for testing
 type mockClipboard struct {
-	data         string
-	writeError   error
-	readError    error
-	shouldFail   bool
-	failOnClear  bool
+	data        string
+	writeError  error
+	readError   error
+	shouldFail  bool
+	failOnClear bool
 }
 
 func (m *mockClipboard) WriteAll(text string) error {
@@ -335,7 +335,7 @@ func TestCopyWithTimeoutWriteError(t *testing.T) {
 // TestCopyWithTimeoutClearError tests error logging when clear fails in timeout goroutine
 func TestCopyWithTimeoutClearError(t *testing.T) {
 	testData := "test-data-for-clear-error"
-	
+
 	mock := &mockClipboard{
 		failOnClear: true,
 		writeError:  errors.New("mock clear error"),
@@ -363,7 +363,7 @@ func TestCopyWithTimeoutClearError(t *testing.T) {
 // TestCopyWithTimeoutClearSuccess tests successful clear after timeout
 func TestCopyWithTimeoutClearSuccess(t *testing.T) {
 	testData := "test-data-for-clear-success"
-	
+
 	mock := &mockClipboard{}
 
 	err := copyWithTimeoutInternal(testData, 50*time.Millisecond, mock)
@@ -388,7 +388,7 @@ func TestCopyWithTimeoutClearSuccess(t *testing.T) {
 // TestCopyWithTimeoutDataChanged tests that clear doesn't happen if data changed
 func TestCopyWithTimeoutDataChanged(t *testing.T) {
 	testData := "original-data"
-	
+
 	mock := &mockClipboard{}
 
 	err := copyWithTimeoutInternal(testData, 50*time.Millisecond, mock)
@@ -411,7 +411,7 @@ func TestCopyWithTimeoutDataChanged(t *testing.T) {
 // TestCopyWithTimeoutReadError tests behavior when ReadAll fails during timeout check
 func TestCopyWithTimeoutReadError(t *testing.T) {
 	testData := "test-data"
-	
+
 	mock := &mockClipboard{
 		readError: errors.New("mock read error"),
 	}
@@ -426,4 +426,3 @@ func TestCopyWithTimeoutReadError(t *testing.T) {
 
 	// No panic should occur
 }
-
