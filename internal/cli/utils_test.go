@@ -10,12 +10,12 @@ import (
 // TestWriteString tests the writeString helper function
 func TestWriteString(t *testing.T) {
 	buf := new(bytes.Buffer)
-	
+
 	err := writeString(buf, "test output")
 	if err != nil {
 		t.Fatalf("writeString failed: %v", err)
 	}
-	
+
 	if buf.String() != "test output" {
 		t.Errorf("Expected 'test output', got '%s'", buf.String())
 	}
@@ -24,7 +24,7 @@ func TestWriteString(t *testing.T) {
 // TestWriteStringError tests error handling
 func TestWriteStringError(t *testing.T) {
 	errorWriter := &errorWriter{}
-	
+
 	err := writeString(errorWriter, "test")
 	if err == nil {
 		t.Error("writeString should fail with error writer")
@@ -41,12 +41,12 @@ func (ew *errorWriter) Write(p []byte) (n int, err error) {
 // TestWriteOutput tests formatted output
 func TestWriteOutput(t *testing.T) {
 	buf := new(bytes.Buffer)
-	
+
 	err := writeOutput(buf, "value: %d", 42)
 	if err != nil {
 		t.Fatalf("writeOutput failed: %v", err)
 	}
-	
+
 	if buf.String() != "value: 42" {
 		t.Errorf("Expected 'value: 42', got '%s'", buf.String())
 	}
@@ -55,12 +55,12 @@ func TestWriteOutput(t *testing.T) {
 // TestSecurePrint tests secure printing
 func TestSecurePrint(t *testing.T) {
 	buf := new(bytes.Buffer)
-	
+
 	err := SecurePrint(buf, "password: %s", "secret123")
 	if err != nil {
 		t.Fatalf("SecurePrint failed: %v", err)
 	}
-	
+
 	if !strings.Contains(buf.String(), "password:") {
 		t.Error("SecurePrint should contain 'password:'")
 	}
@@ -69,18 +69,18 @@ func TestSecurePrint(t *testing.T) {
 // TestCheckDeferredErr tests error checking
 func TestCheckDeferredErr(t *testing.T) {
 	tests := []struct {
-		name     string
-		err      error
-		op       string
-		cerr     error
-		wantNil  bool
+		name    string
+		err     error
+		op      string
+		cerr    error
+		wantNil bool
 	}{
 		{"No errors", nil, "test", nil, true},
 		{"Original error only", io.EOF, "test", nil, false},
 		{"Close error only", nil, "close", io.ErrClosedPipe, false},
 		{"Both errors", io.EOF, "close", io.ErrClosedPipe, false},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := checkDeferredErr(tt.err, tt.op, tt.cerr)
@@ -105,7 +105,7 @@ func TestTruncateString(t *testing.T) {
 		{"Very short", "a", 5, "a"},
 		{"Zero length", "test", 0, ""},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := truncateString(tt.input, tt.length)
@@ -172,7 +172,7 @@ func TestDeriveSessionPassphrase(t *testing.T) {
 	if passphrase == "" {
 		t.Error("deriveSessionPassphrase should return non-empty string")
 	}
-	
+
 	// Different paths should give different passphrases
 	passphrase2 := deriveSessionPassphrase("/different/path/vault.db")
 	if passphrase == passphrase2 {
@@ -184,7 +184,7 @@ func TestDeriveSessionPassphrase(t *testing.T) {
 func TestEnsureVaultDirectory(t *testing.T) {
 	tempDir := t.TempDir()
 	vaultPath := tempDir + "/subdir/vault.db"
-	
+
 	err := EnsureVaultDirectory(vaultPath)
 	if err != nil {
 		t.Errorf("EnsureVaultDirectory failed: %v", err)

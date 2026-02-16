@@ -340,7 +340,7 @@ func TestSaveConfigWriteError(t *testing.T) {
 	// Try to write to a directory that doesn't exist and can't be created
 	// Use a path that will fail
 	invalidPath := "/invalid/nonexistent/path/that/cannot/be/created/config.yaml"
-	
+
 	cfg := DefaultConfig()
 	err := SaveConfig(cfg, invalidPath)
 	if err == nil {
@@ -351,7 +351,7 @@ func TestSaveConfigWriteError(t *testing.T) {
 // TestSaveConfigDirectoryCreationError tests error when creating directory fails
 func TestSaveConfigDirectoryCreationError(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	// Create a file where we want a directory
 	blockingFile := filepath.Join(tmpDir, "blocking")
 	err := os.WriteFile(blockingFile, []byte("test"), 0600)
@@ -361,7 +361,7 @@ func TestSaveConfigDirectoryCreationError(t *testing.T) {
 
 	// Try to create config in a path that would require this file to be a directory
 	configPath := filepath.Join(blockingFile, "subdir", "config.yaml")
-	
+
 	cfg := DefaultConfig()
 	err = SaveConfig(cfg, configPath)
 	if err == nil {
@@ -374,13 +374,13 @@ func TestLoadConfigCreateDefaultError(t *testing.T) {
 	//Use a path that definitely doesn't exist and will fail to write
 	// Trying to write to root directory should fail on most systems
 	configPath := "/readonly-test-vault-config-" + filepath.Base(t.TempDir()) + ".yaml"
-	
+
 	// Ensure cleanup even if the file somehow gets created
 	defer os.Remove(configPath)
-	
+
 	cfg, err := LoadConfig(configPath)
-	
-	// The error should be returned from SaveConfig failing  
+
+	// The error should be returned from SaveConfig failing
 	if err == nil {
 		t.Log("LoadConfig() might have succeeded on this system (OS-dependent)")
 	}
@@ -399,20 +399,20 @@ func TestLoadConfigCreateDefaultError(t *testing.T) {
 // TestSaveConfigFileWritePermissionError tests write permission error
 func TestSaveConfigFileWritePermissionError(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	// Make directory read-only
 	configDir := filepath.Join(tmpDir, "readonly")
 	err := os.MkdirAll(configDir, 0500)
 	if err != nil {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
-	
+
 	// Restore permissions after test
 	defer os.Chmod(configDir, 0700)
-	
+
 	configPath := filepath.Join(configDir, "config.yaml")
 	cfg := DefaultConfig()
-	
+
 	err = SaveConfig(cfg, configPath)
 	if err == nil {
 		// On some systems this might succeed, so we don't fail the test
@@ -442,4 +442,3 @@ func TestLoadConfigYAMLUnmarshalError(t *testing.T) {
 		t.Error("LoadConfig() should return config even for YAML errors")
 	}
 }
-
