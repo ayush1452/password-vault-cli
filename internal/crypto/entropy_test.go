@@ -301,7 +301,7 @@ func TestRandomIndexMediumRange(t *testing.T) {
 
 // TestRandomIndexLargeRange tests > 65536 range (uint64)
 func TestRandomIndexLargeRange(t *testing.T) {
-	// Test range > 65536  
+	// Test range > 65536
 	reader := &mockRangeReader{values: []byte{0, 0, 0, 0, 0, 0, 0, 100}}
 	result, err := randomIndex(reader, 100000)
 	if err != nil {
@@ -334,4 +334,3 @@ func TestDicewareWordsInitialization(t *testing.T) {
 		t.Error("dicewareWords should return consistent length")
 	}
 }
-
