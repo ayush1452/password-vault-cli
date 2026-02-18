@@ -391,7 +391,7 @@ func TestLoadConfigValidYAML(t *testing.T) {
 	cfg.DefaultProfile = "custom-profile"
 	cfg.AutoLockTTL = 2 * time.Hour
 	cfg.ClipboardTTL = 60 * time.Second
-	
+
 	SaveConfig(cfg, path)
 	defer os.Remove(path)
 
@@ -454,7 +454,7 @@ func TestSaveConfig(t *testing.T) {
 // TestSaveConfigInvalidPath tests error handling for invalid paths
 func TestSaveConfigInvalidPath(t *testing.T) {
 	cfg := DefaultConfig()
-	
+
 	// Try to save to a path where we can't create directories
 	err := SaveConfig(cfg, "/root/forbidden/config.yaml")
 	if err == nil {
@@ -512,10 +512,10 @@ func TestConfigRoundTrip(t *testing.T) {
 func TestConfigPathCleaning(t *testing.T) {
 	path := "/tmp/../tmp/test-vault-cleaned.yaml"
 	cfg := DefaultConfig()
-	
+
 	err := SaveConfig(cfg, path)
 	defer os.Remove("/tmp/test-vault-cleaned.yaml")
-	
+
 	if err != nil {
 		t.Errorf("SaveConfig() with path traversal error = %v", err)
 	}
@@ -529,24 +529,24 @@ func TestConfigPathCleaning(t *testing.T) {
 // TestEntryPasswordBackwardCompatibility tests Password field compatibility
 func TestEntryPasswordBackwardCompatibility(t *testing.T) {
 	secret := []byte("test-secret")
-	
+
 	// Test setting Secret field
 	entry1 := Entry{
 		Name:   "test1",
 		Secret: secret,
 	}
-	
+
 	// Both should be accessible
 	if string(entry1.Secret) != string(secret) {
 		t.Error("Secret field mismatch")
 	}
-	
+
 	// Test setting Password field
 	entry2 := Entry{
 		Name:     "test2",
 		Password: secret,
 	}
-	
+
 	if string(entry2.Password) != string(secret) {
 		t.Error("Password field mismatch")
 	}
@@ -613,4 +613,3 @@ func TestConfigAllFields(t *testing.T) {
 		t.Error("KDF.Parallelism mismatch")
 	}
 }
-

@@ -16,7 +16,7 @@ func addPassword(service string, password string) {
 func getPassword(service string) {
 	password, exists := vault[service]
 	if !exists {
-		fmt.Println("No password found for service:", service)
+		fmt.Println("No password is found for service:", service)
 		return
 	}
 	fmt.Println("Password for", service, "is:", password)
