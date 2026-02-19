@@ -22,7 +22,7 @@ func ComputeVaultFileHMAC(vaultPath string, masterKey []byte) (string, error) {
 
 	// Compute HMAC using master key
 	hmacBytes := vault.ComputeHMAC(data, masterKey)
-	
+
 	// Encode to base64 for storage
 	return base64.StdEncoding.EncodeToString(hmacBytes), nil
 }

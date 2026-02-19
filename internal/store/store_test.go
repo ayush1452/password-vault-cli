@@ -1072,4 +1072,3 @@ func TestDeleteNonExistentProfile(t *testing.T) {
 		t.Errorf("Expected ErrProfileNotFound, got %v", err)
 	}
 }
-
