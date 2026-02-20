@@ -10,13 +10,13 @@ import (
 
 // ExportFormat represents the export file format
 type ExportFormat struct {
-	Version   string          `json:"version"`
-	Encrypted bool            `json:"encrypted"`
-	Salt      string          `json:"salt,omitempty"`
-	Nonce     string          `json:"nonce,omitempty"`
-	Tag       string          `json:"tag,omitempty"`
-	Data      string          `json:"data,omitempty"`
-	Entries   []ExportEntry   `json:"entries,omitempty"`
+	Version   string        `json:"version"`
+	Encrypted bool          `json:"encrypted"`
+	Salt      string        `json:"salt,omitempty"`
+	Nonce     string        `json:"nonce,omitempty"`
+	Tag       string        `json:"tag,omitempty"`
+	Data      string        `json:"data,omitempty"`
+	Entries   []ExportEntry `json:"entries,omitempty"`
 }
 
 // ExportEntry represents an entry in plaintext export
