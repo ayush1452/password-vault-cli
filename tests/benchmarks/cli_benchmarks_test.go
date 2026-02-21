@@ -12,15 +12,15 @@ import (
 // BenchmarkVaultInit benchmarks vault initialization
 func BenchmarkVaultInit(b *testing.B) {
 	tempDir := b.TempDir()
-	
+
 	for i := 0; i < b.N; i++ {
 		vaultPath := filepath.Join(tempDir, "bench_init.vault")
-		
+
 		passphrase := "benchmark-passphrase"
 		crypto := vault.NewDefaultCryptoEngine()
 		salt, _ := vault.GenerateSalt()
 		masterKey, _ := crypto.DeriveKey(passphrase, salt)
-		
+
 		kdfParams := vault.DefaultArgon2Params()
 		kdfParamsMap := map[string]interface{}{
 			"memory":      kdfParams.Memory,
@@ -28,7 +28,7 @@ func BenchmarkVaultInit(b *testing.B) {
 			"parallelism": kdfParams.Parallelism,
 			"salt":        salt,
 		}
-		
+
 		vaultStore := store.NewBoltStore()
 		vaultStore.CreateVault(vaultPath, masterKey, kdfParamsMap)
 		vaultStore.CloseVault()
@@ -40,13 +40,13 @@ func BenchmarkVaultInit(b *testing.B) {
 func BenchmarkVaultUnlock(b *testing.B) {
 	tempDir := b.TempDir()
 	vaultPath := filepath.Join(tempDir, "bench_unlock.vault")
-	
+
 	// Setup
 	passphrase := "benchmark-passphrase"
 	crypto := vault.NewDefaultCryptoEngine()
 	salt, _ := vault.GenerateSalt()
 	masterKey, _ := crypto.DeriveKey(passphrase, salt)
-	
+
 	kdfParams := vault.DefaultArgon2Params()
 	kdfParamsMap := map[string]interface{}{
 		"memory":      kdfParams.Memory,
@@ -54,18 +54,18 @@ func BenchmarkVaultUnlock(b *testing.B) {
 		"parallelism": kdfParams.Parallelism,
 		"salt":        salt,
 	}
-	
+
 	vaultStore := store.NewBoltStore()
 	vaultStore.CreateVault(vaultPath, masterKey, kdfParamsMap)
 	vaultStore.CloseVault()
-	
+
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		vaultStore.OpenVault(vaultPath, masterKey)
 		vaultStore.CloseVault()
 	}
-	
+
 	vault.Zeroize(masterKey)
 }
 
@@ -73,14 +73,14 @@ func BenchmarkVaultUnlock(b *testing.B) {
 func BenchmarkEntryAdd(b *testing.B) {
 	tempDir := b.TempDir()
 	vaultPath := filepath.Join(tempDir, "bench_add.vault")
-	
+
 	// Setup
 	passphrase := "benchmark-passphrase"
 	crypto := vault.NewDefaultCryptoEngine()
 	salt, _ := vault.GenerateSalt()
 	masterKey, _ := crypto.DeriveKey(passphrase, salt)
 	defer vault.Zeroize(masterKey)
-	
+
 	kdfParams := vault.DefaultArgon2Params()
 	kdfParamsMap := map[string]interface{}{
 		"memory":      kdfParams.Memory,
@@ -88,14 +88,14 @@ func BenchmarkEntryAdd(b *testing.B) {
 		"parallelism": kdfParams.Parallelism,
 		"salt":        salt,
 	}
-	
+
 	vaultStore := store.NewBoltStore()
 	vaultStore.CreateVault(vaultPath, masterKey, kdfParamsMap)
 	vaultStore.OpenVault(vaultPath, masterKey)
 	defer vaultStore.CloseVault()
-	
+
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		entry := &domain.Entry{
 			Name:     string(rune('a' + i%26)),
@@ -110,14 +110,14 @@ func BenchmarkEntryAdd(b *testing.B) {
 func BenchmarkEntryGet(b *testing.B) {
 	tempDir := b.TempDir()
 	vaultPath := filepath.Join(tempDir, "bench_get.vault")
-	
+
 	// Setup
 	passphrase := "benchmark-passphrase"
 	crypto := vault.NewDefaultCryptoEngine()
 	salt, _ := vault.GenerateSalt()
 	masterKey, _ := crypto.DeriveKey(passphrase, salt)
 	defer vault.Zeroize(masterKey)
-	
+
 	kdfParams := vault.DefaultArgon2Params()
 	kdfParamsMap := map[string]interface{}{
 		"memory":      kdfParams.Memory,
@@ -125,18 +125,18 @@ func BenchmarkEntryGet(b *testing.B) {
 		"parallelism": kdfParams.Parallelism,
 		"salt":        salt,
 	}
-	
+
 	vaultStore := store.NewBoltStore()
 	vaultStore.CreateVault(vaultPath, masterKey, kdfParamsMap)
 	vaultStore.OpenVault(vaultPath, masterKey)
 	defer vaultStore.CloseVault()
-	
+
 	// Add test entry
 	entry := &domain.Entry{Name: "test", Username: "user", Password: []byte("pass")}
 	vaultStore.CreateEntry("default", entry)
-	
+
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		vaultStore.GetEntry("default", "test")
 	}
@@ -146,14 +146,14 @@ func BenchmarkEntryGet(b *testing.B) {
 func BenchmarkEntryList(b *testing.B) {
 	tempDir := b.TempDir()
 	vaultPath := filepath.Join(tempDir, "bench_list.vault")
-	
+
 	// Setup
 	passphrase := "benchmark-passphrase"
 	crypto := vault.NewDefaultCryptoEngine()
 	salt, _ := vault.GenerateSalt()
 	masterKey, _ := crypto.DeriveKey(passphrase, salt)
 	defer vault.Zeroize(masterKey)
-	
+
 	kdfParams := vault.DefaultArgon2Params()
 	kdfParamsMap := map[string]interface{}{
 		"memory":      kdfParams.Memory,
@@ -161,24 +161,24 @@ func BenchmarkEntryList(b *testing.B) {
 		"parallelism": kdfParams.Parallelism,
 		"salt":        salt,
 	}
-	
+
 	vaultStore := store.NewBoltStore()
 	vaultStore.CreateVault(vaultPath, masterKey, kdfParamsMap)
 	vaultStore.OpenVault(vaultPath, masterKey)
 	defer vaultStore.CloseVault()
-	
+
 	// Add 100 entries
 	for i := 0; i < 100; i++ {
 		entry := &domain.Entry{
-			Name:     string(rune('a' + i%26)) + string(rune('0' + i/26)),
+			Name:     string(rune('a'+i%26)) + string(rune('0'+i/26)),
 			Username: "user",
 			Password: []byte("pass"),
 		}
 		vaultStore.CreateEntry("default", entry)
 	}
-	
+
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		vaultStore.ListEntries("default", nil)
 	}
@@ -188,14 +188,14 @@ func BenchmarkEntryList(b *testing.B) {
 func BenchmarkEntryUpdate(b *testing.B) {
 	tempDir := b.TempDir()
 	vaultPath := filepath.Join(tempDir, "bench_update.vault")
-	
+
 	// Setup
 	passphrase := "benchmark-passphrase"
 	crypto := vault.NewDefaultCryptoEngine()
 	salt, _ := vault.GenerateSalt()
 	masterKey, _ := crypto.DeriveKey(passphrase, salt)
 	defer vault.Zeroize(masterKey)
-	
+
 	kdfParams := vault.DefaultArgon2Params()
 	kdfParamsMap := map[string]interface{}{
 		"memory":      kdfParams.Memory,
@@ -203,18 +203,18 @@ func BenchmarkEntryUpdate(b *testing.B) {
 		"parallelism": kdfParams.Parallelism,
 		"salt":        salt,
 	}
-	
+
 	vaultStore := store.NewBoltStore()
 	vaultStore.CreateVault(vaultPath, masterKey, kdfParamsMap)
 	vaultStore.OpenVault(vaultPath, masterKey)
 	defer vaultStore.CloseVault()
-	
+
 	// Add test entry
 	entry := &domain.Entry{Name: "test", Username: "user", Password: []byte("pass")}
 	vaultStore.CreateEntry("default", entry)
-	
+
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		updated := &domain.Entry{Name: "test", Username: "updated", Password: []byte("newpass")}
 		vaultStore.UpdateEntry("default", "test", updated)
@@ -225,14 +225,14 @@ func BenchmarkEntryUpdate(b *testing.B) {
 func BenchmarkEntryDelete(b *testing.B) {
 	tempDir := b.TempDir()
 	vaultPath := filepath.Join(tempDir, "bench_delete.vault")
-	
+
 	// Setup
 	passphrase := "benchmark-passphrase"
 	crypto := vault.NewDefaultCryptoEngine()
 	salt, _ := vault.GenerateSalt()
 	masterKey, _ := crypto.DeriveKey(passphrase, salt)
 	defer vault.Zeroize(masterKey)
-	
+
 	kdfParams := vault.DefaultArgon2Params()
 	kdfParamsMap := map[string]interface{}{
 		"memory":      kdfParams.Memory,
@@ -240,14 +240,14 @@ func BenchmarkEntryDelete(b *testing.B) {
 		"parallelism": kdfParams.Parallelism,
 		"salt":        salt,
 	}
-	
+
 	vaultStore := store.NewBoltStore()
 	vaultStore.CreateVault(vaultPath, masterKey, kdfParamsMap)
 	vaultStore.OpenVault(vaultPath, masterKey)
 	defer vaultStore.CloseVault()
-	
+
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
 		entry := &domain.Entry{
@@ -257,7 +257,7 @@ func BenchmarkEntryDelete(b *testing.B) {
 		}
 		vaultStore.CreateEntry("default", entry)
 		b.StartTimer()
-		
+
 		vaultStore.DeleteEntry("default", entry.Name)
 	}
 }

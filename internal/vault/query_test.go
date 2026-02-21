@@ -183,7 +183,7 @@ func TestMatchesSearchTokensEdgeCases(t *testing.T) {
 	t.Run("Nil entry", func(t *testing.T) {
 		// Should not panic and return false (no match)
 		result := MatchesSearchTokens(nil, []string{"test"})
-		if result != true {  // Function returns true for nil entry as per actual implementation
+		if result != true { // Function returns true for nil entry as per actual implementation
 			t.Error("Nil entry should return true per implementation")
 		}
 	})
@@ -267,4 +267,3 @@ func equalStringSlices(a, b []string) bool {
 	}
 	return true
 }
-
