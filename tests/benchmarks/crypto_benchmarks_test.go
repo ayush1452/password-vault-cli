@@ -11,9 +11,9 @@ func BenchmarkKeyDerivation(b *testing.B) {
 	passphrase := "benchmark-passphrase"
 	crypto := vault.NewDefaultCryptoEngine()
 	salt, _ := vault.GenerateSalt()
-	
+
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		key, _ := crypto.DeriveKey(passphrase, salt)
 		vault.Zeroize(key)
@@ -25,7 +25,7 @@ func BenchmarkKeyDerivationParallel(b *testing.B) {
 	passphrase := "benchmark-passphrase"
 	crypto := vault.NewDefaultCryptoEngine()
 	salt, _ := vault.GenerateSalt()
-	
+
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
@@ -45,9 +45,9 @@ func BenchmarkSaltGeneration(b *testing.B) {
 // BenchmarkZeroization benchmarks memory zeroization
 func BenchmarkZeroization(b *testing.B) {
 	data := make([]byte, 32)
-	
+
 	b.ResetTimer()
-	
+
 	for i := 0; i < b.N; i++ {
 		vault.Zeroize(data)
 	}
@@ -59,7 +59,7 @@ func BenchmarkKeyDerivationMemory64MB(b *testing.B) {
 	params := vault.Argon2Params{Memory: 65536, Iterations: 3, Parallelism: 4}
 	crypto := vault.NewCryptoEngine(params)
 	salt, _ := vault.GenerateSalt()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		key, _ := crypto.DeriveKey(passphrase, salt)
@@ -72,7 +72,7 @@ func BenchmarkKeyDerivationMemory128MB(b *testing.B) {
 	params := vault.Argon2Params{Memory: 131072, Iterations: 3, Parallelism: 4}
 	crypto := vault.NewCryptoEngine(params)
 	salt, _ := vault.GenerateSalt()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		key, _ := crypto.DeriveKey(passphrase, salt)
@@ -85,7 +85,7 @@ func BenchmarkKeyDerivationIterations5(b *testing.B) {
 	params := vault.Argon2Params{Memory: 65536, Iterations: 5, Parallelism: 4}
 	crypto := vault.NewCryptoEngine(params)
 	salt, _ := vault.GenerateSalt()
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		key, _ := crypto.DeriveKey(passphrase, salt)
