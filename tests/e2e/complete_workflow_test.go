@@ -69,7 +69,7 @@ func NewTestHelper(t *testing.T) *TestHelper {
 // forceCleanup removes all vault-related files to ensure a clean state
 func (h *TestHelper) forceCleanup() {
 	h.t.Log("Force cleaning up vault files...")
-	
+
 	// List of all possible vault-related files to clean up
 	files := []string{
 		h.vaultPath,
@@ -78,7 +78,7 @@ func (h *TestHelper) forceCleanup() {
 		h.vaultPath + ".bak",
 		h.vaultPath + ".tmp",
 	}
-	
+
 	// Remove each file if it exists
 	for _, file := range files {
 		if err := os.Remove(file); err == nil {
@@ -105,10 +105,10 @@ func (h *TestHelper) Cleanup() {
 	for i := len(h.cleanupFuncs) - 1; i >= 0; i-- {
 		h.cleanupFuncs[i]()
 	}
-	
+
 	// Force cleanup any remaining files
 	h.forceCleanup()
-	
+
 	// Remove the entire temp directory
 	if err := os.RemoveAll(h.tempDir); err != nil {
 		h.t.Logf("Failed to remove temp dir: %v", err)
@@ -133,12 +133,12 @@ func (h *TestHelper) needsUnlockedVault(args []string) bool {
 
 	subcommand := args[0]
 	nonLockingCmds := map[string]bool{
-		"help":     true,
-		"version":  true,
-		"init":     true,
-		"unlock":   true,
-		"status":   true,
-		"lock":     true,
+		"help":    true,
+		"version": true,
+		"init":    true,
+		"unlock":  true,
+		"status":  true,
+		"lock":    true,
 	}
 
 	return !nonLockingCmds[subcommand]
@@ -146,77 +146,77 @@ func (h *TestHelper) needsUnlockedVault(args []string) bool {
 
 // RunCommand executes a vault command and returns stdout, stderr, and error
 func (h *TestHelper) RunCommand(args ...string) (string, string, error) {
-    // Check if the command needs an unlocked vault
-    if len(args) > 0 && h.needsUnlockedVault(args) {
-        if !h.isUnlocked {
-            // For commands that need an unlocked vault, return an error if vault is locked
-            return "", "vault is locked, run 'vault unlock' first", 
-                fmt.Errorf("vault is locked, run 'vault unlock' first")
-        }
-    }
+	// Check if the command needs an unlocked vault
+	if len(args) > 0 && h.needsUnlockedVault(args) {
+		if !h.isUnlocked {
+			// For commands that need an unlocked vault, return an error if vault is locked
+			return "", "vault is locked, run 'vault unlock' first",
+				fmt.Errorf("vault is locked, run 'vault unlock' first")
+		}
+	}
 
-    // Build command arguments
-    cmdArgs := make([]string, 0, len(args)+4)
-    // Add --config /dev/null to prevent using user's config file
-    cmdArgs = append(cmdArgs, "--config", "/dev/null")
-    if !h.hasVaultFlag(args) {
-        cmdArgs = append(cmdArgs, "--vault", h.vaultPath)
-    }
-    cmdArgs = append(cmdArgs, args...)
+	// Build command arguments
+	cmdArgs := make([]string, 0, len(args)+4)
+	// Add --config /dev/null to prevent using user's config file
+	cmdArgs = append(cmdArgs, "--config", "/dev/null")
+	if !h.hasVaultFlag(args) {
+		cmdArgs = append(cmdArgs, "--vault", h.vaultPath)
+	}
+	cmdArgs = append(cmdArgs, args...)
 
-    h.t.Logf("Executing: %s %v", h.vaultBin, cmdArgs)
-    cmd := exec.Command(h.vaultBin, cmdArgs...)
-    
-    // Set up environment
-    env := os.Environ()
-    env = append(env, "VAULT_NO_COLOR=true")  // Disable color output for easier testing
-    if h.sessionFile != "" {
-        env = append(env, fmt.Sprintf("VAULT_SESSION_FILE=%s", h.sessionFile))
-    }
-    cmd.Env = env
-    
-    // Capture output
-    var stdout, stderr bytes.Buffer
-    cmd.Stdout = &stdout
-    cmd.Stderr = &stderr
-    
-    // Run the command
-    err := cmd.Run()
-    
-    // Log command execution for debugging
-    outStr, errStr := stdout.String(), stderr.String()
-    h.t.Logf("Command: %s %v\nExit: %v\nStdout: %s\nStderr: %s", 
-        h.vaultBin, cmdArgs, err, outStr, errStr)
-    
-    // Update the unlocked state based on the command output
-    h.updateUnlockedState(args, outStr, errStr, err)
-    
-    // If we get a lock error, try to force unlock and retry once
-    if err != nil && strings.Contains(errStr, "vault is locked") {
-        h.t.Log("Detected vault lock error, attempting to force unlock...")
-        h.forceUnlockVault()
-        
-        // Unlock the vault
-        if err := h.UnlockVault(); err != nil {
-            return outStr, errStr, fmt.Errorf("failed to unlock vault after lock error: %w", err)
-        }
-        
-        // Retry the command
-        cmd := exec.Command(h.vaultBin, cmdArgs...)
-        cmd.Env = env
-        stdout.Reset()
-        stderr.Reset()
-        err = cmd.Run()
-        
-        outStr, errStr = stdout.String(), stderr.String()
-        h.t.Logf("Retry command: %s %v\nExit: %v\nStdout: %s\nStderr: %s", 
-            h.vaultBin, cmdArgs, err, outStr, errStr)
-            
-        // Update the unlocked state again after retry
-        h.updateUnlockedState(args, outStr, errStr, err)
-    }
-    
-    return outStr, errStr, err
+	h.t.Logf("Executing: %s %v", h.vaultBin, cmdArgs)
+	cmd := exec.Command(h.vaultBin, cmdArgs...)
+
+	// Set up environment
+	env := os.Environ()
+	env = append(env, "VAULT_NO_COLOR=true") // Disable color output for easier testing
+	if h.sessionFile != "" {
+		env = append(env, fmt.Sprintf("VAULT_SESSION_FILE=%s", h.sessionFile))
+	}
+	cmd.Env = env
+
+	// Capture output
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	// Run the command
+	err := cmd.Run()
+
+	// Log command execution for debugging
+	outStr, errStr := stdout.String(), stderr.String()
+	h.t.Logf("Command: %s %v\nExit: %v\nStdout: %s\nStderr: %s",
+		h.vaultBin, cmdArgs, err, outStr, errStr)
+
+	// Update the unlocked state based on the command output
+	h.updateUnlockedState(args, outStr, errStr, err)
+
+	// If we get a lock error, try to force unlock and retry once
+	if err != nil && strings.Contains(errStr, "vault is locked") {
+		h.t.Log("Detected vault lock error, attempting to force unlock...")
+		h.forceUnlockVault()
+
+		// Unlock the vault
+		if err := h.UnlockVault(); err != nil {
+			return outStr, errStr, fmt.Errorf("failed to unlock vault after lock error: %w", err)
+		}
+
+		// Retry the command
+		cmd := exec.Command(h.vaultBin, cmdArgs...)
+		cmd.Env = env
+		stdout.Reset()
+		stderr.Reset()
+		err = cmd.Run()
+
+		outStr, errStr = stdout.String(), stderr.String()
+		h.t.Logf("Retry command: %s %v\nExit: %v\nStdout: %s\nStderr: %s",
+			h.vaultBin, cmdArgs, err, outStr, errStr)
+
+		// Update the unlocked state again after retry
+		h.updateUnlockedState(args, outStr, errStr, err)
+	}
+
+	return outStr, errStr, err
 }
 
 // updateUnlockedState updates the unlocked state based on command output
@@ -224,18 +224,18 @@ func (h *TestHelper) updateUnlockedState(args []string, stdout, stderr string, e
 	if len(args) == 0 {
 		return
 	}
-	
+
 	command := args[0]
 	output := stdout + "\n" + stderr
-	
+
 	switch command {
 	case "unlock":
 		if err == nil || strings.Contains(output, "Vault unlocked") {
 			h.isUnlocked = true
 		}
 	case "lock":
-		if err == nil || strings.Contains(output, "Vault locked") || 
-		   strings.Contains(output, "Vault is already locked") {
+		if err == nil || strings.Contains(output, "Vault locked") ||
+			strings.Contains(output, "Vault is already locked") {
 			h.isUnlocked = false
 		}
 	case "init":
@@ -250,30 +250,29 @@ func (h *TestHelper) RunWithRetry(fn func() error, maxRetries int) error {
 		if i > 0 {
 			time.Sleep(time.Duration(i*100) * time.Millisecond) // Exponential backoff
 		}
-		
+
 		lastErr = fn()
 		if lastErr == nil {
 			return nil
 		}
-		
+
 		if strings.Contains(lastErr.Error(), "locked by another process") {
 			h.t.Logf("Operation failed due to lock, retrying (%d/%d)...", i+1, maxRetries)
 			continue
 		}
-		
+
 		return lastErr
 	}
 	return fmt.Errorf("after %d attempts, last error: %v", maxRetries, lastErr)
 }
 
-
 // InitVault initializes a new vault
 func (h *TestHelper) InitVault() {
 	h.t.Log("Initializing new vault...")
-	
+
 	// Clean up any existing files
 	h.cleanupVaultFiles()
-	
+
 	// Use retry mechanism for initialization
 	err := h.RunWithRetry(func() error {
 		// Initialize with force flag to overwrite any existing vault
@@ -282,30 +281,30 @@ func (h *TestHelper) InitVault() {
 			"--passphrase", h.passphrase,
 			"--force",
 		)
-		
+
 		if err != nil {
-			h.t.Logf("Init attempt failed: %v\nStdout: %s\nStderr: %s", 
+			h.t.Logf("Init attempt failed: %v\nStdout: %s\nStderr: %s",
 				err, stdout, stderr)
-			
+
 			// Clean up and try again
 			h.cleanupVaultFiles()
 			return err
 		}
-		
+
 		// Verify initialization was successful (check for either message format)
-		if !strings.Contains(stdout, "Vault created successfully at") && 
-		   !strings.Contains(stderr, "Vault created successfully at") &&
-		   !strings.Contains(stdout, "Vault initialized") &&
-		   !strings.Contains(stderr, "Vault initialized") {
+		if !strings.Contains(stdout, "Vault created successfully at") &&
+			!strings.Contains(stderr, "Vault created successfully at") &&
+			!strings.Contains(stdout, "Vault initialized") &&
+			!strings.Contains(stderr, "Vault initialized") {
 			return fmt.Errorf("vault initialization did not report success")
 		}
-		
+
 		// Reset unlocked state
 		h.isUnlocked = false
 		h.t.Log("Vault initialized successfully")
 		return nil
 	}, 3) // Retry up to 3 times
-	
+
 	if err != nil {
 		h.t.Fatalf("Failed to initialize vault after retries: %v", err)
 	}
@@ -314,7 +313,7 @@ func (h *TestHelper) InitVault() {
 // cleanupVaultFiles removes all vault-related files to ensure a clean state
 func (h *TestHelper) cleanupVaultFiles() {
 	h.t.Log("Cleaning up vault files...")
-	
+
 	// List of all possible vault-related files to clean up
 	files := []string{
 		h.vaultPath,
@@ -324,7 +323,7 @@ func (h *TestHelper) cleanupVaultFiles() {
 		h.vaultPath + ".tmp",
 		// Add any other known vault-related file patterns here
 	}
-	
+
 	// Remove each file if it exists
 	for _, file := range files {
 		if err := os.Remove(file); err == nil {
@@ -333,7 +332,7 @@ func (h *TestHelper) cleanupVaultFiles() {
 			h.t.Logf("Error removing %s: %v", file, err)
 		}
 	}
-	
+
 	// Also try to remove any lock files in the temp directory that might be related
 	lockPattern := filepath.Join(h.tempDir, "*.lock")
 	if matches, err := filepath.Glob(lockPattern); err == nil {
@@ -342,7 +341,7 @@ func (h *TestHelper) cleanupVaultFiles() {
 			if strings.Contains(lockFile, "test") || strings.Contains(lockFile, "vault") {
 				// First try to release the lock properly
 				releaseLock(lockFile)
-				
+
 				// Then remove the lock file
 				if err := os.Remove(lockFile); err == nil {
 					h.t.Logf("Removed lock file: %s", lockFile)
@@ -350,7 +349,7 @@ func (h *TestHelper) cleanupVaultFiles() {
 			}
 		}
 	}
-	
+
 	// Force unlock any remaining file locks
 	h.forceUnlockVault()
 }
@@ -379,7 +378,7 @@ func (h *TestHelper) forceUnlockVault() {
 		h.vaultPath + ".lock",
 		filepath.Join(h.tempDir, "*.lock"),
 	}
-	
+
 	for _, pattern := range lockFiles {
 		matches, _ := filepath.Glob(pattern)
 		for _, file := range matches {
@@ -388,13 +387,13 @@ func (h *TestHelper) forceUnlockVault() {
 			}
 		}
 	}
-	
+
 	// Also try to remove any session files
 	sessionFiles := []string{
 		h.sessionFile,
 		filepath.Join(h.tempDir, "*.session"),
 	}
-	
+
 	for _, pattern := range sessionFiles {
 		matches, _ := filepath.Glob(pattern)
 		for _, file := range matches {
@@ -412,7 +411,7 @@ func (h *TestHelper) EnsureVaultUnlocked() {
 	}
 
 	h.t.Log("Ensuring vault is unlocked...")
-	
+
 	// Use retry mechanism for unlock
 	err := h.RunWithRetry(func() error {
 		// First try to run a command that requires an unlocked vault
@@ -422,18 +421,18 @@ func (h *TestHelper) EnsureVaultUnlocked() {
 			h.isUnlocked = true
 			return nil
 		}
-		
+
 		// Check if the error indicates the vault is locked
-		if strings.Contains(stderr, "vault is locked") || 
-		   strings.Contains(stderr, "run 'vault unlock' first") {
+		if strings.Contains(stderr, "vault is locked") ||
+			strings.Contains(stderr, "run 'vault unlock' first") {
 			// Explicitly unlock the vault
 			return h.UnlockVault()
 		}
-		
+
 		// For other errors, try to unlock anyway
 		return h.UnlockVault()
 	}, 3) // Retry up to 3 times
-	
+
 	if err != nil {
 		h.t.Fatalf("Failed to ensure vault is unlocked: %v", err)
 	}
@@ -447,12 +446,12 @@ func (h *TestHelper) UnlockVault() error {
 	}
 
 	h.t.Log("Unlocking vault...")
-	
+
 	// Ensure session directory exists
 	if err := os.MkdirAll(filepath.Dir(h.sessionFile), 0700); err != nil {
 		h.t.Logf("Warning: Failed to create session directory: %v", err)
 	}
-	
+
 	// Use retry mechanism for unlock
 	err := h.RunWithRetry(func() error {
 		// First, ensure any existing session file is removed
@@ -461,38 +460,38 @@ func (h *TestHelper) UnlockVault() error {
 				h.t.Logf("Warning: Failed to remove session file: %v", err)
 			}
 		}
-		
+
 		// Use --passphrase flag for non-interactive unlock
 		stdout, stderr, err := h.RunCommand(
 			"unlock",
 			"--passphrase", h.passphrase,
 		)
-		
+
 		// Check for success conditions
-		if err == nil || 
-		   strings.Contains(stdout, "Vault unlocked") || 
-		   strings.Contains(stderr, "Vault unlocked") ||
-		   strings.Contains(stdout, "Vault is already unlocked") ||
-		   strings.Contains(stderr, "Vault is already unlocked") {
+		if err == nil ||
+			strings.Contains(stdout, "Vault unlocked") ||
+			strings.Contains(stderr, "Vault unlocked") ||
+			strings.Contains(stdout, "Vault is already unlocked") ||
+			strings.Contains(stderr, "Vault is already unlocked") {
 			h.isUnlocked = true
 			h.t.Log("Vault unlocked successfully")
 			return nil
 		}
-		
+
 		// Log the failure
-		h.t.Logf("Unlock attempt failed: %v\nStdout: %s\nStderr: %s", 
+		h.t.Logf("Unlock attempt failed: %v\nStdout: %s\nStderr: %s",
 			err, stdout, stderr)
-		
+
 		// Clean up and try again
 		h.cleanupVaultFiles()
 		return fmt.Errorf("vault unlock failed")
 	}, 5) // Retry up to 5 times
-	
+
 	if err != nil {
 		h.t.Logf("Failed to unlock vault after retries: %v", err)
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -504,19 +503,19 @@ func (h *TestHelper) LockVault() {
 	}
 
 	h.t.Log("Locking vault...")
-	
+
 	// First, try to run the lock command
 	stdout, stderr, err := h.RunCommand("lock")
-	
+
 	// Even if the command fails, we'll still try to clean up
 	if err != nil {
 		h.t.Logf("Warning: Lock command returned error: %v\nStdout: %s\nStderr: %s",
 			err, stdout, stderr)
 	}
-	
+
 	// Ensure the unlocked state is updated
 	h.isUnlocked = false
-	
+
 	// Clean up session file if it exists
 	if h.sessionFile != "" {
 		if _, err := os.Stat(h.sessionFile); err == nil {
@@ -527,7 +526,7 @@ func (h *TestHelper) LockVault() {
 			}
 		}
 	}
-	
+
 	h.t.Log("Vault locked successfully")
 }
 
@@ -548,11 +547,11 @@ func (h *TestHelper) RunCommandWithInput(input string, args ...string) (string, 
 				break
 			}
 		}
-		
+
 		// Insert --passphrase flag
 		args = append(args[:insertAt], append([]string{"", "--passphrase", strings.TrimSpace(input)}, args[insertAt:]...)...)
 		args[0] = "unlock" // Ensure first arg is just "unlock"
-		
+
 		// Run without stdin
 		return h.RunCommand(args...)
 	}
@@ -560,31 +559,31 @@ func (h *TestHelper) RunCommandWithInput(input string, args ...string) (string, 
 	// For other commands, use stdin as before
 	cmd := exec.Command(h.vaultBin, args...)
 	env := os.Environ()
-	env = append(env, 
+	env = append(env,
 		fmt.Sprintf("VAULT_PATH=%s", h.vaultPath),
 		fmt.Sprintf("VAULT_SESSION_FILE=%s", h.sessionFile),
-		"VAULT_NO_COLOR=true",  // Disable color output for easier testing
+		"VAULT_NO_COLOR=true", // Disable color output for easier testing
 	)
 	cmd.Env = env
-	
+
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	
+
 	// Set up stdin
 	cmd.Stdin = strings.NewReader(input)
-	
+
 	// Set up a pipe to capture output in case of errors
 	var combinedOutput bytes.Buffer
 	mw := io.MultiWriter(&stderr, &combinedOutput)
 	cmd.Stderr = mw
-	
+
 	err := cmd.Run()
-	
+
 	// Log the command and its output for debugging
-	h.t.Logf("Command: %s %v\nStdout: %s\nStderr: %s\nError: %v", 
+	h.t.Logf("Command: %s %v\nStdout: %s\nStderr: %s\nError: %v",
 		h.vaultBin, args, stdout.String(), stderr.String(), err)
-	
+
 	return stdout.String(), stderr.String(), err
 }
 
@@ -603,11 +602,11 @@ func (h *TestHelper) AssertError(stdout, stderr string, err error, expectedError
 		h.t.Errorf("Expected error but command succeeded\nStdout: %s\nStderr: %s", stdout, stderr)
 		return
 	}
-	
+
 	combined := stdout + stderr + err.Error()
 	if !strings.Contains(combined, expectedError) {
 		h.t.Helper()
-		h.t.Errorf("Expected error containing '%s', got:\nStdout: %s\nStderr: %s\nError: %v", 
+		h.t.Errorf("Expected error containing '%s', got:\nStdout: %s\nStderr: %s\nError: %v",
 			expectedError, stdout, stderr, err)
 	}
 }
@@ -651,20 +650,20 @@ func TestNewUserOnboarding(t *testing.T) {
 	)
 	// Note: add command doesn't have --password flag, it uses --secret-file or --secret-prompt
 	// So this will fail, but let's use the working approach
-	
+
 	// Create secret file for adding entries
 	secretFile := filepath.Join(h.tempDir, "secret.txt")
 	if err := os.WriteFile(secretFile, []byte("password123"), 0600); err != nil {
 		t.Fatalf("Failed to create secret file: %v", err)
 	}
-	
+
 	stdout, stderr, err = h.RunCommand(
 		"add", "github", "--username", "user@example.com",
 		"--secret-file", secretFile, "--url", "https://github.com",
 		"--tags", "work",
 	)
 	h.AssertSuccess(stdout, stderr, err, "Failed to add entry")
-	
+
 	// Add another entry
 	if err := os.WriteFile(secretFile, []byte("emailpass123"), 0600); err != nil {
 		t.Fatalf("Failed to write secret file: %v", err)
@@ -675,13 +674,13 @@ func TestNewUserOnboarding(t *testing.T) {
 		"--tags", "personal",
 	)
 	h.AssertSuccess(stdout, stderr, err, "Failed to add email entry")
-	
+
 	t.Log("Step 4: List all entries")
 	stdout, stderr, err = h.RunCommand("list")
 	h.AssertSuccess(stdout, stderr, err, "Failed to list entries")
 	h.AssertContains(stdout, "github", "GitHub entry not found in list")
 	h.AssertContains(stdout, "email", "Email entry not found in list")
-	
+
 	t.Log("Step 5: Get entry")
 	stdout, stderr, err = h.RunCommand("get", "github")
 	h.AssertSuccess(stdout, stderr, err, "Failed to get entry")
@@ -694,40 +693,41 @@ func TestNewUserOnboarding(t *testing.T) {
 		"--notes", "Updated via test",
 	)
 	h.AssertSuccess(stdout, stderr, err, "Failed to update entry")
-	
+
 	t.Log("Step 7: Delete entry")
 	stdout, stderr, err = h.RunCommand("delete", "email", "--yes")
 	h.AssertSuccess(stdout, stderr, err, "Failed to delete entry")
-	
+
 	t.Log("Step 8: Lock vault")
 	h.LockVault()
-	
+
 	t.Log("Step 9: Verify locked state")
 	_, _, err = h.RunCommand("list")
 	if err == nil {
 		h.t.Error("Expected error when listing locked vault, but got none")
 	}
-	
+
 	t.Log("✓ New user onboarding workflow completed successfully")
 }
+
 // TestProfileBasedWorkflow tests profile management and isolation
 func TestProfileBasedWorkflow(t *testing.T) {
 	h := NewTestHelper(t)
 	defer h.Cleanup()
-	
+
 	t.Log("Step 1: Initialize vault")
 	h.InitVault()
-	
+
 	t.Log("Step 2: Unlock vault")
 	if err := h.UnlockVault(); err != nil {
 		t.Fatalf("Failed to unlock vault: %v", err)
 	}
-	
+
 	t.Log("Step 3: List initial profiles (should have default)")
 	stdout, stderr, err := h.RunCommand("profiles", "list")
 	h.AssertSuccess(stdout, stderr, err, "list initial profiles failed")
 	h.AssertContains(stdout+stderr, "default", "default profile not found")
-	
+
 	t.Log("✓ Profile-based workflow completed successfully")
 }
 
@@ -736,23 +736,23 @@ func TestBackupAndRecovery(t *testing.T) {
 	h := NewTestHelper(t)
 	defer h.Cleanup()
 	passphrase := "test-backup-passphrase-789!"
-	
+
 	t.Log("Step 1: Initialize and populate vault")
 	stdout, stderr, err := h.RunCommandWithInput(passphrase+"\n"+passphrase+"\n",
 		"init", "--vault", h.vaultPath, "--passphrase", passphrase)
 	h.AssertSuccess(stdout, stderr, err, "vault init failed")
-	
+
 	stdout, stderr, err = h.RunCommand(
 		"unlock", "--vault", h.vaultPath, "--ttl", "1h", "--passphrase", passphrase)
 	h.AssertSuccess(stdout, stderr, err, "vault unlock failed")
-	
+
 	// Add test entries
 	for i := 1; i <= 3; i++ {
 		secretFile := filepath.Join(h.tempDir, fmt.Sprintf("secret%d.txt", i))
 		if err := os.WriteFile(secretFile, []byte(fmt.Sprintf("secret-%d", i)), 0600); err != nil {
 			t.Fatalf("Failed to create secret file: %v", err)
 		}
-		
+
 		stdout, stderr, err = h.RunCommand(
 			"add", fmt.Sprintf("entry-%d", i),
 			"--vault", h.vaultPath,
@@ -761,7 +761,7 @@ func TestBackupAndRecovery(t *testing.T) {
 		)
 		h.AssertSuccess(stdout, stderr, err, fmt.Sprintf("add entry-%d failed", i))
 	}
-	
+
 	t.Log("Step 2: Export encrypted backup")
 	// Ensure vault is unlocked
 	h.RunCommand("unlock", "--vault", h.vaultPath, "--ttl", "1h", "--passphrase", passphrase)
@@ -774,27 +774,27 @@ func TestBackupAndRecovery(t *testing.T) {
 		"--passphrase", passphrase,
 	)
 	h.AssertSuccess(stdout, stderr, err, "export failed")
-	
+
 	// Verify backup file exists
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
 		t.Fatalf("Backup file was not created at %s", backupPath)
 	}
-	
+
 	t.Log("Step 3: Simulate vault corruption")
 	// Create a new vault path for recovery
 	recoveryVaultPath := filepath.Join(h.tempDir, "recovery.vault")
-	
+
 	t.Log("Step 4: Import from backup")
 	// Initialize recovery vault
 	stdout, stderr, err = h.RunCommandWithInput(passphrase+"\n"+passphrase+"\n",
 		"init", "--vault", recoveryVaultPath, "--passphrase", passphrase)
 	h.AssertSuccess(stdout, stderr, err, "recovery vault init failed")
-	
+
 	// Unlock recovery vault
 	stdout, stderr, err = h.RunCommand(
 		"unlock", "--vault", recoveryVaultPath, "--ttl", "1h", "--passphrase", passphrase)
 	h.AssertSuccess(stdout, stderr, err, "recovery vault unlock failed")
-	
+
 	// Import
 	stdout, stderr, err = h.RunCommand(
 		"import",
@@ -803,7 +803,7 @@ func TestBackupAndRecovery(t *testing.T) {
 		"--passphrase", passphrase,
 	)
 	h.AssertSuccess(stdout, stderr, err, "import failed")
-	
+
 	t.Log("Step 5: Verify data integrity")
 	// Ensure vault is unlocked
 	h.RunCommand("unlock", "--vault", recoveryVaultPath, "--ttl", "1h", "--passphrase", passphrase)
@@ -813,14 +813,14 @@ func TestBackupAndRecovery(t *testing.T) {
 	h.AssertContains(stdout+stderr, "entry-2", "entry-2 recovered")
 	h.AssertContains(stdout+stderr, "entry-3", "entry-3 recovered")
 	h.AssertContains(stdout+stderr, "Found 3 entries", "all entries recovered")
-	
+
 	// Verify entry details
 	// Ensure vault is unlocked
 	h.RunCommand("unlock", "--vault", recoveryVaultPath, "--ttl", "1h", "--passphrase", passphrase)
 	stdout, stderr, err = h.RunCommand("get", "entry-1", "--vault", recoveryVaultPath, "--show", "--field", "username")
 	h.AssertSuccess(stdout, stderr, err, "get recovered entry failed")
 	h.AssertContains(stdout+stderr, "user1", "recovered username matches")
-	
+
 	t.Log("✓ Backup and recovery workflow completed successfully")
 }
 
@@ -828,20 +828,20 @@ func TestBackupAndRecovery(t *testing.T) {
 func TestConcurrentOperations(t *testing.T) {
 	h := NewTestHelper(t)
 	passphrase := "test-concurrent-passphrase!"
-	
+
 	t.Log("Initialize vault")
 	stdout, stderr, err := h.RunCommandWithInput(passphrase+"\n"+passphrase+"\n",
 		"init", "--vault", h.vaultPath, "--passphrase", passphrase)
 	h.AssertSuccess(stdout, stderr, err, "vault init failed")
-	
+
 	stdout, stderr, err = h.RunCommand(
 		"unlock", "--vault", h.vaultPath, "--ttl", "1h", "--passphrase", passphrase)
 	h.AssertSuccess(stdout, stderr, err, "vault unlock failed")
-	
+
 	t.Log("Test concurrent add operations")
 	done := make(chan bool)
 	errors := make(chan error, 5)
-	
+
 	for i := 0; i < 5; i++ {
 		go func(id int) {
 			secretFile := filepath.Join(h.tempDir, fmt.Sprintf("concurrent_secret%d.txt", id))
@@ -850,7 +850,7 @@ func TestConcurrentOperations(t *testing.T) {
 				done <- true
 				return
 			}
-			
+
 			_, _, err := h.RunCommand(
 				"add", fmt.Sprintf("concurrent-%d", id),
 				"--vault", h.vaultPath,
@@ -863,23 +863,23 @@ func TestConcurrentOperations(t *testing.T) {
 			done <- true
 		}(i)
 	}
-	
+
 	// Wait for all goroutines
 	for i := 0; i < 5; i++ {
 		<-done
 	}
 	close(errors)
-	
+
 	// Check for errors
 	for err := range errors {
 		t.Errorf("Concurrent operation failed: %v", err)
 	}
-	
+
 	// Verify all entries were added
 	stdout, stderr, err = h.RunCommand("list", "--vault", h.vaultPath)
 	h.AssertSuccess(stdout, stderr, err, "list after concurrent adds failed")
 	h.AssertContains(stdout+stderr, "Found 5 entries", "all concurrent entries added")
-	
+
 	t.Log("✓ Concurrent operations handled correctly")
 }
 
@@ -934,13 +934,13 @@ func TestErrorHandling(t *testing.T) {
 		"--username", "user",
 		"--secret-file", secretFile,
 	)
-	
+
 	// Check if the error contains the expected message
 	if err == nil || !strings.Contains(stderr, "entry 'duplicate' already exists in profile 'default'") {
-		h.t.Fatalf("Expected duplicate entry error, got: %v, stdout: %s, stderr: %s", 
+		h.t.Fatalf("Expected duplicate entry error, got: %v, stdout: %s, stderr: %s",
 			err, stdout, stderr)
 	}
-	
+
 	t.Log("✓ Error handling tests completed successfully")
 }
 
@@ -957,98 +957,98 @@ func (h *TestHelper) runCommandDirectly(args ...string) (string, string, error) 
 
 	h.t.Logf("[DIRECT] Executing: %s %v", h.vaultBin, cmdArgs)
 	cmd := exec.Command(h.vaultBin, cmdArgs...)
-	
+
 	// Set up environment
 	env := os.Environ()
-	env = append(env, "VAULT_NO_COLOR=true")  // Disable color output for easier testing
+	env = append(env, "VAULT_NO_COLOR=true") // Disable color output for easier testing
 	if h.sessionFile != "" {
 		env = append(env, fmt.Sprintf("VAULT_SESSION_FILE=%s", h.sessionFile))
 	}
 	cmd.Env = env
-	
+
 	// Capture output
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	
+
 	// Run the command
 	err := cmd.Run()
-	
+
 	// Log command execution for debugging
 	outStr, errStr := stdout.String(), stderr.String()
-	h.t.Logf("[DIRECT] Command: %s %v\nExit: %v\nStdout: %s\nStderr: %s", 
+	h.t.Logf("[DIRECT] Command: %s %v\nExit: %v\nStdout: %s\nStderr: %s",
 		h.vaultBin, cmdArgs, err, outStr, errStr)
-	
+
 	return outStr, errStr, err
 }
 
 // TestSessionTimeout tests session TTL and auto-lock
 func TestSessionTimeout(t *testing.T) {
 	// Note: This test involves waiting for timeouts (5 seconds)
-	
+
 	h := NewTestHelper(t)
 	defer h.Cleanup()
-	
+
 	passphrase := "test-timeout-passphrase!"
-	
+
 	t.Log("Initialize vault")
 	stdout, stderr, err := h.runCommandDirectly(
 		"init", "--vault", h.vaultPath, "--passphrase", passphrase,
 	)
 	h.AssertSuccess(stdout, stderr, err, "vault init failed")
-	
+
 	t.Log("Unlock with short TTL")
 	unlockOutput, unlockStderr, unlockErr := h.runCommandDirectly(
 		"unlock", "--vault", h.vaultPath, "--passphrase", passphrase, "--ttl", "3s",
 	)
 	h.AssertSuccess(unlockOutput, unlockStderr, unlockErr, "vault unlock failed")
-	
+
 	t.Log("Verify vault is unlocked")
 	statusOut, statusErr, err := h.runCommandDirectly("status", "--vault", h.vaultPath)
 	h.AssertSuccess(statusOut, statusErr, err, "status check failed")
 	h.AssertContains(statusOut+statusErr, "unlocked", "vault should be unlocked")
-	
+
 	t.Log("Wait for session to expire (TTL: 3s + 2s buffer)")
 	time.Sleep(5 * time.Second)
 
 	t.Log("Verify vault is locked after timeout")
-	
+
 	// The session file might still exist, but the vault should be locked
 	sessionFile := h.vaultPath + ".session"
 	if _, err := os.Stat(sessionFile); err == nil {
 		h.t.Logf("Note: Session file still exists at: %s (this might be expected)", sessionFile)
 	}
-	
+
 	// Try to list entries, which should fail if vault is locked
 	h.t.Log("Attempting to list entries (should fail with 'vault is locked')")
 	listOut, listErr, listErr2 := h.runCommandDirectly("list", "--vault", h.vaultPath)
-	
+
 	// Check if the error indicates the vault is locked
 	// The error might be in listErr (stderr) or listErr2 (error)
 	errMsg := ""
 	if listErr2 != nil {
 		errMsg = listErr2.Error()
 	}
-	
+
 	if !strings.Contains(listErr, "vault is locked") && !strings.Contains(errMsg, "vault is locked") {
 		h.t.Fatalf("Expected vault to be locked after timeout, but got error: %v, stdout: %s, stderr: %s",
 			listErr2, listOut, listErr)
 	}
-	
+
 	h.t.Log("Vault is locked as expected after timeout")
-	
+
 	h.t.Log("Verify vault status shows locked")
 	statusOut, statusErr, err = h.runCommandDirectly("status", "--vault", h.vaultPath)
-	
+
 	// The status command might fail with an error, or it might return a message indicating locked status
 	statusOutput := statusOut + statusErr
 	if err == nil && !strings.Contains(statusOutput, "locked") {
 		h.t.Fatalf("Expected vault status to show locked, but got: stdout: %s, stderr: %s",
 			statusOut, statusErr)
 	}
-	
+
 	h.t.Log("Vault status shows locked as expected")
-	
+
 	t.Log("✓ Session timeout test completed successfully")
 }
 
