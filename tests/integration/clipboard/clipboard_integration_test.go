@@ -10,10 +10,10 @@ func TestClipboardCopy(t *testing.T) {
 	// Simulate clipboard copy
 	secret := "sensitive-password-123"
 	_ = secret // Placeholder for clipboard integration
-	
+
 	// In real implementation, this would use clipboard library
 	// clipboard.WriteAll(secret)
-	
+
 	t.Log("✓ Clipboard copy simulated")
 }
 
@@ -22,23 +22,23 @@ func TestClipboardClear(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping clipboard TTL test in short mode")
 	}
-	
+
 	secret := "temp-secret"
 	_ = secret // Placeholder for clipboard integration
 	ttl := 3 * time.Second
-	
+
 	// Copy to clipboard
 	// clipboard.WriteAll(secret)
-	
+
 	// Wait for TTL
 	time.Sleep(ttl + time.Second)
-	
+
 	// Clipboard should be cleared
 	// content, _ := clipboard.ReadAll()
 	// if content == secret {
 	//     t.Error("Clipboard should be cleared after TTL")
 	// }
-	
+
 	t.Log("✓ Clipboard TTL test completed")
 }
 
@@ -52,14 +52,14 @@ func TestClipboardCustomTTL(t *testing.T) {
 		{"30 seconds", 30 * time.Second},
 		{"1 minute", 60 * time.Second},
 	}
-	
+
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Test custom TTL
 			t.Logf("Testing TTL: %v", tc.ttl)
 		})
 	}
-	
+
 	t.Log("✓ Custom TTL tests completed")
 }
 
@@ -70,7 +70,7 @@ func TestClipboardUnavailable(t *testing.T) {
 	// if err != nil {
 	//     t.Log("✓ Clipboard unavailable handled gracefully")
 	// }
-	
+
 	t.Log("✓ Clipboard unavailable test completed")
 }
 
@@ -79,10 +79,10 @@ func TestClipboardSecurity(t *testing.T) {
 	// Verify clipboard doesn't leak to history
 	secret := "secret-password"
 	_ = secret // Placeholder for clipboard integration
-	
+
 	// Copy to clipboard
 	// clipboard.WriteAll(secret)
-	
+
 	// Verify it's not in clipboard history (platform-specific)
 	t.Log("✓ Clipboard security verified")
 }
@@ -91,7 +91,7 @@ func TestClipboardSecurity(t *testing.T) {
 func TestClipboardConcurrent(t *testing.T) {
 	// Test multiple concurrent clipboard operations
 	done := make(chan bool)
-	
+
 	for i := 0; i < 5; i++ {
 		go func(id int) {
 			// clipboard.WriteAll(fmt.Sprintf("secret-%d", id))
@@ -99,10 +99,10 @@ func TestClipboardConcurrent(t *testing.T) {
 			done <- true
 		}(i)
 	}
-	
+
 	for i := 0; i < 5; i++ {
 		<-done
 	}
-	
+
 	t.Log("✓ Concurrent clipboard operations handled")
 }
