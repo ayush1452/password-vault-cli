@@ -9,7 +9,7 @@ var vault = make(map[string]string)
 // addPassword stores a password for a given service
 func addPassword(service string, password string) {
 	vault[service] = password
-	fmt.Println("Password added successfully. New password test")
+	fmt.Println("Password added successfully.")
 }
 
 // getPassword retrieves a password for a given service
