@@ -10,7 +10,10 @@ import (
 	"github.com/vault-cli/vault/internal/config"
 )
 
-var unlockTTL time.Duration
+var (
+	unlockTTL        time.Duration
+	unlockPassphrase string
+)
 
 var unlockCmd = &cobra.Command{
 	Use:   "unlock",
@@ -31,6 +34,7 @@ Example:
 
 func init() {
 	unlockCmd.Flags().DurationVar(&unlockTTL, "ttl", time.Hour, "Auto-lock timeout")
+	unlockCmd.Flags().StringVar(&unlockPassphrase, "passphrase", "", "Master passphrase (for non-interactive use)")
 }
 
 // NewUnlockCommand creates a new unlock command for testing
@@ -56,6 +60,7 @@ Example:
 	}
 
 	cmd.Flags().DurationVar(&unlockTTL, "ttl", time.Hour, "Auto-lock timeout")
+	cmd.Flags().StringVar(&unlockPassphrase, "passphrase", "", "Master passphrase (for non-interactive use)")
 
 	return cmd
 }
@@ -80,10 +85,18 @@ func runUnlock() error {
 		}
 	}
 
-	// Prompt for passphrase
-	passphrase, err := PromptPassword("Enter master passphrase: ")
-	if err != nil {
-		return fmt.Errorf("failed to read passphrase: %w", err)
+	// Get passphrase from flag or prompt
+	var passphrase string
+	if unlockPassphrase != "" {
+		// Use passphrase from flag (non-interactive mode)
+		passphrase = unlockPassphrase
+	} else {
+		// Prompt for passphrase (interactive mode)
+		var err error
+		passphrase, err = PromptPassword("Enter master passphrase: ")
+		if err != nil {
+			return fmt.Errorf("failed to read passphrase: %w", err)
+		}
 	}
 
 	// Unlock vault

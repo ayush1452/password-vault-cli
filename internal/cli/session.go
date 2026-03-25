@@ -74,10 +74,6 @@ func GetVaultStore() store.VaultStore {
 		vaultStore := store.NewBoltStore()
 		if err := vaultStore.OpenVault(sessionManager.vaultPath, sessionManager.masterKey); err != nil {
 			logWarning("Error opening vault store: %v", err)
-			// Try to clear the session if we can't open the vault
-			if clearErr := LockVault(); clearErr != nil {
-				logWarning("Failed to clear session after open error: %v", clearErr)
-			}
 			return nil
 		}
 		sessionManager.vaultStore = vaultStore

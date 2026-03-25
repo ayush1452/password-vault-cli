@@ -231,7 +231,7 @@ func TestRotatePasswordCommand(t *testing.T) {
 			clipboardIsAvailable = func() bool { return true }
 
 			// Create command with mock store
-			cmd := NewRotatePasswordCommand(&config.Config{ClipboardTTL: 45 * time.Second})
+			cmd := NewRotatePassword(&config.Config{ClipboardTTL: 45 * time.Second})
 			stdout := &bytes.Buffer{}
 			cmd.SetOut(stdout)
 			cmd.SetErr(stdout)

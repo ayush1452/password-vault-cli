@@ -118,6 +118,11 @@ func runList(cmd *cobra.Command) (err error) {
 
 	vaultStore := GetVaultStore()
 
+	// Ensure profile is set to default if empty
+	if profile == "" {
+		profile = "default"
+	}
+
 	// Create filter
 	filter := &domain.Filter{
 		Tags:         listTags,
@@ -159,9 +164,17 @@ func runList(cmd *cobra.Command) (err error) {
 
 	// Output based on format
 	if outputJSON {
+		// Close session store to release lock file
+		if err := CloseSessionStore(); err != nil {
+			logWarning("Failed to close session store after list: %v", err)
+		}
 		return outputEntriesJSON(out, entries)
 	}
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after list: %v", err)
+	}
 	return outputEntriesTable(out, entries)
 }
 

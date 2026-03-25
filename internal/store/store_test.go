@@ -679,3 +679,396 @@ func TestAtomicWriter(t *testing.T) {
 		t.Error("Aborted file should not exist")
 	}
 }
+
+// TestUpdateVaultMetadata tests metadata update functionality
+func TestUpdateVaultMetadata(t *testing.T) {
+	tempDir, _ := os.MkdirTemp("", "vault_test_")
+	defer os.RemoveAll(tempDir)
+
+	vaultPath := filepath.Join(tempDir, "test.vault")
+	store := NewBoltStore()
+
+	salt, _ := vault.GenerateSalt()
+	crypto := vault.NewDefaultCryptoEngine()
+	masterKey, _ := crypto.DeriveKey("test-passphrase", salt)
+	defer vault.Zeroize(masterKey)
+
+	kdfParams := map[string]interface{}{
+		"memory":      uint32(1024),
+		"iterations":  uint32(1),
+		"parallelism": uint8(1),
+	}
+
+	store.CreateVault(vaultPath, masterKey, kdfParams)
+	store.OpenVault(vaultPath, masterKey)
+	defer store.CloseVault()
+
+	// Get original metadata
+	metadata, err := store.GetVaultMetadata()
+	if err != nil {
+		t.Fatalf("Failed to get metadata: %v", err)
+	}
+
+	// Update metadata
+	metadata.FileHMAC = "test-hmac-value"
+	metadata.UpdatedAt = time.Now().UTC()
+
+	err = store.UpdateVaultMetadata(metadata)
+	if err != nil {
+		t.Fatalf("Failed to update metadata: %v", err)
+	}
+
+	// Verify update
+	updated, err := store.GetVaultMetadata()
+	if err != nil {
+		t.Fatalf("Failed to get updated metadata: %v", err)
+	}
+
+	if updated.FileHMAC != "test-hmac-value" {
+		t.Errorf("FileHMAC not updated: got %s, want test-hmac-value", updated.FileHMAC)
+	}
+}
+
+// TestLogOperation tests audit logging
+func TestLogOperation(t *testing.T) {
+	tempDir, _ := os.MkdirTemp("", "vault_test_")
+	defer os.RemoveAll(tempDir)
+
+	vaultPath := filepath.Join(tempDir, "test.vault")
+	store := NewBoltStore()
+
+	salt, _ := vault.GenerateSalt()
+	crypto := vault.NewDefaultCryptoEngine()
+	masterKey, _ := crypto.DeriveKey("test-passphrase", salt)
+	defer vault.Zeroize(masterKey)
+
+	kdfParams := map[string]interface{}{
+		"memory":      uint32(1024),
+		"iterations":  uint32(1),
+		"parallelism": uint8(1),
+	}
+
+	store.CreateVault(vaultPath, masterKey, kdfParams)
+	store.OpenVault(vaultPath, masterKey)
+	defer store.CloseVault()
+
+	// Test logging operation
+	op := &domain.Operation{
+		Type:      "test_operation",
+		Profile:   "default",
+		EntryID:   "test-entry",
+		Timestamp: time.Now().UTC(),
+		Success:   true,
+	}
+
+	err := store.LogOperation(op)
+	if err != nil {
+		t.Fatalf("Failed to log operation: %v", err)
+	}
+
+	// Test logging with auto timestamp
+	op2 := &domain.Operation{
+		Type:    "auto_timestamp",
+		Success: true,
+	}
+
+	err = store.LogOperation(op2)
+	if err != nil {
+		t.Fatalf("Failed to log operation with auto timestamp: %v", err)
+	}
+}
+
+// TestGetAuditLog tests retrieving audit log
+func TestGetAuditLog(t *testing.T) {
+	tempDir, _ := os.MkdirTemp("", "vault_test_")
+	defer os.RemoveAll(tempDir)
+
+	vaultPath := filepath.Join(tempDir, "test.vault")
+	store := NewBoltStore()
+
+	salt, _ := vault.GenerateSalt()
+	crypto := vault.NewDefaultCryptoEngine()
+	masterKey, _ := crypto.DeriveKey("test-passphrase", salt)
+	defer vault.Zeroize(masterKey)
+
+	kdfParams := map[string]interface{}{
+		"memory":      uint32(1024),
+		"iterations":  uint32(1),
+		"parallelism": uint8(1),
+	}
+
+	store.CreateVault(vaultPath, masterKey, kdfParams)
+	store.OpenVault(vaultPath, masterKey)
+	defer store.CloseVault()
+
+	// Log multiple operations
+	for i := 0; i < 5; i++ {
+		op := &domain.Operation{
+			Type:      "test_op",
+			Success:   true,
+			Timestamp: time.Now().UTC(),
+		}
+		store.LogOperation(op)
+	}
+
+	// Get audit log
+	log, err := store.GetAuditLog()
+	if err != nil {
+		t.Fatalf("Failed to get audit log: %v", err)
+	}
+
+	if len(log) < 5 {
+		t.Errorf("Expected at least 5 audit entries, got %d", len(log))
+	}
+}
+
+// TestLogOperationNil tests nil operation handling
+func TestLogOperationNil(t *testing.T) {
+	tempDir, _ := os.MkdirTemp("", "vault_test_")
+	defer os.RemoveAll(tempDir)
+
+	vaultPath := filepath.Join(tempDir, "test.vault")
+	store := NewBoltStore()
+
+	salt, _ := vault.GenerateSalt()
+	crypto := vault.NewDefaultCryptoEngine()
+	masterKey, _ := crypto.DeriveKey("test-passphrase", salt)
+	defer vault.Zeroize(masterKey)
+
+	kdfParams := map[string]interface{}{
+		"memory":      uint32(1024),
+		"iterations":  uint32(1),
+		"parallelism": uint8(1),
+	}
+
+	store.CreateVault(vaultPath, masterKey, kdfParams)
+	store.OpenVault(vaultPath, masterKey)
+	defer store.CloseVault()
+
+	err := store.LogOperation(nil)
+	if err == nil {
+		t.Error("LogOperation should fail with nil operation")
+	}
+}
+
+// TestStoreClosedOperations tests operations on closed vault
+func TestStoreClosedOperations(t *testing.T) {
+	store := NewBoltStore()
+
+	// Test GetAuditLog on closed vault
+	_, err := store.GetAuditLog()
+	if err == nil {
+		t.Error("GetAuditLog should fail on closed vault")
+	}
+
+	// Test LogOperation on closed vault
+	err = store.LogOperation(&domain.Operation{Type: "test"})
+	if err == nil {
+		t.Error("LogOperation should fail on closed vault")
+	}
+
+	// Test UpdateVaultMetadata on closed vault
+	err = store.UpdateVaultMetadata(&domain.VaultMetadata{})
+	if err == nil {
+		t.Error("UpdateVaultMetadata should fail on closed vault")
+	}
+}
+
+// TestCreateEntryDuplicateID tests duplicate entry creation
+func TestCreateEntryDuplicateID(t *testing.T) {
+	tempDir, _ := os.MkdirTemp("", "vault_test_")
+	defer os.RemoveAll(tempDir)
+
+	vaultPath := filepath.Join(tempDir, "test.vault")
+	store := NewBoltStore()
+
+	salt, _ := vault.GenerateSalt()
+	crypto := vault.NewDefaultCryptoEngine()
+	masterKey, _ := crypto.DeriveKey("test-passphrase", salt)
+	defer vault.Zeroize(masterKey)
+
+	kdfParams := map[string]interface{}{
+		"memory":      uint32(1024),
+		"iterations":  uint32(1),
+		"parallelism": uint8(1),
+	}
+
+	store.CreateVault(vaultPath, masterKey, kdfParams)
+	store.OpenVault(vaultPath, masterKey)
+	defer store.CloseVault()
+
+	entry := &domain.Entry{
+		Name:     "duplicate-test",
+		Secret:   []byte("password"),
+		Username: "user",
+	}
+
+	// Create entry first time
+	err := store.CreateEntry("default", entry)
+	if err != nil {
+		t.Fatalf("Failed to create entry: %v", err)
+	}
+
+	// Try to create same entry again
+	err = store.CreateEntry("default", entry)
+	if err != ErrEntryExists {
+		t.Errorf("Expected ErrEntryExists, got %v", err)
+	}
+}
+
+// TestCreateProfileDuplicate tests duplicate profile creation
+func TestCreateProfileDuplicate(t *testing.T) {
+	tempDir, _ := os.MkdirTemp("", "vault_test_")
+	defer os.RemoveAll(tempDir)
+
+	vaultPath := filepath.Join(tempDir, "test.vault")
+	store := NewBoltStore()
+
+	salt, _ := vault.GenerateSalt()
+	crypto := vault.NewDefaultCryptoEngine()
+	masterKey, _ := crypto.DeriveKey("test-passphrase", salt)
+	defer vault.Zeroize(masterKey)
+
+	kdfParams := map[string]interface{}{
+		"memory":      uint32(1024),
+		"iterations":  uint32(1),
+		"parallelism": uint8(1),
+	}
+
+	store.CreateVault(vaultPath, masterKey, kdfParams)
+	store.OpenVault(vaultPath, masterKey)
+	defer store.CloseVault()
+
+	// Create profile
+	err := store.CreateProfile("test-profile", "Test Profile")
+	if err != nil {
+		t.Fatalf("Failed to create profile: %v", err)
+	}
+
+	// Try to create same profile again
+	err = store.CreateProfile("test-profile", "Duplicate")
+	if err != ErrProfileExists {
+		t.Errorf("Expected ErrProfileExists, got %v", err)
+	}
+}
+
+// TestUpdateNonExistentEntry tests updating non-existent entry
+func TestUpdateNonExistentEntry(t *testing.T) {
+	tempDir, _ := os.MkdirTemp("", "vault_test_")
+	defer os.RemoveAll(tempDir)
+
+	vaultPath := filepath.Join(tempDir, "test.vault")
+	store := NewBoltStore()
+
+	salt, _ := vault.GenerateSalt()
+	crypto := vault.NewDefaultCryptoEngine()
+	masterKey, _ := crypto.DeriveKey("test-passphrase", salt)
+	defer vault.Zeroize(masterKey)
+
+	kdfParams := map[string]interface{}{
+		"memory":      uint32(1024),
+		"iterations":  uint32(1),
+		"parallelism": uint8(1),
+	}
+
+	store.CreateVault(vaultPath, masterKey, kdfParams)
+	store.OpenVault(vaultPath, masterKey)
+	defer store.CloseVault()
+
+	entry := &domain.Entry{
+		Name:   "non-existent",
+		Secret: []byte("password"),
+	}
+
+	err := store.UpdateEntry("default", "non-existent", entry)
+	if err != ErrEntryNotFound {
+		t.Errorf("Expected ErrEntryNotFound, got %v", err)
+	}
+}
+
+// TestDeleteNonExistentEntry tests deleting non-existent entry
+func TestDeleteNonExistentEntry(t *testing.T) {
+	tempDir, _ := os.MkdirTemp("", "vault_test_")
+	defer os.RemoveAll(tempDir)
+
+	vaultPath := filepath.Join(tempDir, "test.vault")
+	store := NewBoltStore()
+
+	salt, _ := vault.GenerateSalt()
+	crypto := vault.NewDefaultCryptoEngine()
+	masterKey, _ := crypto.DeriveKey("test-passphrase", salt)
+	defer vault.Zeroize(masterKey)
+
+	kdfParams := map[string]interface{}{
+		"memory":      uint32(1024),
+		"iterations":  uint32(1),
+		"parallelism": uint8(1),
+	}
+
+	store.CreateVault(vaultPath, masterKey, kdfParams)
+	store.OpenVault(vaultPath, masterKey)
+	defer store.CloseVault()
+
+	err := store.DeleteEntry("default", "non-existent")
+	if err != ErrEntryNotFound {
+		t.Errorf("Expected ErrEntryNotFound, got %v", err)
+	}
+}
+
+// TestGetNonExistentProfile tests retrieving non-existent profile
+func TestGetNonExistentProfile(t *testing.T) {
+	tempDir, _ := os.MkdirTemp("", "vault_test_")
+	defer os.RemoveAll(tempDir)
+
+	vaultPath := filepath.Join(tempDir, "test.vault")
+	store := NewBoltStore()
+
+	salt, _ := vault.GenerateSalt()
+	crypto := vault.NewDefaultCryptoEngine()
+	masterKey, _ := crypto.DeriveKey("test-passphrase", salt)
+	defer vault.Zeroize(masterKey)
+
+	kdfParams := map[string]interface{}{
+		"memory":      uint32(1024),
+		"iterations":  uint32(1),
+		"parallelism": uint8(1),
+	}
+
+	store.CreateVault(vaultPath, masterKey, kdfParams)
+	store.OpenVault(vaultPath, masterKey)
+	defer store.CloseVault()
+
+	_, err := store.GetProfile("non-existent")
+	if err != ErrProfileNotFound {
+		t.Errorf("Expected ErrProfileNotFound, got %v", err)
+	}
+}
+
+// TestDeleteNonExistentProfile tests deleting non-existent profile
+func TestDeleteNonExistentProfile(t *testing.T) {
+	tempDir, _ := os.MkdirTemp("", "vault_test_")
+	defer os.RemoveAll(tempDir)
+
+	vaultPath := filepath.Join(tempDir, "test.vault")
+	store := NewBoltStore()
+
+	salt, _ := vault.GenerateSalt()
+	crypto := vault.NewDefaultCryptoEngine()
+	masterKey, _ := crypto.DeriveKey("test-passphrase", salt)
+	defer vault.Zeroize(masterKey)
+
+	kdfParams := map[string]interface{}{
+		"memory":      uint32(1024),
+		"iterations":  uint32(1),
+		"parallelism": uint8(1),
+	}
+
+	store.CreateVault(vaultPath, masterKey, kdfParams)
+	store.OpenVault(vaultPath, masterKey)
+	defer store.CloseVault()
+
+	err := store.DeleteProfile("non-existent")
+	if err != ErrProfileNotFound {
+		t.Errorf("Expected ErrProfileNotFound, got %v", err)
+	}
+}

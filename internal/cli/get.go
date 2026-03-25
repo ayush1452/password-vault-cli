@@ -92,6 +92,11 @@ func runGet(cmd *cobra.Command, entryName string) (err error) {
 
 	vaultStore := GetVaultStore()
 
+	// Ensure profile is set to default if empty
+	if profile == "" {
+		profile = "default"
+	}
+
 	// Get entry
 	entry, err := vaultStore.GetEntry(profile, entryName)
 	if err != nil {
@@ -130,6 +135,11 @@ func runGet(cmd *cobra.Command, entryName string) (err error) {
 	if sensitive && !show && !shouldCopy {
 		// Default behavior for secrets: copy to clipboard
 		shouldCopy = true
+	}
+
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after get: %v", err)
 	}
 
 	if shouldCopy || (!show && sensitive) {

@@ -52,6 +52,11 @@ func (bs *BoltStore) CreateVault(path string, masterKey []byte, kdfParams map[st
 		return fmt.Errorf("vault is already open")
 	}
 
+	// Validate path for security
+	if err := ValidateVaultPath(path); err != nil {
+		return fmt.Errorf("invalid vault path: %w", err)
+	}
+
 	// Check if vault already exists
 	if _, err := os.Stat(path); err == nil {
 		return ErrVaultExists

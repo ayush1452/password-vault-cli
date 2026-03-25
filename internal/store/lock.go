@@ -93,9 +93,18 @@ func (fl *FileLock) Unlock() error {
 	}
 
 	var err error
+
+	// First remove the lock file while we still have the file descriptor
+	if removeErr := os.Remove(fl.path); removeErr != nil {
+		// Don't treat file not found as an error - it might already be removed
+		if !os.IsNotExist(removeErr) {
+			err = removeErr
+		}
+	}
+
 	if fl.lockFile != nil {
 		// Release platform-specific lock
-		if unlockErr := platformUnlock(fl.lockFile); unlockErr != nil {
+		if unlockErr := platformUnlock(fl.lockFile); unlockErr != nil && err == nil {
 			err = unlockErr
 		}
 
@@ -104,11 +113,6 @@ func (fl *FileLock) Unlock() error {
 			err = closeErr
 		}
 		fl.lockFile = nil
-	}
-
-	// Remove lock file
-	if removeErr := os.Remove(fl.path); removeErr != nil && err == nil {
-		err = removeErr
 	}
 
 	fl.locked = false

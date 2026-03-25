@@ -79,6 +79,11 @@ func runDelete(entryName string) error {
 
 	vaultStore := GetVaultStore()
 
+	// Ensure profile is set to default if empty
+	if profile == "" {
+		profile = "default"
+	}
+
 	// Check if entry exists
 	if !vaultStore.EntryExists(profile, entryName) {
 		return fmt.Errorf("entry '%s' does not exist in profile '%s'", entryName, profile)
@@ -107,6 +112,11 @@ func runDelete(entryName string) error {
 
 	// Refresh session
 	RefreshSession()
+
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after delete: %v", err)
+	}
 
 	if err := writeOutput(os.Stdout, "✓ Entry '%s' deleted successfully from profile '%s'\n", entryName, profile); err != nil {
 		return err

@@ -5,15 +5,32 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
+	"github.com/vault-cli/vault/internal/config"
+	"github.com/vault-cli/vault/internal/domain"
 	"github.com/vault-cli/vault/internal/store"
 	"github.com/vault-cli/vault/internal/vault"
 )
 
 var statusJSON bool
+
+// NewStatus creates a new status command
+func NewStatus(cfg *config.Config) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "status",
+		Short: "Show vault status",
+		Long:  "Display vault metadata, session state, and entry statistics.",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runStatus()
+		},
+	}
+
+	cmd.Flags().BoolVar(&statusJSON, "json", false, "Output status as JSON")
+	return cmd
+}
 
 var statusCmd = &cobra.Command{
 	Use:   "status",
@@ -28,28 +45,41 @@ func init() {
 	statusCmd.Flags().BoolVar(&statusJSON, "json", false, "Output status as JSON")
 }
 
-type statusInfo struct {
-	VaultPath        string             `json:"vault_path"`
-	Cipher           string             `json:"cipher"`
-	KDF              vault.Argon2Params `json:"kdf"`
-	SaltLength       int                `json:"salt_length"`
-	MetadataCreated  string             `json:"metadata_created"`
-	EntryCount       *int               `json:"entry_count,omitempty"`
-	LastUpdated      *time.Time         `json:"last_updated,omitempty"`
-	SessionState     string             `json:"session_state"`
-	RemainingTTL     time.Duration      `json:"remaining_ttl"`
-	RemainingTTLSecs int64              `json:"remaining_ttl_seconds"`
+// StatusInfo captures the status information for the vault
+type StatusInfo struct {
+	VaultPath        string        `json:"vault_path"`
+	Profile          string        `json:"profile,omitempty"`
+	Cipher           string        `json:"cipher"`
+	KDF              string        `json:"kdf"`
+	SaltLength       int           `json:"salt_length"`
+	MetadataCreated  string        `json:"metadata_created"`
+	EntryCount       *int          `json:"entry_count,omitempty"`
+	LastUpdated      *time.Time    `json:"last_updated,omitempty"`
+	SessionState     string        `json:"session_state"`
+	RemainingTTL     time.Duration `json:"remaining_ttl"`
+	RemainingTTLSecs int64         `json:"remaining_ttl_seconds"`
 }
 
 func runStatus() error {
+	log.Printf("Running status check with vault: %s, profile: %s", vaultPath, profile)
+
+	// If no profile is specified, use "default" as a fallback
+	if profile == "" {
+		profile = "default"
+		log.Printf("No profile specified, using default profile")
+	}
+
 	if cfg != nil {
 		if vaultPath == "" {
 			vaultPath = cfg.VaultPath
 		}
-		if profile == "" {
+		if profile == "" && cfg.DefaultProfile != "" {
 			profile = cfg.DefaultProfile
+			log.Printf("Using default profile from config: %s", profile)
 		}
 	}
+
+	log.Printf("Final vault path: %s, profile: %s", vaultPath, profile)
 
 	if vaultPath == "" {
 		return fmt.Errorf("vault path not configured")
@@ -59,64 +89,119 @@ func runStatus() error {
 
 	metaInfo, err := loadMetadataInfo()
 	if err != nil {
-		return err
+		log.Printf("Error loading metadata: %v", err)
+		return fmt.Errorf("failed to load vault metadata: %w", err)
+	}
+	log.Printf("Successfully loaded metadata for vault")
+
+	// Log basic metadata info
+	if metaInfo != nil {
+		log.Printf("Vault Cipher: %s, KDF: %+v, Salt Length: %d",
+			metaInfo.Cipher,
+			metaInfo.KDF,
+			metaInfo.SaltLength)
 	}
 
-	var entryCount *int
+	// Initialize with default values
+	var entryCount int
 	var lastUpdated *time.Time
 
 	if unlocked {
 		vaultStore := GetVaultStore()
 		if vaultStore == nil {
-			return fmt.Errorf("failed to access unlocked vault store")
-		}
-		defer func() {
-			if err := CloseSessionStore(); err != nil {
-				log.Printf("Warning: failed to close session store: %v", err)
-			}
-		}()
+			log.Printf("Warning: failed to access unlocked vault store")
+			// Continue with basic status
+		} else {
+			defer func() {
+				if err := CloseSessionStore(); err != nil {
+					log.Printf("Warning: failed to close session store: %v", err)
+				}
+			}()
 
-		entries, err := vaultStore.ListEntries(profile, nil)
-		if err != nil {
-			return fmt.Errorf("failed to list entries: %w", err)
-		}
+			// Try to list profiles
+			profiles, err := vaultStore.ListProfiles()
+			if err != nil {
+				log.Printf("Warning: failed to list profiles: %v", err)
+			} else {
+				// Look for the requested profile
+				profileExists := false
+				var profileObj *domain.Profile
 
-		count := len(entries)
-		entryCount = &count
+				for _, p := range profiles {
+					if p != nil && p.Name == profile {
+						profileExists = true
+						profileObj = p
+						break
+					}
+				}
 
-		for _, entry := range entries {
-			if entry == nil {
-				continue
-			}
-			ts := entry.UpdatedAt
-			if lastUpdated == nil || ts.After(*lastUpdated) {
-				snapshot := ts
-				lastUpdated = &snapshot
+				if profileExists {
+					log.Printf("Found profile: %+v", profileObj)
+
+					// Try to list entries for the profile
+					entries, err := vaultStore.ListEntries(profile, nil)
+					if err != nil {
+						log.Printf("Warning: failed to list entries for profile '%s': %v", profile, err)
+					} else {
+						totalEntries := len(entries)
+						entryCount = totalEntries
+						log.Printf("Found %d entries in profile '%s'", totalEntries, profile)
+
+						// Find the most recent update time
+						if totalEntries > 0 {
+							var latestTime time.Time
+							for _, entry := range entries {
+								if entry != nil && (latestTime.IsZero() || entry.UpdatedAt.After(latestTime)) {
+									latestTime = entry.UpdatedAt
+								}
+							}
+							if !latestTime.IsZero() {
+								lastUpdated = &latestTime
+							}
+						}
+					}
+				} else {
+					log.Printf("Profile '%s' not found in vault, showing basic status only", profile)
+				}
 			}
 		}
 	}
 
-	ttl := RemainingSessionTTL()
 	sessionState := "locked"
 	if unlocked {
 		sessionState = "unlocked"
 	}
 
-	result := statusInfo{
+	ttl := RemainingSessionTTL()
+
+	// Format KDF as string
+	kdfStr := fmt.Sprintf("Argon2id (memory %d KB, iterations %d, parallelism %d)",
+		metaInfo.KDF.Memory, metaInfo.KDF.Iterations, metaInfo.KDF.Parallelism)
+
+	// Prepare status output
+	status := &StatusInfo{
 		VaultPath:        vaultPath,
+		Profile:          profile,
 		Cipher:           metaInfo.Cipher,
-		KDF:              metaInfo.KDF,
+		KDF:              kdfStr,
 		SaltLength:       metaInfo.SaltLength,
 		MetadataCreated:  metaInfo.MetadataCreated,
-		EntryCount:       entryCount,
-		LastUpdated:      lastUpdated,
 		SessionState:     sessionState,
 		RemainingTTL:     ttl,
 		RemainingTTLSecs: int64(ttl.Seconds()),
 	}
 
+	// Only set EntryCount if we have a valid value
+	if entryCount > 0 {
+		tempCount := entryCount // Create a new variable to hold the value
+		status.EntryCount = &tempCount
+	}
+
+	// LastUpdated is already a pointer, so we can assign it directly
+	status.LastUpdated = lastUpdated
+
 	if statusJSON {
-		payload, err := json.MarshalIndent(result, "", "  ")
+		payload, err := json.MarshalIndent(status, "", "  ")
 		if err != nil {
 			return fmt.Errorf("failed to marshal status: %w", err)
 		}
@@ -126,58 +211,31 @@ func runStatus() error {
 		return nil
 	}
 
-	// Use a helper function to handle fmt.Fprintf errors
-	printStatus := func(format string, args ...interface{}) error {
-		_, err := fmt.Fprintf(os.Stdout, format, args...)
-		if err != nil {
-			return fmt.Errorf("failed to write status: %w", err)
-		}
-		return nil
+	// Format the output for non-JSON
+	var result strings.Builder
+	result.WriteString(fmt.Sprintf("Vault: %s\n", status.VaultPath))
+	if status.Profile != "" {
+		result.WriteString(fmt.Sprintf("Profile: %s\n", status.Profile))
+	}
+	result.WriteString(fmt.Sprintf("Cipher: %s\n", status.Cipher))
+	result.WriteString(fmt.Sprintf("KDF: %s\n", status.KDF))
+	result.WriteString(fmt.Sprintf("Created: %s\n", status.MetadataCreated))
+	result.WriteString(fmt.Sprintf("Session: %s\n", status.SessionState))
+
+	if status.EntryCount != nil {
+		result.WriteString(fmt.Sprintf("Entries: %d\n", *status.EntryCount))
 	}
 
-	// Write each status line with error checking
-	if err := printStatus("Vault: %s\n", result.VaultPath); err != nil {
-		return err
-	}
-	if err := printStatus("Cipher: %s\n", result.Cipher); err != nil {
-		return err
-	}
-	if err := printStatus("KDF: Argon2id (memory %d KB, iterations %d, parallelism %d, salt %d bytes)\n",
-		result.KDF.Memory, result.KDF.Iterations, result.KDF.Parallelism, result.SaltLength); err != nil {
-		return err
-	}
-	if err := printStatus("Created: %s\n", result.MetadataCreated); err != nil {
-		return err
+	if status.LastUpdated != nil {
+		result.WriteString(fmt.Sprintf("Last Updated: %s\n", status.LastUpdated.Format(time.RFC3339)))
 	}
 
-	if unlocked {
-		if err := printStatus("Entries: %d\n", *entryCount); err != nil {
-			return err
-		}
-		if lastUpdated != nil {
-			if err := printStatus("Last Updated: %s\n", lastUpdated.Format(time.RFC3339)); err != nil {
-				return err
-			}
-		} else {
-			if _, err := fmt.Fprintln(os.Stdout, "Last Updated: n/a"); err != nil {
-				return fmt.Errorf("failed to write status: %w", err)
-			}
-		}
-	} else {
-		if _, err := fmt.Fprintln(os.Stdout, "Entries: (locked)"); err != nil {
-			return fmt.Errorf("failed to write status: %w", err)
-		}
+	if status.RemainingTTL > 0 {
+		result.WriteString(fmt.Sprintf("Session TTL: %s\n", status.RemainingTTL.Round(time.Second)))
 	}
 
-	if unlocked {
-		if err := printStatus("Session: %s (expires in %s)\n", sessionState, ttl.Round(time.Second)); err != nil {
-			return err
-		}
-	} else {
-		if err := printStatus("Session: %s\n", sessionState); err != nil {
-			return err
-		}
-	}
+	// Print the result
+	fmt.Print(result.String())
 
 	return nil
 }

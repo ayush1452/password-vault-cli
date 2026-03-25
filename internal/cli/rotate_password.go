@@ -10,8 +10,8 @@ import (
 	"github.com/vault-cli/vault/internal/domain"
 )
 
-// NewRotatePasswordCommand creates a new command for rotating passwords
-func NewRotatePasswordCommand(cfg *config.Config) *cobra.Command {
+// NewRotatePassword creates a new command for rotating passwords
+func NewRotatePassword(cfg *config.Config) *cobra.Command {
 	var (
 		length     int
 		copyToClip bool
@@ -60,8 +60,14 @@ func runRotatePassword(cmd *cobra.Command, name string, length int, copyToClip b
 		return fmt.Errorf("failed to generate password: %w", err)
 	}
 
+	// Use the global profile variable (from --profile flag or default)
+	profileToUse := profile
+	if profileToUse == "" {
+		profileToUse = "default"
+	}
+
 	// Get the current entry
-	entry, err := vaultStore.GetEntry("", name) // Empty string for profile uses default
+	entry, err := vaultStore.GetEntry(profileToUse, name)
 	if err != nil {
 		return fmt.Errorf("failed to get entry: %w", err)
 	}
@@ -81,7 +87,7 @@ func runRotatePassword(cmd *cobra.Command, name string, length int, copyToClip b
 	}
 
 	// Save the updated entry
-	err = vaultStore.UpdateEntry("", name, updatedEntry) // Empty string for profile uses default
+	err = vaultStore.UpdateEntry(profileToUse, name, updatedEntry)
 	if err != nil {
 		return fmt.Errorf("failed to update entry: %w", err)
 	}
@@ -111,5 +117,9 @@ func runRotatePassword(cmd *cobra.Command, name string, length int, copyToClip b
 		}
 	}
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after rotation: %v", err)
+	}
 	return nil
 }

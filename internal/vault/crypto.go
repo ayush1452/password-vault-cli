@@ -5,7 +5,9 @@ package vault
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/binary"
 	"errors"
@@ -298,26 +300,44 @@ func SecureCompare(a, b []byte) bool {
 	return subtle.ConstantTimeCompare(a, b) == 1
 }
 
+// ComputeHMAC computes HMAC-SHA256 of data using the provided key
+func ComputeHMAC(data, key []byte) []byte {
+	h := hmac.New(sha256.New, key)
+	h.Write(data)
+	return h.Sum(nil)
+}
+
+// VerifyHMAC verifies that the provided MAC matches the computed HMAC of data
+func VerifyHMAC(data, key, mac []byte) bool {
+	expectedMAC := ComputeHMAC(data, key)
+	return hmac.Equal(mac, expectedMAC)
+}
+
 // ValidateArgon2Params validates Argon2id parameters
 func ValidateArgon2Params(params Argon2Params) error {
-	if params.Memory < 1024 {
-		return errors.New("memory parameter too low (minimum 1024 KB)")
+	// Minimum memory: 64MB (65536 KB) - increased from 1MB for better security
+	if params.Memory < 65536 {
+		return fmt.Errorf("memory parameter too low (minimum 65536 KB, got %d)", params.Memory)
 	}
+	// Maximum memory: 1GB (1048576 KB)
 	if params.Memory > 1024*1024 {
-		return errors.New("memory parameter too high (maximum 1 GB)")
+		return fmt.Errorf("memory parameter too high (maximum 1048576 KB, got %d)", params.Memory)
 	}
-	if params.Iterations < 1 {
-		return errors.New("iterations parameter too low (minimum 1)")
+	// Minimum iterations: 3 (increased from 1 for better security)
+	if params.Iterations < 3 {
+		return fmt.Errorf("iterations parameter too low (minimum 3, got %d)", params.Iterations)
 	}
+	// Maximum iterations: 100 (prevent DoS from too high values)
 	if params.Iterations > 100 {
-		return errors.New("iterations parameter too high (maximum 100)")
+		return fmt.Errorf("iterations parameter too high (maximum 100, got %d)", params.Iterations)
 	}
+	// Minimum parallelism: 1
 	if params.Parallelism < 1 {
 		return errors.New("parallelism parameter too low (minimum 1)")
 	}
-	// Limit parallelism to a reasonable number of CPU cores
+	// Maximum parallelism: 16 (prevent DoS from too high values)
 	if params.Parallelism > 16 {
-		return errors.New("parallelism parameter too high (maximum 16)")
+		return fmt.Errorf("parallelism parameter too high (maximum 16, got %d)", params.Parallelism)
 	}
 	return nil
 }

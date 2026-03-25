@@ -14,6 +14,97 @@ import (
 	"github.com/vault-cli/vault/internal/config"
 )
 
+// NewProfiles creates a new profiles command
+func NewProfiles(cfg *config.Config) *cobra.Command {
+	profilesCmd := &cobra.Command{
+		Use:   "profiles",
+		Short: "Manage vault profiles",
+		Long: `Manage vault profiles for organizing entries by environment or category.
+
+Profiles allow you to separate entries into different namespaces, such as
+'work', 'personal', 'production', 'development', etc.
+
+Example:
+  vault profiles list                    # List all profiles
+  vault profiles create production       # Create production profile
+  vault profiles delete old-project     # Delete a profile
+  vault profiles set-default work       # Set default profile`,
+	}
+
+	profilesCmd.AddCommand(newProfilesListCmd())
+	profilesCmd.AddCommand(newProfilesCreateCmd())
+	profilesCmd.AddCommand(newProfilesDeleteCmd())
+	profilesCmd.AddCommand(newProfilesRenameCmd())
+	profilesCmd.AddCommand(newProfilesSetDefaultCmd())
+
+	return profilesCmd
+}
+
+func newProfilesListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List all profiles",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runProfilesList()
+		},
+	}
+}
+
+var profileCreateDescription string
+
+func newProfilesCreateCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "create <name>",
+		Short: "Create a new profile",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// Use flag value, don't prompt if empty (for non-interactive use)
+			desc, _ := cmd.Flags().GetString("description")
+			return runProfilesCreateNonInteractive(args[0], desc)
+		},
+	}
+	cmd.Flags().StringVar(&profileCreateDescription, "description", "", "Profile description")
+	return cmd
+}
+
+var profileDeleteYes bool
+
+func newProfilesDeleteCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "delete <name>",
+		Short: "Delete a profile",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			yes, _ := cmd.Flags().GetBool("yes")
+			return runProfilesDeleteWithFlag(args[0], yes)
+		},
+	}
+	cmd.Flags().BoolVar(&profileDeleteYes, "yes", false, "Skip confirmation prompt")
+	return cmd
+}
+
+func newProfilesRenameCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "rename <old-name> <new-name>",
+		Short: "Rename a profile",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runProfilesRename(args[0], args[1])
+		},
+	}
+}
+
+func newProfilesSetDefaultCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "set-default <name>",
+		Short: "Set the default profile",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runProfilesSetDefault(args[0])
+		},
+	}
+}
+
 var profilesCmd = &cobra.Command{
 	Use:   "profiles",
 	Short: "Manage vault profiles",
@@ -111,6 +202,11 @@ func runProfilesList() error {
 	// Refresh session
 	RefreshSession()
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after profile list: %v", err)
+	}
+
 	if len(profiles) == 0 {
 		if err := writeOutput(os.Stdout, "No profiles found\n"); err != nil {
 			return err
@@ -124,6 +220,10 @@ func runProfilesList() error {
 	})
 
 	if outputJSON {
+		// Close session store to release lock file
+		if err := CloseSessionStore(); err != nil {
+			logWarning("Failed to close session store after profile list: %v", err)
+		}
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
 		if err := encoder.Encode(profiles); err != nil {
@@ -177,6 +277,11 @@ func runProfilesList() error {
 		return fmt.Errorf("failed to write summary for %d profiles: %w", len(profiles), err)
 	}
 
+	// Close session store to release lock file (already closed above, but safe to call again)
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after profile list: %v", err)
+	}
+
 	return nil
 }
 
@@ -209,6 +314,11 @@ func runProfilesCreate(name, description string) error {
 
 	// Refresh session
 	RefreshSession()
+
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after profile creation: %v", err)
+	}
 
 	fmt.Printf("✓ Profile '%s' created successfully\n", name)
 	return nil
@@ -260,6 +370,11 @@ func runProfilesDelete(name string) error {
 	// Refresh session
 	RefreshSession()
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after profile deletion: %v", err)
+	}
+
 	fmt.Printf("✓ Profile '%s' deleted successfully\n", name)
 	return nil
 }
@@ -291,6 +406,100 @@ func runProfilesSetDefault(name string) error {
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after setting default profile: %v", err)
+	}
+
 	fmt.Printf("✓ Default profile set to '%s'\n", name)
+	return nil
+}
+
+// runProfilesCreateNonInteractive creates a profile without prompting for description
+func runProfilesCreateNonInteractive(name, description string) error {
+	// Check if vault is unlocked
+	if !IsUnlocked() {
+		return fmt.Errorf("vault is locked, run 'vault unlock' first")
+	}
+
+	vaultStore := GetVaultStore()
+
+	// Check if profile already exists
+	if vaultStore.ProfileExists(name) {
+		return fmt.Errorf("profile '%s' already exists", name)
+	}
+
+	// Create profile (don't prompt for description - use what's provided)
+	if err := vaultStore.CreateProfile(name, description); err != nil {
+		return fmt.Errorf("failed to create profile: %w", err)
+	}
+
+	// Refresh session
+	RefreshSession()
+
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after profile creation: %v", err)
+	}
+
+	fmt.Printf("✓ Profile '%s' created successfully\n", name)
+	return nil
+}
+
+// runProfilesDeleteWithFlag deletes a profile with optional --yes flag
+func runProfilesDeleteWithFlag(name string, skipConfirm bool) error {
+	// Check if vault is unlocked
+	if !IsUnlocked() {
+		return fmt.Errorf("vault is locked, run 'vault unlock' first")
+	}
+
+	if name == "default" {
+		return fmt.Errorf("cannot delete the default profile")
+	}
+
+	vaultStore := GetVaultStore()
+
+	// Check if profile exists
+	if !vaultStore.ProfileExists(name) {
+		return fmt.Errorf("profile '%s' does not exist", name)
+	}
+
+	// Get entries count for confirmation
+	entries, err := vaultStore.ListEntries(name, nil)
+	if err != nil {
+		return fmt.Errorf("failed to check profile entries: %w", err)
+	}
+
+	// Confirm deletion unless --yes flag is used
+	if !skipConfirm {
+		if len(entries) > 0 {
+			fmt.Printf("⚠️  Profile '%s' contains %d entries\n", name, len(entries))
+		}
+
+		confirmed, err := PromptConfirm(fmt.Sprintf("Delete profile '%s'?", name), false)
+		if err != nil {
+			return fmt.Errorf("failed to get confirmation: %w", err)
+		}
+
+		if !confirmed {
+			fmt.Println("Profile deletion canceled")
+			return nil
+		}
+	}
+
+	// Delete profile
+	if err := vaultStore.DeleteProfile(name); err != nil {
+		return fmt.Errorf("failed to delete profile: %w", err)
+	}
+
+	// Refresh session
+	RefreshSession()
+
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after profile deletion: %v", err)
+	}
+
+	fmt.Printf("✓ Profile '%s' deleted successfully\n", name)
 	return nil
 }

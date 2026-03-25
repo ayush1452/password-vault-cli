@@ -104,6 +104,11 @@ func runAdd(entryName string) (err error) {
 
 	vaultStore := GetVaultStore()
 
+	// Ensure profile is set to default if empty
+	if profile == "" {
+		profile = "default"
+	}
+
 	// Check if entry already exists
 	if vaultStore.EntryExists(profile, entryName) {
 		return fmt.Errorf("entry '%s' already exists in profile '%s'", entryName, profile)
@@ -196,5 +201,9 @@ func runAdd(entryName string) (err error) {
 		}
 	}
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after add: %v", err)
+	}
 	return nil
 }

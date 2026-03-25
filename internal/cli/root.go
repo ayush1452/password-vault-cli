@@ -48,9 +48,13 @@ Features:
 			vaultPath = cfg.VaultPath
 		}
 
-		// Set profile from config if not provided
+		// Set profile from config if not provided, with fallback to "default"
 		if profile == "" {
-			profile = cfg.DefaultProfile
+			if cfg.DefaultProfile != "" {
+				profile = cfg.DefaultProfile
+			} else {
+				profile = "default"
+			}
 		}
 
 		return nil
@@ -81,7 +85,7 @@ func init() {
 	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(statusCmd)
-	rootCmd.AddCommand(profilesCmd)
+	rootCmd.AddCommand(NewProfiles(nil))
 	rootCmd.AddCommand(exportCmd)
 	rootCmd.AddCommand(importCmd)
 	rootCmd.AddCommand(rotateMasterKeyCmd)
@@ -89,7 +93,7 @@ func init() {
 	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(passgenCmd)
-	rootCmd.AddCommand(NewRotatePasswordCommand(cfg))
+	rootCmd.AddCommand(NewRotatePassword(cfg))
 }
 
 func initConfig() {

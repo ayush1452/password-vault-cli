@@ -10,10 +10,35 @@ import (
 	"github.com/atotto/clipboard"
 )
 
+// ClipboardInterface defines the interface for clipboard operations
+type ClipboardInterface interface {
+	WriteAll(text string) error
+	ReadAll() (string, error)
+}
+
+// realClipboard wraps the actual clipboard package
+type realClipboard struct{}
+
+func (r *realClipboard) WriteAll(text string) error {
+	return clipboard.WriteAll(text)
+}
+
+func (r *realClipboard) ReadAll() (string, error) {
+	return clipboard.ReadAll()
+}
+
+// defaultClipboard is the default clipboard implementation
+var defaultClipboard ClipboardInterface = &realClipboard{}
+
 // CopyWithTimeout copies text to clipboard and clears it after timeout
 func CopyWithTimeout(text string, timeout time.Duration) error {
+	return copyWithTimeoutInternal(text, timeout, defaultClipboard)
+}
+
+// copyWithTimeoutInternal is the internal implementation that accepts a clipboard interface
+func copyWithTimeoutInternal(text string, timeout time.Duration, cb ClipboardInterface) error {
 	// Copy to clipboard
-	if err := clipboard.WriteAll(text); err != nil {
+	if err := cb.WriteAll(text); err != nil {
 		return fmt.Errorf("failed to copy to clipboard: %w", err)
 	}
 
@@ -22,10 +47,10 @@ func CopyWithTimeout(text string, timeout time.Duration) error {
 		time.Sleep(timeout)
 
 		// Check if clipboard still contains our text before clearing
-		current, err := clipboard.ReadAll()
+		current, err := cb.ReadAll()
 		if err == nil && current == text {
 			// Best effort clear, log any errors
-			if err := clipboard.WriteAll(""); err != nil {
+			if err := cb.WriteAll(""); err != nil {
 				log.Printf("warning: failed to clear clipboard: %v", err)
 			}
 		}
@@ -44,4 +69,20 @@ func IsAvailable() bool {
 // Clear clears the clipboard
 func Clear() error {
 	return clipboard.WriteAll("")
+}
+
+// Copy copies text to the clipboard without a timeout
+func Copy(text string) error {
+	return clipboard.WriteAll(text)
+}
+
+// CanRead checks if the clipboard can be read
+func CanRead() bool {
+	_, err := clipboard.ReadAll()
+	return err == nil
+}
+
+// Read reads the current content of the clipboard
+func Read() (string, error) {
+	return clipboard.ReadAll()
 }

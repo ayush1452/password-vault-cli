@@ -130,5 +130,10 @@ func runRotateMasterKey() error {
 		return err
 	}
 
+	// Close session store to release lock file
+	if err := CloseSessionStore(); err != nil {
+		logWarning("Failed to close session store after master key rotation: %v", err)
+	}
+
 	return nil
 }

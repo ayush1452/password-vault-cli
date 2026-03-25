@@ -675,3 +675,55 @@ func TestSecureCompareComprehensive(t *testing.T) {
 		})
 	}
 }
+
+// TestComputeHMAC tests HMAC computation
+func TestComputeHMAC(t *testing.T) {
+	key := []byte("test-hmac-key-32-bytes-long!!")
+	data := []byte("test data to compute HMAC")
+
+	mac := ComputeHMAC(key, data)
+	if len(mac) == 0 {
+		t.Error("ComputeHMAC returned empty MAC")
+	}
+
+	// Same inputs should produce same MAC
+	mac2 := ComputeHMAC(key, data)
+	if !bytes.Equal(mac, mac2) {
+		t.Error("ComputeHMAC is not deterministic")
+	}
+
+	// Different key should produce different MAC
+	differentKey := []byte("different-key-32-bytes-long!!")
+	mac3 := ComputeHMAC(differentKey, data)
+	if bytes.Equal(mac, mac3) {
+		t.Error("Different keys should produce different MACs")
+	}
+}
+
+// TestVerifyHMAC tests HMAC verification
+func TestVerifyHMAC(t *testing.T) {
+	key := []byte("test-verification-key-32-bytes!")
+	data := []byte("data to verify")
+
+	// Compute MAC
+	mac := ComputeHMAC(key, data)
+
+	// Verify should succeed with correct MAC
+	if !VerifyHMAC(key, data, mac) {
+		t.Error("VerifyHMAC failed with correct MAC")
+	}
+
+	// Verify should fail with incorrect MAC
+	wrongMAC := make([]byte, len(mac))
+	copy(wrongMAC, mac)
+	wrongMAC[0] ^= 0xFF // Flip bits
+	if VerifyHMAC(key, data, wrongMAC) {
+		t.Error("VerifyHMAC should fail with incorrect MAC")
+	}
+
+	// Verify should fail with wrong key
+	wrongKey := []byte("wrong-key-32-bytes-long!!!!!!")
+	if VerifyHMAC(wrongKey, data, mac) {
+		t.Error("VerifyHMAC should fail with wrong key")
+	}
+}
