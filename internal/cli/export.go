@@ -87,32 +87,12 @@ func runExport() error {
 		return fmt.Errorf("cannot use both --encrypted and --plaintext")
 	}
 
-	// Ensure profile is set
-	if profile == "" {
-		profile = "default"
-	}
-
-	// Get vault store
 	vaultStore := GetVaultStore()
 
-	// Get all entries for the profile
-	entries, err := vaultStore.ListEntries(profile, nil)
-	if err != nil {
-		return fmt.Errorf("failed to list entries: %w", err)
-	}
-
-	if len(entries) == 0 {
-		return fmt.Errorf("no entries to export in profile '%s'", profile)
-	}
-
-	// Confirm for plaintext export
-	if exportPlaintext {
-		if !exportIncludeSecrets {
-			return fmt.Errorf("plaintext export requires --include-secrets flag for safety")
-		}
-
+	// Confirm for plaintext export only when secrets are included.
+	if exportPlaintext && exportIncludeSecrets {
 		confirmed, err := PromptConfirm(
-			fmt.Sprintf("WARNING: Exporting %d entries in PLAINTEXT format. Secrets will be visible. Continue?", len(entries)),
+			"WARNING: Exporting a PLAINTEXT vault snapshot with secrets. Passwords and DID private keys will be visible. Continue?",
 			false,
 		)
 		if err != nil {
@@ -122,6 +102,29 @@ func runExport() error {
 			fmt.Println("Export canceled")
 			return nil
 		}
+	}
+
+	tmpFile, err := os.CreateTemp("", "vault-export-*.json")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary export file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary export file: %w", err)
+	}
+	defer func() {
+		if removeErr := os.Remove(tmpPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			logWarning("Failed to remove temporary export file %s: %v", tmpPath, removeErr)
+		}
+	}()
+
+	if err := vaultStore.ExportVault(tmpPath, exportIncludeSecrets); err != nil {
+		return fmt.Errorf("failed to export vault snapshot: %w", err)
+	}
+
+	rawSnapshot, err := os.ReadFile(tmpPath)
+	if err != nil {
+		return fmt.Errorf("failed to read temporary export snapshot: %w", err)
 	}
 
 	// Get passphrase for encrypted export
@@ -147,10 +150,12 @@ func runExport() error {
 		}
 	}
 
-	// Export entries
-	data, err := vault.ExportVault(entries, passphrase, exportEncrypted)
-	if err != nil {
-		return fmt.Errorf("failed to export vault: %w", err)
+	data := rawSnapshot
+	if exportEncrypted {
+		data, err = vault.EncryptExportData(rawSnapshot, passphrase)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt export data: %w", err)
+		}
 	}
 
 	// Write to file
@@ -164,11 +169,13 @@ func runExport() error {
 		format = "plaintext"
 	}
 
-	fmt.Printf("✓ Exported %d entries to %s (%s format)\n", len(entries), exportPath, format)
+	fmt.Printf("✓ Exported vault snapshot to %s (%s format)\n", exportPath, format)
 	if exportEncrypted {
 		fmt.Println("Keep your export passphrase safe - you'll need it to import this backup")
+	} else if exportIncludeSecrets {
+		fmt.Println("WARNING: This file contains unencrypted secrets, including DID private keys. Store it securely!")
 	} else {
-		fmt.Println("WARNING: This file contains unencrypted secrets. Store it securely!")
+		fmt.Println("Snapshot exported without secret material")
 	}
 
 	// Close session store to release lock file
