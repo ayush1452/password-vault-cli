@@ -83,11 +83,6 @@ func runImport() error {
 		return fmt.Errorf("invalid conflict resolution: %s (must be skip, overwrite, or fail)", importConflict)
 	}
 
-	// Ensure profile is set
-	if profile == "" {
-		profile = "default"
-	}
-
 	// Read import file
 	data, err := os.ReadFile(importPath)
 	if err != nil {
@@ -108,46 +103,36 @@ func runImport() error {
 		}
 	}
 
-	// Import entries
-	entries, err := vault.ImportVault(data, passphrase)
-	if err != nil {
-		return fmt.Errorf("failed to import vault: %w", err)
+	rawSnapshot := data
+	if vault.IsEncryptedExport(data) {
+		rawSnapshot, err = vault.DecryptExportData(data, passphrase)
+		if err != nil {
+			return fmt.Errorf("failed to decrypt import: %w", err)
+		}
 	}
 
-	if len(entries) == 0 {
-		return fmt.Errorf("no entries found in import file")
-	}
-
-	// Get vault store
 	vaultStore := GetVaultStore()
 
-	// Import entries with conflict resolution
-	imported := 0
-	skipped := 0
-	overwritten := 0
-
-	for _, entry := range entries {
-		exists := vaultStore.EntryExists(profile, entry.Name)
-
-		if exists {
-			switch importConflict {
-			case "fail":
-				return fmt.Errorf("entry '%s' already exists (use --conflict skip or --conflict overwrite)", entry.Name)
-			case "skip":
-				skipped++
-				continue
-			case "overwrite":
-				if err := vaultStore.UpdateEntry(profile, entry.Name, entry); err != nil {
-					return fmt.Errorf("failed to overwrite entry '%s': %w", entry.Name, err)
-				}
-				overwritten++
-			}
-		} else {
-			if err := vaultStore.CreateEntry(profile, entry); err != nil {
-				return fmt.Errorf("failed to create entry '%s': %w", entry.Name, err)
-			}
-			imported++
+	tmpFile, err := os.CreateTemp("", "vault-import-*.json")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary import file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary import file: %w", err)
+	}
+	defer func() {
+		if removeErr := os.Remove(tmpPath); removeErr != nil && !os.IsNotExist(removeErr) {
+			logWarning("Failed to remove temporary import file %s: %v", tmpPath, removeErr)
 		}
+	}()
+
+	if err := os.WriteFile(tmpPath, rawSnapshot, 0600); err != nil {
+		return fmt.Errorf("failed to stage import snapshot: %w", err)
+	}
+
+	if err := vaultStore.ImportVault(tmpPath, importConflict); err != nil {
+		return fmt.Errorf("failed to import vault snapshot: %w", err)
 	}
 
 	// Refresh session
@@ -158,18 +143,7 @@ func runImport() error {
 		logWarning("Failed to close session store after import: %v", err)
 	}
 
-	// Success message
-	fmt.Printf("✓ Import completed:\n")
-	if imported > 0 {
-		fmt.Printf("  - %d new entries imported\n", imported)
-	}
-	if overwritten > 0 {
-		fmt.Printf("  - %d entries overwritten\n", overwritten)
-	}
-	if skipped > 0 {
-		fmt.Printf("  - %d entries skipped (already exist)\n", skipped)
-	}
-	fmt.Printf("Total: %d entries processed\n", len(entries))
+	fmt.Println("✓ Vault snapshot imported successfully")
 
 	return nil
 }
