@@ -8,10 +8,11 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/vault-cli/vault/internal/config"
+	"github.com/vault-cli/vault/internal/identity"
 )
 
 // NewDoctor creates a new doctor command
-func NewDoctor(cfg *config.Config) *cobra.Command {
+func NewDoctor(commandCfg *config.Config) *cobra.Command {
 	return &cobra.Command{
 		Use:   "doctor",
 		Short: "Perform security and health checks",
@@ -27,6 +28,17 @@ This command checks:
 Example:
   vault doctor`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if commandCfg != nil {
+				if vaultPath == "" {
+					vaultPath = commandCfg.VaultPath
+				}
+				if profile == "" {
+					profile = commandCfg.DefaultProfile
+				}
+				if cfg == nil {
+					cfg = commandCfg
+				}
+			}
 			return runDoctor()
 		},
 	}
@@ -52,6 +64,13 @@ Example:
 }
 
 func runDoctor() error {
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
+	if vaultPath == "" {
+		vaultPath = cfg.VaultPath
+	}
+
 	// Helper function to write output and check for errors
 	printStatus := func(format string, args ...interface{}) error {
 		_, err := fmt.Fprintf(os.Stdout, format, args...)
@@ -194,6 +213,52 @@ func runDoctor() error {
 			}
 			if err := printStatus("   ✅ Created: %s\n", metadata.CreatedAt.Format("2006-01-02 15:04:05")); err != nil {
 				return err
+			}
+		}
+
+		profiles, err := vaultStore.ListProfiles()
+		if err != nil {
+			if err := printStatus("   ⚠️  Failed to inspect identity profiles: %v\n", err); err != nil {
+				return err
+			}
+			warnings++
+		} else {
+			totalDIDs := 0
+			totalCredentials := 0
+			invalidCredentials := 0
+			for _, vaultProfile := range profiles {
+				if vaultProfile == nil {
+					continue
+				}
+				identities, err := vaultStore.ListIdentities(vaultProfile.Name)
+				if err == nil {
+					totalDIDs += len(identities)
+				}
+				credentials, err := vaultStore.ListCredentials(vaultProfile.Name)
+				if err == nil {
+					totalCredentials += len(credentials)
+					for _, credential := range credentials {
+						if verifyErr := identity.VerifyCredential(credential); verifyErr != nil {
+							invalidCredentials++
+						}
+					}
+				}
+			}
+			if err := printStatus("   ✅ DIDs discovered: %d\n", totalDIDs); err != nil {
+				return err
+			}
+			if err := printStatus("   ✅ Credentials discovered: %d\n", totalCredentials); err != nil {
+				return err
+			}
+			if invalidCredentials > 0 {
+				if err := printStatus("   ❌ Invalid credential signatures: %d\n", invalidCredentials); err != nil {
+					return err
+				}
+				issues += invalidCredentials
+			} else {
+				if err := printStatus("   ✅ Stored credential signatures verify successfully\n"); err != nil {
+					return err
+				}
 			}
 		}
 	} else {

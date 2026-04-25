@@ -53,6 +53,12 @@ func runRotatePassword(cmd *cobra.Command, name string, length int, copyToClip b
 
 	// Get the vault store
 	vaultStore := GetVaultStore()
+	if vaultStore == nil {
+		return fmt.Errorf("failed to access unlocked vault store")
+	}
+	if cfg == nil {
+		cfg = config.DefaultConfig()
+	}
 
 	// Generate new password using the same logic as passgen
 	newPassword, err := crypto.GeneratePassword(length, crypto.CharsetAlnumSpecial)

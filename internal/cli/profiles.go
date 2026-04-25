@@ -45,7 +45,7 @@ func newProfilesListCmd() *cobra.Command {
 		Use:   "list",
 		Short: "List all profiles",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runProfilesList()
+			return runProfilesList(cmd.OutOrStdout())
 		},
 	}
 }
@@ -124,7 +124,7 @@ var profilesListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all profiles",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runProfilesList()
+		return runProfilesList(cmd.OutOrStdout())
 	},
 }
 
@@ -176,7 +176,7 @@ func init() {
 	profilesCmd.AddCommand(profilesSetDefaultCmd)
 }
 
-func runProfilesList() error {
+func runProfilesList(out io.Writer) error {
 	// Helper function to write output with error checking
 	writeOutput := func(w io.Writer, format string, args ...interface{}) error {
 		_, err := fmt.Fprintf(w, format, args...)
@@ -208,7 +208,7 @@ func runProfilesList() error {
 	}
 
 	if len(profiles) == 0 {
-		if err := writeOutput(os.Stdout, "No profiles found\n"); err != nil {
+		if err := writeOutput(out, "No profiles found\n"); err != nil {
 			return err
 		}
 		return nil
@@ -224,7 +224,7 @@ func runProfilesList() error {
 		if err := CloseSessionStore(); err != nil {
 			logWarning("Failed to close session store after profile list: %v", err)
 		}
-		encoder := json.NewEncoder(os.Stdout)
+		encoder := json.NewEncoder(out)
 		encoder.SetIndent("", "  ")
 		if err := encoder.Encode(profiles); err != nil {
 			return fmt.Errorf("failed to encode profiles to JSON: %w", err)
@@ -233,7 +233,7 @@ func runProfilesList() error {
 	}
 
 	// Table output
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	defer func() {
 		if err := w.Flush(); err != nil {
 			log.Printf("warning: failed to flush tabwriter: %v\n", err)
