@@ -94,6 +94,9 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(passgenCmd)
 	rootCmd.AddCommand(NewRotatePassword(cfg))
+	rootCmd.AddCommand(NewDID(nil))
+	rootCmd.AddCommand(NewVC(nil))
+	rootCmd.AddCommand(NewZKProof(nil))
 }
 
 func initConfig() {

@@ -72,6 +72,11 @@ func exportEncrypted(entries []*domain.Entry, passphrase string) ([]byte, error)
 		return nil, fmt.Errorf("failed to marshal entries: %w", err)
 	}
 
+	return EncryptExportData(plainData, passphrase)
+}
+
+// EncryptExportData encrypts an arbitrary export payload using the standard export wrapper.
+func EncryptExportData(plainData []byte, passphrase string) ([]byte, error) {
 	// Create crypto engine
 	crypto := NewDefaultCryptoEngine()
 
@@ -118,49 +123,9 @@ func exportPlaintext(entries []*domain.Entry) ([]byte, error) {
 }
 
 func importEncrypted(data []byte, passphrase string) ([]*domain.Entry, error) {
-	var format ExportFormat
-	if err := json.Unmarshal(data, &format); err != nil {
-		return nil, fmt.Errorf("invalid export file: %w", err)
-	}
-
-	// Decode salt, nonce, tag, and ciphertext
-	salt, err := base64.StdEncoding.DecodeString(format.Salt)
+	plainData, err := DecryptExportData(data, passphrase)
 	if err != nil {
-		return nil, fmt.Errorf("invalid salt: %w", err)
-	}
-
-	nonce, err := base64.StdEncoding.DecodeString(format.Nonce)
-	if err != nil {
-		return nil, fmt.Errorf("invalid nonce: %w", err)
-	}
-
-	tag, err := base64.StdEncoding.DecodeString(format.Tag)
-	if err != nil {
-		return nil, fmt.Errorf("invalid tag: %w", err)
-	}
-
-	ciphertext, err := base64.StdEncoding.DecodeString(format.Data)
-	if err != nil {
-		return nil, fmt.Errorf("invalid encrypted data: %w", err)
-	}
-
-	// Create envelope
-	envelope := &Envelope{
-		Version:    1,
-		KDFParams:  DefaultArgon2Params(),
-		Salt:       salt,
-		Nonce:      nonce,
-		Tag:        tag,
-		Ciphertext: ciphertext,
-	}
-
-	// Create crypto engine
-	crypto := NewDefaultCryptoEngine()
-
-	// Decrypt data with passphrase
-	plainData, err := crypto.OpenWithPassphrase(envelope, passphrase)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt data (wrong passphrase?): %w", err)
+		return nil, err
 	}
 
 	// Unmarshal entries
@@ -170,6 +135,47 @@ func importEncrypted(data []byte, passphrase string) ([]*domain.Entry, error) {
 	}
 
 	return convertExportEntries(exportEntries), nil
+}
+
+// DecryptExportData decrypts a wrapped export payload into raw bytes.
+func DecryptExportData(data []byte, passphrase string) ([]byte, error) {
+	var format ExportFormat
+	if err := json.Unmarshal(data, &format); err != nil {
+		return nil, fmt.Errorf("invalid export file: %w", err)
+	}
+
+	salt, err := base64.StdEncoding.DecodeString(format.Salt)
+	if err != nil {
+		return nil, fmt.Errorf("invalid salt: %w", err)
+	}
+	nonce, err := base64.StdEncoding.DecodeString(format.Nonce)
+	if err != nil {
+		return nil, fmt.Errorf("invalid nonce: %w", err)
+	}
+	tag, err := base64.StdEncoding.DecodeString(format.Tag)
+	if err != nil {
+		return nil, fmt.Errorf("invalid tag: %w", err)
+	}
+	ciphertext, err := base64.StdEncoding.DecodeString(format.Data)
+	if err != nil {
+		return nil, fmt.Errorf("invalid encrypted data: %w", err)
+	}
+
+	envelope := &Envelope{
+		Version:    1,
+		KDFParams:  DefaultArgon2Params(),
+		Salt:       salt,
+		Nonce:      nonce,
+		Tag:        tag,
+		Ciphertext: ciphertext,
+	}
+
+	crypto := NewDefaultCryptoEngine()
+	plainData, err := crypto.OpenWithPassphrase(envelope, passphrase)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt data (wrong passphrase?): %w", err)
+	}
+	return plainData, nil
 }
 
 func importPlaintext(data []byte) ([]*domain.Entry, error) {

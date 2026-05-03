@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/vault-cli/vault/internal/domain"
+	"github.com/vault-cli/vault/internal/identity"
 	"github.com/vault-cli/vault/internal/vault"
 )
 
@@ -1070,5 +1072,205 @@ func TestDeleteNonExistentProfile(t *testing.T) {
 	err := store.DeleteProfile("non-existent")
 	if err != ErrProfileNotFound {
 		t.Errorf("Expected ErrProfileNotFound, got %v", err)
+	}
+}
+
+func TestBoltStore_IdentityAndCredentialOperations(t *testing.T) {
+	tempDir := t.TempDir()
+	vaultPath := filepath.Join(tempDir, "identity.vault")
+
+	salt, err := vault.GenerateSalt()
+	if err != nil {
+		t.Fatalf("failed to generate salt: %v", err)
+	}
+
+	crypto := vault.NewDefaultCryptoEngine()
+	masterKey, err := crypto.DeriveKey("test-passphrase", salt)
+	if err != nil {
+		t.Fatalf("failed to derive key: %v", err)
+	}
+	defer vault.Zeroize(masterKey)
+
+	kdfParams := vault.DefaultArgon2Params()
+	kdfParamsMap := map[string]interface{}{
+		"memory":      kdfParams.Memory,
+		"iterations":  kdfParams.Iterations,
+		"parallelism": kdfParams.Parallelism,
+		"salt":        salt,
+	}
+
+	store := NewBoltStore()
+	if err := store.CreateVault(vaultPath, masterKey, kdfParamsMap); err != nil {
+		t.Fatalf("failed to create vault: %v", err)
+	}
+	if err := store.OpenVault(vaultPath, masterKey); err != nil {
+		t.Fatalf("failed to open vault: %v", err)
+	}
+	defer store.CloseVault()
+
+	record, err := identity.GenerateIdentity("issuer", time.Unix(1700000000, 0))
+	if err != nil {
+		t.Fatalf("failed to generate identity: %v", err)
+	}
+	if err := store.CreateIdentity("default", record); err != nil {
+		t.Fatalf("failed to create identity: %v", err)
+	}
+	if !store.IdentityExists("default", "issuer") {
+		t.Fatalf("identity should exist")
+	}
+
+	fetchedIdentity, err := store.GetIdentity("default", "issuer")
+	if err != nil {
+		t.Fatalf("failed to fetch identity: %v", err)
+	}
+	if fetchedIdentity.DID != record.DID {
+		t.Fatalf("identity DID mismatch")
+	}
+
+	credential, err := identity.IssueCredential(
+		record,
+		"cred-1",
+		record.DID,
+		[]string{"EmployeeCredential"},
+		[]identity.CredentialClaim{{Name: "role", Value: "admin"}},
+		nil,
+		time.Unix(1700000100, 0),
+	)
+	if err != nil {
+		t.Fatalf("failed to issue credential: %v", err)
+	}
+	if err := store.CreateCredential("default", credential); err != nil {
+		t.Fatalf("failed to create credential: %v", err)
+	}
+	if !store.CredentialExists("default", "cred-1") {
+		t.Fatalf("credential should exist")
+	}
+
+	fetchedCredential, err := store.GetCredential("default", "cred-1")
+	if err != nil {
+		t.Fatalf("failed to fetch credential: %v", err)
+	}
+	if err := identity.VerifyCredential(fetchedCredential); err != nil {
+		t.Fatalf("stored credential should verify: %v", err)
+	}
+
+	if err := store.VerifyIntegrity(); err != nil {
+		t.Fatalf("verify integrity failed: %v", err)
+	}
+}
+
+func TestBoltStore_ExportImportIncludesIdentityData(t *testing.T) {
+	tempDir := t.TempDir()
+	sourceVaultPath := filepath.Join(tempDir, "source.vault")
+	exportPath := filepath.Join(tempDir, "snapshot.json")
+
+	salt, err := vault.GenerateSalt()
+	if err != nil {
+		t.Fatalf("failed to generate salt: %v", err)
+	}
+
+	crypto := vault.NewDefaultCryptoEngine()
+	masterKey, err := crypto.DeriveKey("test-passphrase", salt)
+	if err != nil {
+		t.Fatalf("failed to derive key: %v", err)
+	}
+	defer vault.Zeroize(masterKey)
+
+	kdfParams := vault.DefaultArgon2Params()
+	kdfParamsMap := map[string]interface{}{
+		"memory":      kdfParams.Memory,
+		"iterations":  kdfParams.Iterations,
+		"parallelism": kdfParams.Parallelism,
+		"salt":        salt,
+	}
+
+	source := NewBoltStore()
+	if err := source.CreateVault(sourceVaultPath, masterKey, kdfParamsMap); err != nil {
+		t.Fatalf("failed to create source vault: %v", err)
+	}
+	if err := source.OpenVault(sourceVaultPath, masterKey); err != nil {
+		t.Fatalf("failed to open source vault: %v", err)
+	}
+
+	record, err := identity.GenerateIdentity("issuer", time.Unix(1700000000, 0))
+	if err != nil {
+		t.Fatalf("failed to generate identity: %v", err)
+	}
+	if err := source.CreateIdentity("default", record); err != nil {
+		t.Fatalf("failed to create identity: %v", err)
+	}
+
+	credential, err := identity.IssueCredential(
+		record,
+		"cred-1",
+		record.DID,
+		[]string{"AccessCredential"},
+		[]identity.CredentialClaim{{Name: "scope", Value: "read"}},
+		nil,
+		time.Unix(1700000100, 0),
+	)
+	if err != nil {
+		t.Fatalf("failed to issue credential: %v", err)
+	}
+	if err := source.CreateCredential("default", credential); err != nil {
+		t.Fatalf("failed to create credential: %v", err)
+	}
+
+	if err := source.ExportVault(exportPath, true); err != nil {
+		t.Fatalf("failed to export snapshot: %v", err)
+	}
+	if err := source.CloseVault(); err != nil {
+		t.Fatalf("failed to close source vault: %v", err)
+	}
+
+	importedVaultPath := filepath.Join(tempDir, "imported.vault")
+	imported := NewBoltStore()
+	if err := imported.CreateVault(importedVaultPath, masterKey, kdfParamsMap); err != nil {
+		t.Fatalf("failed to create imported vault: %v", err)
+	}
+	if err := imported.OpenVault(importedVaultPath, masterKey); err != nil {
+		t.Fatalf("failed to open imported vault: %v", err)
+	}
+	defer imported.CloseVault()
+
+	if err := imported.ImportVault(exportPath, "overwrite"); err != nil {
+		t.Fatalf("failed to import snapshot: %v", err)
+	}
+
+	importedIdentity, err := imported.GetIdentity("default", "issuer")
+	if err != nil {
+		t.Fatalf("failed to fetch imported identity: %v", err)
+	}
+	if importedIdentity.PrivateJWK.D == "" {
+		t.Fatalf("expected imported identity to include private key material")
+	}
+
+	importedCredential, err := imported.GetCredential("default", "cred-1")
+	if err != nil {
+		t.Fatalf("failed to fetch imported credential: %v", err)
+	}
+	if err := identity.VerifyCredential(importedCredential); err != nil {
+		t.Fatalf("imported credential should verify: %v", err)
+	}
+
+	publicOnlyExportPath := filepath.Join(tempDir, "snapshot-public.json")
+	if err := imported.ExportVault(publicOnlyExportPath, false); err != nil {
+		t.Fatalf("failed to export public-only snapshot: %v", err)
+	}
+
+	data, err := os.ReadFile(publicOnlyExportPath)
+	if err != nil {
+		t.Fatalf("failed to read public-only snapshot: %v", err)
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("failed to decode public-only snapshot: %v", err)
+	}
+
+	identitiesPayload := payload["identities"].(map[string]interface{})
+	records := identitiesPayload["default"].([]interface{})
+	first := records[0].(map[string]interface{})
+	if _, exists := first["private_jwk"]; exists {
+		t.Fatalf("public-only snapshot should not contain private_jwk")
 	}
 }

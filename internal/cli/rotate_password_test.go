@@ -10,6 +10,7 @@ import (
 	"github.com/vault-cli/vault/internal/config"
 	"github.com/vault-cli/vault/internal/crypto"
 	"github.com/vault-cli/vault/internal/domain"
+	"github.com/vault-cli/vault/internal/identity"
 )
 
 // rotatePasswordVaultStore is a minimal implementation of VaultStore for testing
@@ -48,13 +49,41 @@ func (m *rotatePasswordVaultStore) CreateEntry(profile string, entry *domain.Ent
 func (m *rotatePasswordVaultStore) ListEntries(profile string, filter *domain.Filter) ([]*domain.Entry, error) {
 	return nil, nil
 }
-func (m *rotatePasswordVaultStore) DeleteEntry(profile, id string) error             { return nil }
-func (m *rotatePasswordVaultStore) EntryExists(profile, id string) bool              { return false }
-func (m *rotatePasswordVaultStore) CreateProfile(name, description string) error     { return nil }
-func (m *rotatePasswordVaultStore) GetProfile(name string) (*domain.Profile, error)  { return nil, nil }
-func (m *rotatePasswordVaultStore) ListProfiles() ([]*domain.Profile, error)         { return nil, nil }
-func (m *rotatePasswordVaultStore) DeleteProfile(name string) error                  { return nil }
-func (m *rotatePasswordVaultStore) ProfileExists(name string) bool                   { return false }
+func (m *rotatePasswordVaultStore) DeleteEntry(profile, id string) error            { return nil }
+func (m *rotatePasswordVaultStore) EntryExists(profile, id string) bool             { return false }
+func (m *rotatePasswordVaultStore) CreateProfile(name, description string) error    { return nil }
+func (m *rotatePasswordVaultStore) GetProfile(name string) (*domain.Profile, error) { return nil, nil }
+func (m *rotatePasswordVaultStore) ListProfiles() ([]*domain.Profile, error)        { return nil, nil }
+func (m *rotatePasswordVaultStore) DeleteProfile(name string) error                 { return nil }
+func (m *rotatePasswordVaultStore) ProfileExists(name string) bool                  { return false }
+func (m *rotatePasswordVaultStore) CreateIdentity(profile string, record *identity.IdentityRecord) error {
+	return nil
+}
+func (m *rotatePasswordVaultStore) GetIdentity(profile, name string) (*identity.IdentityRecord, error) {
+	return nil, nil
+}
+func (m *rotatePasswordVaultStore) ListIdentities(profile string) ([]*identity.IdentityRecord, error) {
+	return nil, nil
+}
+func (m *rotatePasswordVaultStore) UpdateIdentity(profile, name string, record *identity.IdentityRecord) error {
+	return nil
+}
+func (m *rotatePasswordVaultStore) DeleteIdentity(profile, name string) error { return nil }
+func (m *rotatePasswordVaultStore) IdentityExists(profile, name string) bool  { return false }
+func (m *rotatePasswordVaultStore) CreateCredential(profile string, record *identity.CredentialRecord) error {
+	return nil
+}
+func (m *rotatePasswordVaultStore) GetCredential(profile, id string) (*identity.CredentialRecord, error) {
+	return nil, nil
+}
+func (m *rotatePasswordVaultStore) ListCredentials(profile string) ([]*identity.CredentialRecord, error) {
+	return nil, nil
+}
+func (m *rotatePasswordVaultStore) UpdateCredential(profile, id string, record *identity.CredentialRecord) error {
+	return nil
+}
+func (m *rotatePasswordVaultStore) DeleteCredential(profile, id string) error        { return nil }
+func (m *rotatePasswordVaultStore) CredentialExists(profile, id string) bool         { return false }
 func (m *rotatePasswordVaultStore) GetVaultMetadata() (*domain.VaultMetadata, error) { return nil, nil }
 func (m *rotatePasswordVaultStore) UpdateVaultMetadata(metadata *domain.VaultMetadata) error {
 	return nil
@@ -222,6 +251,7 @@ func TestRotatePasswordCommand(t *testing.T) {
 			if tt.setup != nil {
 				tt.setup()
 			}
+			sessionManager.vaultStore = mockStore
 
 			// Setup clipboard spy
 			clipSpy := &clipboardSpy{}

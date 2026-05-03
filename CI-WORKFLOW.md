@@ -205,6 +205,11 @@ env:
 
 **Purpose:** run unit/integration tests, with `-race` detection and coverage measurement.
 
+**Identity feature note**
+
+- The DID/VC/ZK workflow now adds coverage in `internal/identity`, `tests/integration/identity`, `tests/e2e/identity_workflow_test.go`, and `tests/security/identity_security_test.go`.
+- Changes under `internal/identity`, `internal/store`, or the identity CLI commands should trigger those suites in addition to the existing repository-wide test jobs.
+
 **Key steps**
 
 1. checkout code

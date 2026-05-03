@@ -6,6 +6,7 @@ import (
 	"errors"
 
 	"github.com/vault-cli/vault/internal/domain"
+	"github.com/vault-cli/vault/internal/identity"
 )
 
 // Error variables for vault store operations
@@ -22,6 +23,14 @@ var (
 	ErrProfileNotFound = errors.New("profile not found")
 	// ErrProfileExists is returned when attempting to create a profile that already exists
 	ErrProfileExists = errors.New("profile already exists")
+	// ErrIdentityNotFound is returned when the specified DID identity does not exist
+	ErrIdentityNotFound = errors.New("identity not found")
+	// ErrIdentityExists is returned when attempting to create an identity that already exists
+	ErrIdentityExists = errors.New("identity already exists")
+	// ErrCredentialNotFound is returned when the specified verifiable credential does not exist
+	ErrCredentialNotFound = errors.New("credential not found")
+	// ErrCredentialExists is returned when attempting to create a credential that already exists
+	ErrCredentialExists = errors.New("credential already exists")
 	// ErrVaultLocked is returned when the vault is locked by another process
 	ErrVaultLocked = errors.New("vault is locked by another process")
 	// ErrVaultCorrupted is returned when the vault data is corrupted or invalid
@@ -54,6 +63,22 @@ type VaultStore interface {
 	ListProfiles() ([]*domain.Profile, error)
 	DeleteProfile(name string) error
 	ProfileExists(name string) bool
+
+	// Identity operations
+	CreateIdentity(profile string, record *identity.IdentityRecord) error
+	GetIdentity(profile, name string) (*identity.IdentityRecord, error)
+	ListIdentities(profile string) ([]*identity.IdentityRecord, error)
+	UpdateIdentity(profile, name string, record *identity.IdentityRecord) error
+	DeleteIdentity(profile, name string) error
+	IdentityExists(profile, name string) bool
+
+	// Credential operations
+	CreateCredential(profile string, record *identity.CredentialRecord) error
+	GetCredential(profile, id string) (*identity.CredentialRecord, error)
+	ListCredentials(profile string) ([]*identity.CredentialRecord, error)
+	UpdateCredential(profile, id string, record *identity.CredentialRecord) error
+	DeleteCredential(profile, id string) error
+	CredentialExists(profile, id string) bool
 
 	// Metadata operations
 	GetVaultMetadata() (*domain.VaultMetadata, error)

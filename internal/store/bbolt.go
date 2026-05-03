@@ -18,6 +18,7 @@ import (
 	"go.etcd.io/bbolt"
 
 	"github.com/vault-cli/vault/internal/domain"
+	"github.com/vault-cli/vault/internal/identity"
 	"github.com/vault-cli/vault/internal/vault"
 )
 
@@ -27,6 +28,12 @@ var (
 	ProfilesBucket = []byte("profiles")
 	AuditBucket    = []byte("audit")
 	ConfigBucket   = []byte("config")
+)
+
+const (
+	entriesBucketPrefix     = "entries:"
+	identitiesBucketPrefix  = "dids:"
+	credentialsBucketPrefix = "credentials:"
 )
 
 // BoltStore implements VaultStore using BoltDB
@@ -44,6 +51,39 @@ func NewBoltStore() *BoltStore {
 	return &BoltStore{
 		crypto: vault.NewDefaultCryptoEngine(),
 	}
+}
+
+func bucketName(prefix, profile string) []byte {
+	return []byte(prefix + profile)
+}
+
+func ensureFeatureBuckets(db *bbolt.DB) error {
+	return db.Update(func(tx *bbolt.Tx) error {
+		profilesBucket := tx.Bucket(ProfilesBucket)
+		if profilesBucket == nil {
+			return ErrVaultCorrupted
+		}
+
+		return profilesBucket.ForEach(func(name, _ []byte) error {
+			profile := string(name)
+			requiredBuckets := [][]byte{
+				bucketName(entriesBucketPrefix, profile),
+				bucketName(identitiesBucketPrefix, profile),
+				bucketName(credentialsBucketPrefix, profile),
+			}
+
+			for _, required := range requiredBuckets {
+				if tx.Bucket(required) != nil {
+					continue
+				}
+				if _, err := tx.CreateBucket(required); err != nil {
+					return fmt.Errorf("create bucket %s: %w", string(required), err)
+				}
+			}
+
+			return nil
+		})
+	})
 }
 
 // CreateVault creates a new vault at the specified path
@@ -129,8 +169,14 @@ func (bs *BoltStore) CreateVault(path string, masterKey []byte, kdfParams map[st
 		}
 
 		// Create default entries bucket
-		if _, err := tx.CreateBucket([]byte("entries:default")); err != nil {
+		if _, err := tx.CreateBucket(bucketName(entriesBucketPrefix, "default")); err != nil {
 			return fmt.Errorf("failed to create default entries bucket: %w", err)
+		}
+		if _, err := tx.CreateBucket(bucketName(identitiesBucketPrefix, "default")); err != nil {
+			return fmt.Errorf("failed to create default did bucket: %w", err)
+		}
+		if _, err := tx.CreateBucket(bucketName(credentialsBucketPrefix, "default")); err != nil {
+			return fmt.Errorf("failed to create default credential bucket: %w", err)
 		}
 
 		// Create audit bucket
@@ -224,6 +270,16 @@ func (bs *BoltStore) OpenVault(path string, masterKey []byte) error {
 			log.Printf("warning: failed to unlock file after verification error: %v", unlockErr)
 		}
 		return fmt.Errorf("vault verification failed: %w", err)
+	}
+
+	if err := ensureFeatureBuckets(db); err != nil {
+		if closeErr := db.Close(); closeErr != nil {
+			log.Printf("warning: failed to close database after bucket initialization error: %v", closeErr)
+		}
+		if unlockErr := lock.Unlock(); unlockErr != nil {
+			log.Printf("warning: failed to unlock file after bucket initialization error: %v", unlockErr)
+		}
+		return fmt.Errorf("failed to initialize identity buckets: %w", err)
 	}
 
 	bs.db = db
@@ -589,10 +645,15 @@ func (bs *BoltStore) CreateProfile(name, description string) error {
 			return fmt.Errorf("failed to store profile: %w", err)
 		}
 
-		// Create entries bucket for the profile
-		bucketName := fmt.Sprintf("entries:%s", name)
-		if _, err := tx.CreateBucket([]byte(bucketName)); err != nil {
-			return fmt.Errorf("failed to create entries bucket: %w", err)
+		requiredBuckets := [][]byte{
+			bucketName(entriesBucketPrefix, name),
+			bucketName(identitiesBucketPrefix, name),
+			bucketName(credentialsBucketPrefix, name),
+		}
+		for _, bucket := range requiredBuckets {
+			if _, err := tx.CreateBucket(bucket); err != nil {
+				return fmt.Errorf("failed to create bucket %s: %w", string(bucket), err)
+			}
 		}
 
 		return nil
@@ -676,10 +737,15 @@ func (bs *BoltStore) DeleteProfile(name string) error {
 			return fmt.Errorf("failed to delete profile: %w", err)
 		}
 
-		// Delete entries bucket
-		bucketName := fmt.Sprintf("entries:%s", name)
-		if err := tx.DeleteBucket([]byte(bucketName)); err != nil {
-			return fmt.Errorf("failed to delete entries bucket: %w", err)
+		requiredBuckets := [][]byte{
+			bucketName(entriesBucketPrefix, name),
+			bucketName(identitiesBucketPrefix, name),
+			bucketName(credentialsBucketPrefix, name),
+		}
+		for _, bucket := range requiredBuckets {
+			if err := tx.DeleteBucket(bucket); err != nil {
+				return fmt.Errorf("failed to delete bucket %s: %w", string(bucket), err)
+			}
 		}
 
 		return nil
@@ -706,6 +772,293 @@ func (bs *BoltStore) ProfileExists(name string) bool {
 	}
 
 	return exists
+}
+
+func (bs *BoltStore) marshalEncryptedRecord(value interface{}) ([]byte, error) {
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return nil, fmt.Errorf("marshal encrypted record: %w", err)
+	}
+
+	envelope, err := bs.crypto.SealWithPassphrase(payload, string(bs.masterKey))
+	vault.Zeroize(payload)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt record: %w", err)
+	}
+
+	data, err := vault.EnvelopeToBytes(envelope)
+	if err != nil {
+		return nil, fmt.Errorf("serialize record envelope: %w", err)
+	}
+
+	return data, nil
+}
+
+func (bs *BoltStore) unmarshalEncryptedRecord(data []byte, target interface{}) error {
+	envelope, err := vault.EnvelopeFromBytes(data)
+	if err != nil {
+		return fmt.Errorf("deserialize record envelope: %w", err)
+	}
+
+	payload, err := bs.crypto.OpenWithPassphrase(envelope, string(bs.masterKey))
+	if err != nil {
+		return fmt.Errorf("decrypt record: %w", err)
+	}
+	defer vault.Zeroize(payload)
+
+	if err := json.Unmarshal(payload, target); err != nil {
+		return fmt.Errorf("unmarshal record: %w", err)
+	}
+
+	return nil
+}
+
+func (bs *BoltStore) putEncryptedRecord(bucket *bbolt.Bucket, key string, value interface{}) error {
+	data, err := bs.marshalEncryptedRecord(value)
+	if err != nil {
+		return err
+	}
+	return bucket.Put([]byte(key), data)
+}
+
+func (bs *BoltStore) recordExists(profile, prefix, key string) bool {
+	if !bs.isOpen {
+		return false
+	}
+
+	exists := false
+	err := bs.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(bucketName(prefix, profile))
+		if bucket != nil {
+			exists = bucket.Get([]byte(key)) != nil
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("Warning: error checking record existence (profile=%s, key=%s, prefix=%s): %v", profile, key, prefix, err)
+	}
+
+	return exists
+}
+
+func (bs *BoltStore) CreateIdentity(profile string, record *identity.IdentityRecord) error {
+	if !bs.isOpen {
+		return fmt.Errorf("vault is not open")
+	}
+	if record == nil || strings.TrimSpace(record.Name) == "" {
+		return fmt.Errorf("identity record is invalid")
+	}
+
+	return bs.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(bucketName(identitiesBucketPrefix, profile))
+		if bucket == nil {
+			return ErrProfileNotFound
+		}
+		if bucket.Get([]byte(record.Name)) != nil {
+			return ErrIdentityExists
+		}
+		return bs.putEncryptedRecord(bucket, record.Name, record)
+	})
+}
+
+func (bs *BoltStore) GetIdentity(profile, name string) (*identity.IdentityRecord, error) {
+	if !bs.isOpen {
+		return nil, fmt.Errorf("vault is not open")
+	}
+
+	var record *identity.IdentityRecord
+	err := bs.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(bucketName(identitiesBucketPrefix, profile))
+		if bucket == nil {
+			return ErrProfileNotFound
+		}
+		data := bucket.Get([]byte(name))
+		if data == nil {
+			return ErrIdentityNotFound
+		}
+		record = &identity.IdentityRecord{}
+		return bs.unmarshalEncryptedRecord(data, record)
+	})
+	return record, err
+}
+
+func (bs *BoltStore) ListIdentities(profile string) ([]*identity.IdentityRecord, error) {
+	if !bs.isOpen {
+		return nil, fmt.Errorf("vault is not open")
+	}
+
+	var records []*identity.IdentityRecord
+	err := bs.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(bucketName(identitiesBucketPrefix, profile))
+		if bucket == nil {
+			return ErrProfileNotFound
+		}
+		return bucket.ForEach(func(_, value []byte) error {
+			record := &identity.IdentityRecord{}
+			if err := bs.unmarshalEncryptedRecord(value, record); err != nil {
+				return err
+			}
+			records = append(records, record)
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return records, nil
+}
+
+func (bs *BoltStore) UpdateIdentity(profile, name string, record *identity.IdentityRecord) error {
+	if !bs.isOpen {
+		return fmt.Errorf("vault is not open")
+	}
+	if record == nil || strings.TrimSpace(name) == "" {
+		return fmt.Errorf("identity record is invalid")
+	}
+	record.Name = name
+
+	return bs.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(bucketName(identitiesBucketPrefix, profile))
+		if bucket == nil {
+			return ErrProfileNotFound
+		}
+		if bucket.Get([]byte(name)) == nil {
+			return ErrIdentityNotFound
+		}
+		return bs.putEncryptedRecord(bucket, name, record)
+	})
+}
+
+func (bs *BoltStore) DeleteIdentity(profile, name string) error {
+	if !bs.isOpen {
+		return fmt.Errorf("vault is not open")
+	}
+
+	return bs.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(bucketName(identitiesBucketPrefix, profile))
+		if bucket == nil {
+			return ErrProfileNotFound
+		}
+		if bucket.Get([]byte(name)) == nil {
+			return ErrIdentityNotFound
+		}
+		return bucket.Delete([]byte(name))
+	})
+}
+
+func (bs *BoltStore) IdentityExists(profile, name string) bool {
+	return bs.recordExists(profile, identitiesBucketPrefix, name)
+}
+
+func (bs *BoltStore) CreateCredential(profile string, record *identity.CredentialRecord) error {
+	if !bs.isOpen {
+		return fmt.Errorf("vault is not open")
+	}
+	if record == nil || strings.TrimSpace(record.ID) == "" {
+		return fmt.Errorf("credential record is invalid")
+	}
+
+	return bs.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(bucketName(credentialsBucketPrefix, profile))
+		if bucket == nil {
+			return ErrProfileNotFound
+		}
+		if bucket.Get([]byte(record.ID)) != nil {
+			return ErrCredentialExists
+		}
+		return bs.putEncryptedRecord(bucket, record.ID, record)
+	})
+}
+
+func (bs *BoltStore) GetCredential(profile, id string) (*identity.CredentialRecord, error) {
+	if !bs.isOpen {
+		return nil, fmt.Errorf("vault is not open")
+	}
+
+	var record *identity.CredentialRecord
+	err := bs.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(bucketName(credentialsBucketPrefix, profile))
+		if bucket == nil {
+			return ErrProfileNotFound
+		}
+		data := bucket.Get([]byte(id))
+		if data == nil {
+			return ErrCredentialNotFound
+		}
+		record = &identity.CredentialRecord{}
+		return bs.unmarshalEncryptedRecord(data, record)
+	})
+	return record, err
+}
+
+func (bs *BoltStore) ListCredentials(profile string) ([]*identity.CredentialRecord, error) {
+	if !bs.isOpen {
+		return nil, fmt.Errorf("vault is not open")
+	}
+
+	var records []*identity.CredentialRecord
+	err := bs.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(bucketName(credentialsBucketPrefix, profile))
+		if bucket == nil {
+			return ErrProfileNotFound
+		}
+		return bucket.ForEach(func(_, value []byte) error {
+			record := &identity.CredentialRecord{}
+			if err := bs.unmarshalEncryptedRecord(value, record); err != nil {
+				return err
+			}
+			records = append(records, record)
+			return nil
+		})
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return records, nil
+}
+
+func (bs *BoltStore) UpdateCredential(profile, id string, record *identity.CredentialRecord) error {
+	if !bs.isOpen {
+		return fmt.Errorf("vault is not open")
+	}
+	if record == nil || strings.TrimSpace(id) == "" {
+		return fmt.Errorf("credential record is invalid")
+	}
+	record.ID = id
+
+	return bs.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(bucketName(credentialsBucketPrefix, profile))
+		if bucket == nil {
+			return ErrProfileNotFound
+		}
+		if bucket.Get([]byte(id)) == nil {
+			return ErrCredentialNotFound
+		}
+		return bs.putEncryptedRecord(bucket, id, record)
+	})
+}
+
+func (bs *BoltStore) DeleteCredential(profile, id string) error {
+	if !bs.isOpen {
+		return fmt.Errorf("vault is not open")
+	}
+
+	return bs.db.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(bucketName(credentialsBucketPrefix, profile))
+		if bucket == nil {
+			return ErrProfileNotFound
+		}
+		if bucket.Get([]byte(id)) == nil {
+			return ErrCredentialNotFound
+		}
+		return bucket.Delete([]byte(id))
+	})
+}
+
+func (bs *BoltStore) CredentialExists(profile, id string) bool {
+	return bs.recordExists(profile, credentialsBucketPrefix, id)
 }
 
 // GetVaultMetadata returns vault metadata
@@ -800,7 +1153,7 @@ func (bs *BoltStore) RotateMasterKey(newPassphrase string) error {
 	updatedAt := time.Now().UTC()
 
 	if err := bs.db.Update(func(tx *bbolt.Tx) error {
-		if err := reencryptEntries(tx, oldMasterKeyStr, newMasterKeyStr, bs.crypto); err != nil {
+		if err := reencryptProfileBuckets(tx, oldMasterKeyStr, newMasterKeyStr, bs.crypto); err != nil {
 			return err
 		}
 
@@ -853,12 +1206,15 @@ func (bs *BoltStore) RotateMasterKey(newPassphrase string) error {
 	return nil
 }
 
-func reencryptEntries(tx *bbolt.Tx, oldPassphrase, newPassphrase string, cryptoEngine *vault.CryptoEngine) error {
+func reencryptProfileBuckets(tx *bbolt.Tx, oldPassphrase, newPassphrase string, cryptoEngine *vault.CryptoEngine) error {
 	return tx.ForEach(func(name []byte, bucket *bbolt.Bucket) error {
 		if bucket == nil {
 			return nil
 		}
-		if !strings.HasPrefix(string(name), "entries:") {
+		bucketName := string(name)
+		if !strings.HasPrefix(bucketName, entriesBucketPrefix) &&
+			!strings.HasPrefix(bucketName, identitiesBucketPrefix) &&
+			!strings.HasPrefix(bucketName, credentialsBucketPrefix) {
 			return nil
 		}
 
@@ -1066,12 +1422,14 @@ func copyKDFParams(original map[string]interface{}) map[string]interface{} {
 }
 
 type vaultExport struct {
-	Metadata       *domain.VaultMetadata    `json:"metadata"`
-	Profiles       []*domain.Profile        `json:"profiles"`
-	Entries        map[string][]exportEntry `json:"entries"`
-	AuditLog       []*domain.Operation      `json:"audit_log"`
-	ExportedAt     time.Time                `json:"exported_at"`
-	IncludeSecrets bool                     `json:"include_secrets"`
+	Metadata       *domain.VaultMetadata         `json:"metadata"`
+	Profiles       []*domain.Profile             `json:"profiles"`
+	Entries        map[string][]exportEntry      `json:"entries"`
+	Identities     map[string][]exportIdentity   `json:"identities,omitempty"`
+	Credentials    map[string][]exportCredential `json:"credentials,omitempty"`
+	AuditLog       []*domain.Operation           `json:"audit_log"`
+	ExportedAt     time.Time                     `json:"exported_at"`
+	IncludeSecrets bool                          `json:"include_secrets"`
 }
 
 type exportEntry struct {
@@ -1085,6 +1443,28 @@ type exportEntry struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Secret    string    `json:"secret,omitempty"`
+}
+
+type exportIdentity struct {
+	Name                 string               `json:"name"`
+	DID                  string               `json:"did"`
+	VerificationMethodID string               `json:"verification_method_id"`
+	PublicJWK            identity.JWK         `json:"public_jwk"`
+	PrivateJWK           *identity.JWK        `json:"private_jwk,omitempty"`
+	Document             identity.DIDDocument `json:"document"`
+	CreatedAt            time.Time            `json:"created_at"`
+}
+
+type exportCredential struct {
+	ID         string                     `json:"id"`
+	IssuerName string                     `json:"issuer_name,omitempty"`
+	IssuerDID  string                     `json:"issuer_did"`
+	Subject    string                     `json:"subject"`
+	Types      []string                   `json:"types"`
+	Claims     []identity.CredentialClaim `json:"claims"`
+	IssuedAt   time.Time                  `json:"issued_at"`
+	ExpiresAt  *time.Time                 `json:"expires_at,omitempty"`
+	Proof      identity.CredentialProof   `json:"proof"`
 }
 
 type auditEnvelope struct {
@@ -1211,6 +1591,8 @@ func (bs *BoltStore) ExportVault(path string, includeSecrets bool) error {
 	}
 
 	entries := make(map[string][]exportEntry)
+	identities := make(map[string][]exportIdentity)
+	credentials := make(map[string][]exportCredential)
 	for _, profile := range profiles {
 		summaries, err := bs.ListEntries(profile.Name, nil)
 		if err != nil {
@@ -1255,6 +1637,50 @@ func (bs *BoltStore) ExportVault(path string, includeSecrets bool) error {
 		if _, ok := entries[profile.Name]; !ok {
 			entries[profile.Name] = []exportEntry{}
 		}
+
+		identityList, err := bs.ListIdentities(profile.Name)
+		if err != nil {
+			return fmt.Errorf("failed to list identities for profile %s: %w", profile.Name, err)
+		}
+		for _, record := range identityList {
+			exported := exportIdentity{
+				Name:                 record.Name,
+				DID:                  record.DID,
+				VerificationMethodID: record.VerificationMethodID,
+				PublicJWK:            record.PublicJWK,
+				Document:             record.Document,
+				CreatedAt:            record.CreatedAt,
+			}
+			if includeSecrets {
+				privateJWK := record.PrivateJWK
+				exported.PrivateJWK = &privateJWK
+			}
+			identities[profile.Name] = append(identities[profile.Name], exported)
+		}
+		if _, ok := identities[profile.Name]; !ok {
+			identities[profile.Name] = []exportIdentity{}
+		}
+
+		credentialList, err := bs.ListCredentials(profile.Name)
+		if err != nil {
+			return fmt.Errorf("failed to list credentials for profile %s: %w", profile.Name, err)
+		}
+		for _, record := range credentialList {
+			credentials[profile.Name] = append(credentials[profile.Name], exportCredential{
+				ID:         record.ID,
+				IssuerName: record.IssuerName,
+				IssuerDID:  record.IssuerDID,
+				Subject:    record.Subject,
+				Types:      append([]string(nil), record.Types...),
+				Claims:     append([]identity.CredentialClaim(nil), record.Claims...),
+				IssuedAt:   record.IssuedAt,
+				ExpiresAt:  record.ExpiresAt,
+				Proof:      record.Proof,
+			})
+		}
+		if _, ok := credentials[profile.Name]; !ok {
+			credentials[profile.Name] = []exportCredential{}
+		}
 	}
 
 	auditLog, err := bs.GetAuditLog()
@@ -1266,6 +1692,8 @@ func (bs *BoltStore) ExportVault(path string, includeSecrets bool) error {
 		Metadata:       metadata,
 		Profiles:       profiles,
 		Entries:        entries,
+		Identities:     identities,
+		Credentials:    credentials,
 		AuditLog:       auditLog,
 		ExportedAt:     time.Now().UTC(),
 		IncludeSecrets: includeSecrets,
@@ -1379,7 +1807,7 @@ func (bs *BoltStore) ImportVault(path, conflictResolution string) error {
 	if mode == "" {
 		mode = "overwrite"
 	}
-	if mode != "overwrite" && mode != "skip" && mode != "replace" {
+	if mode != "overwrite" && mode != "skip" && mode != "replace" && mode != "fail" {
 		return fmt.Errorf("invalid conflict resolution mode: %s", conflictResolution)
 	}
 
@@ -1456,6 +1884,13 @@ func (bs *BoltStore) ImportVault(path, conflictResolution string) error {
 					vault.Zeroize(secretBytes)
 					continue
 				}
+			case "fail":
+				if exists {
+					vault.Zeroize(entry.Secret)
+					vault.Zeroize(entry.Password)
+					vault.Zeroize(secretBytes)
+					return fmt.Errorf("entry %s/%s already exists", profileName, exported.ID)
+				}
 			case "replace":
 				if exists {
 					if err := bs.DeleteEntry(profileName, exported.ID); err != nil {
@@ -1487,6 +1922,124 @@ func (bs *BoltStore) ImportVault(path, conflictResolution string) error {
 			vault.Zeroize(entry.Secret)
 			vault.Zeroize(entry.Password)
 			vault.Zeroize(secretBytes)
+		}
+	}
+
+	for profileName, list := range payload.Identities {
+		if profileName == "" {
+			continue
+		}
+		if !bs.ProfileExists(profileName) {
+			if err := bs.CreateProfile(profileName, ""); err != nil && err != ErrProfileExists {
+				return fmt.Errorf("failed to ensure profile %s: %w", profileName, err)
+			}
+		}
+
+		for i := range list {
+			exported := list[i]
+			if exported.Name == "" {
+				continue
+			}
+
+			record := &identity.IdentityRecord{
+				Name:                 exported.Name,
+				DID:                  exported.DID,
+				VerificationMethodID: exported.VerificationMethodID,
+				PublicJWK:            exported.PublicJWK,
+				Document:             exported.Document,
+				CreatedAt:            exported.CreatedAt.UTC(),
+			}
+			if exported.PrivateJWK != nil {
+				record.PrivateJWK = *exported.PrivateJWK
+			}
+
+			exists := bs.IdentityExists(profileName, record.Name)
+			switch mode {
+			case "skip":
+				if exists {
+					continue
+				}
+			case "fail":
+				if exists {
+					return fmt.Errorf("identity %s/%s already exists", profileName, record.Name)
+				}
+			case "replace":
+				if exists {
+					if err := bs.DeleteIdentity(profileName, record.Name); err != nil {
+						return fmt.Errorf("failed to replace identity %s/%s: %w", profileName, record.Name, err)
+					}
+					exists = false
+				}
+			}
+
+			if exists {
+				if err := bs.UpdateIdentity(profileName, record.Name, record); err != nil {
+					return fmt.Errorf("failed to update identity %s/%s: %w", profileName, record.Name, err)
+				}
+			} else {
+				if err := bs.CreateIdentity(profileName, record); err != nil {
+					return fmt.Errorf("failed to create identity %s/%s: %w", profileName, record.Name, err)
+				}
+			}
+		}
+	}
+
+	for profileName, list := range payload.Credentials {
+		if profileName == "" {
+			continue
+		}
+		if !bs.ProfileExists(profileName) {
+			if err := bs.CreateProfile(profileName, ""); err != nil && err != ErrProfileExists {
+				return fmt.Errorf("failed to ensure profile %s: %w", profileName, err)
+			}
+		}
+
+		for i := range list {
+			exported := list[i]
+			if exported.ID == "" {
+				continue
+			}
+
+			record := &identity.CredentialRecord{
+				ID:         exported.ID,
+				IssuerName: exported.IssuerName,
+				IssuerDID:  exported.IssuerDID,
+				Subject:    exported.Subject,
+				Types:      append([]string(nil), exported.Types...),
+				Claims:     append([]identity.CredentialClaim(nil), exported.Claims...),
+				IssuedAt:   exported.IssuedAt.UTC(),
+				ExpiresAt:  exported.ExpiresAt,
+				Proof:      exported.Proof,
+			}
+
+			exists := bs.CredentialExists(profileName, record.ID)
+			switch mode {
+			case "skip":
+				if exists {
+					continue
+				}
+			case "fail":
+				if exists {
+					return fmt.Errorf("credential %s/%s already exists", profileName, record.ID)
+				}
+			case "replace":
+				if exists {
+					if err := bs.DeleteCredential(profileName, record.ID); err != nil {
+						return fmt.Errorf("failed to replace credential %s/%s: %w", profileName, record.ID, err)
+					}
+					exists = false
+				}
+			}
+
+			if exists {
+				if err := bs.UpdateCredential(profileName, record.ID, record); err != nil {
+					return fmt.Errorf("failed to update credential %s/%s: %w", profileName, record.ID, err)
+				}
+			} else {
+				if err := bs.CreateCredential(profileName, record); err != nil {
+					return fmt.Errorf("failed to create credential %s/%s: %w", profileName, record.ID, err)
+				}
+			}
 		}
 	}
 
@@ -1556,6 +2109,45 @@ func (bs *BoltStore) VerifyIntegrity() error {
 			return fmt.Errorf("corrupted vault metadata: %w", err)
 		}
 
-		return nil
+		profilesBucket := tx.Bucket(ProfilesBucket)
+		return profilesBucket.ForEach(func(profileKey, value []byte) error {
+			if value == nil {
+				return fmt.Errorf("corrupted profile metadata for %s", string(profileKey))
+			}
+
+			for _, prefix := range []string{entriesBucketPrefix, identitiesBucketPrefix, credentialsBucketPrefix} {
+				bucket := tx.Bucket(bucketName(prefix, string(profileKey)))
+				if bucket == nil {
+					return fmt.Errorf("missing profile bucket %s for %s", prefix, string(profileKey))
+				}
+
+				if prefix == entriesBucketPrefix {
+					continue
+				}
+
+				if err := bucket.ForEach(func(recordKey, recordValue []byte) error {
+					if recordValue == nil {
+						return fmt.Errorf("nil record value for %s/%s", string(profileKey), string(recordKey))
+					}
+					switch prefix {
+					case identitiesBucketPrefix:
+						record := &identity.IdentityRecord{}
+						if err := bs.unmarshalEncryptedRecord(recordValue, record); err != nil {
+							return fmt.Errorf("invalid identity %s/%s: %w", string(profileKey), string(recordKey), err)
+						}
+					case credentialsBucketPrefix:
+						record := &identity.CredentialRecord{}
+						if err := bs.unmarshalEncryptedRecord(recordValue, record); err != nil {
+							return fmt.Errorf("invalid credential %s/%s: %w", string(profileKey), string(recordKey), err)
+						}
+					}
+					return nil
+				}); err != nil {
+					return err
+				}
+			}
+
+			return nil
+		})
 	})
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"strings"
 	"time"
@@ -24,7 +25,7 @@ func NewStatus(cfg *config.Config) *cobra.Command {
 		Short: "Show vault status",
 		Long:  "Display vault metadata, session state, and entry statistics.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runStatus()
+			return runStatus(cmd.OutOrStdout())
 		},
 	}
 
@@ -37,7 +38,7 @@ var statusCmd = &cobra.Command{
 	Short: "Show vault status",
 	Long:  "Display vault metadata, session state, and entry statistics.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return runStatus()
+		return runStatus(cmd.OutOrStdout())
 	},
 }
 
@@ -54,13 +55,15 @@ type StatusInfo struct {
 	SaltLength       int           `json:"salt_length"`
 	MetadataCreated  string        `json:"metadata_created"`
 	EntryCount       *int          `json:"entry_count,omitempty"`
+	DIDCount         *int          `json:"did_count,omitempty"`
+	CredentialCount  *int          `json:"credential_count,omitempty"`
 	LastUpdated      *time.Time    `json:"last_updated,omitempty"`
 	SessionState     string        `json:"session_state"`
 	RemainingTTL     time.Duration `json:"remaining_ttl"`
 	RemainingTTLSecs int64         `json:"remaining_ttl_seconds"`
 }
 
-func runStatus() error {
+func runStatus(out io.Writer) error {
 	log.Printf("Running status check with vault: %s, profile: %s", vaultPath, profile)
 
 	// If no profile is specified, use "default" as a fallback
@@ -104,6 +107,8 @@ func runStatus() error {
 
 	// Initialize with default values
 	var entryCount int
+	var didCount int
+	var credentialCount int
 	var lastUpdated *time.Time
 
 	if unlocked {
@@ -160,6 +165,20 @@ func runStatus() error {
 							}
 						}
 					}
+
+					identities, err := vaultStore.ListIdentities(profile)
+					if err != nil {
+						log.Printf("Warning: failed to list identities for profile '%s': %v", profile, err)
+					} else {
+						didCount = len(identities)
+					}
+
+					credentials, err := vaultStore.ListCredentials(profile)
+					if err != nil {
+						log.Printf("Warning: failed to list credentials for profile '%s': %v", profile, err)
+					} else {
+						credentialCount = len(credentials)
+					}
 				} else {
 					log.Printf("Profile '%s' not found in vault, showing basic status only", profile)
 				}
@@ -196,6 +215,14 @@ func runStatus() error {
 		tempCount := entryCount // Create a new variable to hold the value
 		status.EntryCount = &tempCount
 	}
+	if didCount > 0 {
+		tempCount := didCount
+		status.DIDCount = &tempCount
+	}
+	if credentialCount > 0 {
+		tempCount := credentialCount
+		status.CredentialCount = &tempCount
+	}
 
 	// LastUpdated is already a pointer, so we can assign it directly
 	status.LastUpdated = lastUpdated
@@ -205,7 +232,7 @@ func runStatus() error {
 		if err != nil {
 			return fmt.Errorf("failed to marshal status: %w", err)
 		}
-		if _, err := fmt.Println(string(payload)); err != nil {
+		if _, err := fmt.Fprintln(out, string(payload)); err != nil {
 			return fmt.Errorf("failed to write JSON output: %w", err)
 		}
 		return nil
@@ -225,6 +252,12 @@ func runStatus() error {
 	if status.EntryCount != nil {
 		result.WriteString(fmt.Sprintf("Entries: %d\n", *status.EntryCount))
 	}
+	if status.DIDCount != nil {
+		result.WriteString(fmt.Sprintf("DIDs: %d\n", *status.DIDCount))
+	}
+	if status.CredentialCount != nil {
+		result.WriteString(fmt.Sprintf("Credentials: %d\n", *status.CredentialCount))
+	}
 
 	if status.LastUpdated != nil {
 		result.WriteString(fmt.Sprintf("Last Updated: %s\n", status.LastUpdated.Format(time.RFC3339)))
@@ -235,7 +268,9 @@ func runStatus() error {
 	}
 
 	// Print the result
-	fmt.Print(result.String())
+	if _, err := io.WriteString(out, result.String()); err != nil {
+		return fmt.Errorf("failed to write status output: %w", err)
+	}
 
 	return nil
 }
